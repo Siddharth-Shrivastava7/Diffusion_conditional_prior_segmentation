@@ -45,7 +45,7 @@ def _build_datasets(params: dict) -> Tuple[DataLoader, torch.Tensor, int, int, d
     # required in params_eval.yml for using datasets/pipelines/transforms
     train_ids_to_class_names = None
 
-    if ((dataset_file == 'datasets.cityscapes') or (dataset_file == 'datasets.ade20k')) \
+    if ((dataset_file == 'datasets.cityscapes') or (dataset_file == 'datasets.ade20k') or (dataset_file == 'datasets.darkzurich')) \
             and all(['dataset_pipeline_val' in params, 'dataset_pipeline_val_settings' in params]):
         transforms_names_val = params["dataset_pipeline_val"]
         transforms_settings_val = params["dataset_pipeline_val_settings"]
@@ -388,14 +388,14 @@ def build_engine(evaluator: Evaluator,
     return engine_test
 
 
-def run_inference(params: dict):
+def run_inference(params: dict, params_path: str):
     setup_logger(name=None, format="\x1b[32;1m%(asctime)s [%(name)s]\x1b[0m %(message)s", reset=True)
     LOGGER.info("%d GPUs available", torch.cuda.device_count())
     # Create output folder and archive the current code and the parameters there
     output_path = expanduservars(params['output_path'])
     os.makedirs(output_path, exist_ok=True)
     LOGGER.info("experiment dir: %s", output_path)
-    archive_code(output_path)
+    archive_code(output_path, params_path)
     LOGGER.info("Inference params:\n%s", pprint.pformat(params))
 
     # Load the datasets

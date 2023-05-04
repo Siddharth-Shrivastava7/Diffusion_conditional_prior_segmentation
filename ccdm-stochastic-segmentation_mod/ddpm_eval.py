@@ -29,7 +29,7 @@ def set_seeds(seed: int):
 def main(argv):
     set_seeds(0)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--paramspath", type=str, default='/home/sidd_s/ccdm-stochastic-segmentation/params_eval.yml')
+    parser.add_argument("--paramspath", type=str, default='/home/sidd_s/Diffusion_conditional_prior_segmentation/ccdm-stochastic-segmentation_mod/params_eval.yml')
     args = parser.parse_args() 
     params_file = args.paramspath
     
@@ -45,8 +45,8 @@ def main(argv):
         eval_lidc_sampling_speed(params)
     elif 'lidc' in params['dataset_file']:
         eval_lidc_uncertainty(params)   
-    elif 'cityscapes' in params['dataset_file']:
-        run_inference_only_cdm(params)
+    elif 'cityscapes' or 'darkzurich' in params['dataset_file']:
+        run_inference_only_cdm(params, args.paramspath)
     else:
         raise ValueError("Unknown dataset")
 
