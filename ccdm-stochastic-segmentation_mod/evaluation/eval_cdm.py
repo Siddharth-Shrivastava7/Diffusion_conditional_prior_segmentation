@@ -174,10 +174,15 @@ class Evaluator:
         return self.feature_cond_encoder(x)
 
     @torch.no_grad()    
-    def predict_single(self, condition, image, feature_condition, label_ref_logits=None):
+    def predict_single(self, condition, image, feature_condition, label_ref_logits=None, names = None):
         # predict a single segmentation (BNHW) for image (BCHW) where N = num_classes
         label_shape = (image.shape[0], self.num_classes, *image.shape[2:])
-        xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
+        if isinstance(names, tuple) and names[0]: # assuming bt = 1 
+            xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/MIC_mod/seg/labelTrainIds', names[0]))))
+            xt = one_hot(xt.long(), self.num_classes).to(torch_device)
+            xt = xt.permute((2,0,1)).unsqueeze(dim=0)
+        else:
+            xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
         prediction = self.predict(xt, condition, feature_condition, label_ref_logits)
         return prediction
 
@@ -192,11 +197,11 @@ class Evaluator:
         return ret["diffusion_out"]
 
     @torch.no_grad()
-    def predict_multiple(self, image, condition, feature_condition):
+    def predict_multiple(self, image, condition, feature_condition, names = None):
         assert (self.num_evaluations > 1), f'predict_multiple assumes evaluations > 1 instead got {self.evaluations}'
         # predict a params['evaluations'] * segmentations each of shape (BNHW) for image (BCHW) where N = num_classes
         for i in range(self.num_evaluations):
-            prediction_onehot_i = self.predict_single(image, condition, feature_condition)
+            prediction_onehot_i = self.predict_single(image, condition, feature_condition, names=names)
             if self.eval_voting_strategy == 'confidence':
                 if i == 0:
                     prediction_onehot_total = torch.zeros_like(prediction_onehot_i, dtype=float)
@@ -215,8 +220,8 @@ class Evaluator:
         # cdm only inference step
 
         # prep data
-        image, label, label_orig = batch
-        image = image.to(idist.device())
+        image, label, label_orig, names = batch ## for now, it is hard coded, later need to change for Darkzurich instance dataset and for other datasets 
+        image = image.to(idist.device())    
         label_onehot = label.to(idist.device())
         label = label_onehot.argmax(dim=1).long()  # one_hot to int, (BHW)
 
@@ -224,9 +229,9 @@ class Evaluator:
         condition = self.predict_condition(image)  # condition is the image itself  # I have made this up but it is consistent with the paper
         feature_condition = self.predict_feature_condition(image) 
         if self.num_evaluations == 1:
-            prediction_onehot = self.predict_single(image, condition, feature_condition)  # (BNHW)
+            prediction_onehot = self.predict_single(image, condition, feature_condition, names=names)  # (BNHW)
         else:
-            prediction_onehot = self.predict_multiple(image, condition, feature_condition)
+            prediction_onehot = self.predict_multiple(image, condition, feature_condition, names=names)
             # add predict_multiple
 
         # debug only shows 1st element of the batch

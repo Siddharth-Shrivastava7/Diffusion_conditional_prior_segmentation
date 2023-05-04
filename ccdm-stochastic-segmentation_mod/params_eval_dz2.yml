@@ -1,4 +1,4 @@
-output_path: "/home/sidd_s/scratch/ccdm_logs/darkzurich_majority_single_onlyprior_bt1"
+output_path: "/home/sidd_s/scratch/ccdm_logs/darkzurich_majority_single_conditionalposterior_bt1"
 evaluation_path: "./evaluation/results"
 evaluations: 8  # for multiple evaluations with majority vote and for LIDC number of samples
 evaluation_vote_strategy: "majority"  # One of ["majority", "confidence"]  

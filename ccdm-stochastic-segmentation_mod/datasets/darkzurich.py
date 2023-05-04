@@ -107,6 +107,8 @@ class DarkZurich(datasets.Cityscapes):
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         
         image = Image.open(self.images[index]).convert('RGB') 
-        target = Image.open(self.targets[index])
+        target = Image.open(self.targets[index]) 
         
-        return image, target
+        name = self.images[index].split('/')[-1] # getting name for generation of y_hat (MIC prediction) further
+        
+        return image, target, name

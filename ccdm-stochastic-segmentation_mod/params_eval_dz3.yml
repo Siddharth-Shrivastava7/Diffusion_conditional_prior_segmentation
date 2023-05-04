@@ -1,7 +1,7 @@
-output_path: "/home/sidd_s/scratch/ccdm_logs/darkzurich_majority_single_onlyprior_bt1"
+output_path: "/home/sidd_s/scratch/ccdm_logs/darkzurich_confidence_10fuse_conditionalposterior_bt1"
 evaluation_path: "./evaluation/results"
 evaluations: 8  # for multiple evaluations with majority vote and for LIDC number of samples
-evaluation_vote_strategy: "majority"  # One of ["majority", "confidence"]  
+evaluation_vote_strategy: "confidence"  # One of ["majority", "confidence"]  
 
 dataset_file: datasets.darkzurich
 dataset_split: 'val'  # One of ['val', 'test']
@@ -23,7 +23,7 @@ dataset_pipeline_val_settings:
 
 evaluation:
     resolution: "dataloader" # One of ["dataloader", "original"] # using "dataloader" is better if want to increase speed and should use "confidence" if want to have "original" resolution via bilinear upsampling
-    evaluations: 1  # for multiple evaluations with confidence vote
+    evaluations: 10  # for multiple evaluations with confidence vote
     evaluation_vote_strategy: "confidence"  # One of ["majority", "confidence"]
 
 multigpu: no

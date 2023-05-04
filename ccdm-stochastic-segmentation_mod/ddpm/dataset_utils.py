@@ -10,6 +10,8 @@ import torch.nn.functional
 from torchvision.transforms import Compose, ToPILImage, ToTensor
 from torch.utils.data import Dataset
 
+from datasets.darkzurich import DarkZurich
+
 __all__ = [
     "EmptyDataset",
     "H5Dataset",
@@ -164,7 +166,11 @@ class TransformedImgLblDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Tout:
 
-        image, target = self.source_dataset[idx]
+        if isinstance(self.source_dataset, DarkZurich):
+            image, target, name = self.source_dataset[idx]
+        else:
+            image, target = self.source_dataset[idx]
+            name = None 
 
         metadata = {'index': idx}
         image, target, metadata = self.common_transforms((image, target, metadata))
@@ -195,10 +201,19 @@ class TransformedImgLblDataset(Dataset):
             #     filename = pathlib.Path(filepath).stem
             # else:
             #     raise ValueError()
-            original_lbl_tensor = metadata_transform(metadata, self.label_mapping_func)[0]
-            return img_tensor, lbl_tensor, original_lbl_tensor
+            original_lbl_tensor = metadata_transform(metadata, self.label_mapping_func)[0] 
+            # if isinstance(self.source_dataset, DarkZurich):
+            #     return img_tensor, lbl_tensor, original_lbl_tensor, name
+            # else:
+            #     return img_tensor, lbl_tensor, original_lbl_tensor
+            return img_tensor, lbl_tensor, original_lbl_tensor, name
+            
+        # if isinstance(self.source_dataset, DarkZurich):
+        #     return img_tensor, lbl_tensor, name
+        # else:
+        #     return img_tensor, lbl_tensor
+        return img_tensor, lbl_tensor, name
 
-        return img_tensor, lbl_tensor
 
 
 def metadata_transform(metadata: dict, label_mapping_function: types.FunctionType) -> dict:
