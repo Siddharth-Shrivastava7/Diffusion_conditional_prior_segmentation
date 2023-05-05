@@ -32,6 +32,8 @@ from ddpm.utils import expanduservars, archive_code, worker_init_fn
 from .cs_eval import evaluateImgLists, args
 from .utils import _flatten, create_new_directory
 
+import torch.nn.functional as F
+
 LOGGER = logging.getLogger(__name__)
 Model = Union[DenoisingModel, nn.parallel.DataParallel, nn.parallel.DistributedDataParallel]
 
@@ -66,7 +68,12 @@ def _build_datasets(params: dict) -> Tuple[DataLoader, torch.Tensor, int, int, d
     # class_weights = get_weights(params["class_weights"])
     class_weights = get_weights() # cause this relevant to the module being called
 
-    batch_size = params['batch_size']  # if single_gpu or non-DDP
+    batch_size = params['batch_size']  # if single_gpu or non-DDP 
+    
+    ## using subset of dataset being used for faster inference on results
+    lst = [3,4]
+    validation_dataset = torch.utils.data.Subset(validation_dataset, lst)
+    
     validation_loader = DataLoader(validation_dataset,
                                    batch_size=batch_size,
                                    num_workers=params["mp_loaders"],
@@ -178,12 +185,39 @@ class Evaluator:
         # predict a single segmentation (BNHW) for image (BCHW) where N = num_classes
         label_shape = (image.shape[0], self.num_classes, *image.shape[2:])
         if isinstance(names, tuple) and names[0]: # assuming bt = 1 
-            xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/MIC_mod/seg/labelTrainIds', names[0]))))
-            xt = one_hot(xt.long(), self.num_classes).to(torch_device)
+            
+            ## MIC val results >>> mIoU = 34.8 (with passing resized image 256x512 to MIC initially) >> coming to 7.6 in conditional posterior generation
+            xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/MIC_mod/seg/labelTrainIds', names[0])).convert('P')))
+            
+            ## starting from DZ VAL GT >>> mIoU = 83.8 (128x256) and mIoU = 85.9 (256x512) >> 7.3 in conditional posterior generation (without feat enc) and  7.6 (with feat enc on size(256x512)) 
+            # print(names[0])
+            # name = str(names[0]).replace('_rgb_anon.png', '_gt_labelTrainIds.png')
+            # xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/scratch/dataset/dark_zurich/gt/val/night/GOPR0356', name)).convert('P')))
+            # xt[xt==255] = 19
+                        
+            ## DZ val results >>> mIoU = 36.3 (128x256) and 36.5 (256x512) >> coming to 7.3 in conditional posterior generation (without feat enc) and  7.6 (with feat enc on size(256x512)) 
+            # xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/scratch/dataset/dark_zurich_val_morepred/pred/dannet_PSPNet_val', names[0])).convert('P')))
+            
+            # # resizing to 128 x256
+            # xt = xt.unsqueeze(dim=0).unsqueeze(dim=0)
+            # # # print('>>>>', xt.shape) 
+            # xt = F.interpolate(xt, size=(128,256)) 
+            # # xt = F.interpolate(xt, size=(256,512)) 
+            # # print('>>>>', xt.shape)
+            
+            xt = one_hot(xt.squeeze().long(), self.num_classes).to(torch_device)
             xt = xt.permute((2,0,1)).unsqueeze(dim=0)
+            # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
         else:
+            ## random onehots >>> mIoU = 1.6 and 1.6 (same in both sizes) >> coming to 7.1 in conditional posterior generation (128x256) and 7.5 in (256x512)
             xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
         prediction = self.predict(xt, condition, feature_condition, label_ref_logits)
+        
+        # have to remove later
+        # xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample()
+        # prediction = self.predict(xt, condition, feature_condition, label_ref_logits)
+        # prediction = xt 
+    
         return prediction
 
     @torch.no_grad()
