@@ -36,10 +36,10 @@ wandb: no
 polyak_alpha: 0.999 
 beta_schedule: "cosine" # One of ["cosine", "linear"]
 beta_schedule_params:
-    s: 0.00008
+    s: 0.08
     # start: 0.01
-    # end: 0.2
-time_steps: 20 # changing number of time steps as starting from close outputs
+    # end: 0.1 ## this (st: 0.01, end: 0.0008) is falling back to MIC model output that means going back to x_T which is not desired thus, beta should always be increasing s.t. start < end
+time_steps: 250 # changing number of time steps as starting from close outputs
 
 backbone: "unet_openai"  # One of ["unetplus", "unet_openai", "resnet50", "resnet101"]
 
