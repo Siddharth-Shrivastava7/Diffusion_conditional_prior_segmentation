@@ -142,7 +142,7 @@ class DenoisingModel(nn.Module):
         return self.diffusion.time_steps
 
     def forward(self, x: Tensor, condition: Tensor, feature_condition: Tensor = None, t: Optional[Tensor] = None, label_ref_logits: Optional[Tensor] = None,
-                validation: bool = False) -> Union[Tensor, dict]:
+                validation: bool = False, params: dict = None) -> Union[Tensor, dict]:
 
         if self.training:
             if not isinstance(t, Tensor):
@@ -154,15 +154,15 @@ class DenoisingModel(nn.Module):
             if validation:
                 return self.forward_step(x, condition, feature_condition, t)
             if t is None:
-                return self.forward_denoising(x, condition, feature_condition, label_ref_logits=label_ref_logits)
+                return self.forward_denoising(x, condition, feature_condition, label_ref_logits=label_ref_logits, params=params)
 
-            return self.forward_denoising(x, condition, feature_condition, cast(int, t.item()), label_ref_logits)
+            return self.forward_denoising(x, condition, feature_condition, cast(int, t.item()), label_ref_logits, params=params)
 
     def forward_step(self, x: Tensor, condition: Tensor, feature_condition: Tensor, t: Tensor) -> Tensor:
         return self.unet(x, condition, feature_condition=feature_condition, timesteps=t)
 
     def forward_denoising(self, x: Optional[Tensor], condition: Tensor, feature_condition: Tensor, init_t: Optional[int] = None,
-                          label_ref_logits: Optional[Tensor] = None) -> dict:
+                          label_ref_logits: Optional[Tensor] = None, params: dict = None) -> dict:
 
         if init_t is None:
             init_t = self.time_steps
@@ -191,7 +191,7 @@ class DenoisingModel(nn.Module):
             t_ = torch.full(size=(shape[0],), fill_value=t, device=xt.device)
 
             # Predict the noise of x_t
-            ret = self.unet(xt, condition, feature_condition, t_.float())
+            ret = self.unet(xt, condition, feature_condition, t_.float(), params=params)
             x0pred = ret["diffusion_out"]
 
             probs = self.diffusion.theta_post_prob(xt, x0pred, t_)

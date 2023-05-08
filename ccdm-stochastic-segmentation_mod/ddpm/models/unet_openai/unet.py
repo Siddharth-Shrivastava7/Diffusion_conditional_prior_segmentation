@@ -741,7 +741,7 @@ class UNetModel(nn.Module):
         self.middle_block.apply(convert_module_to_f32)
         self.output_blocks.apply(convert_module_to_f32)
 
-    def forward(self, x, input_condition, feature_condition, timesteps, y=None):
+    def forward(self, x, input_condition, feature_condition, timesteps, y=None, params = None): #adding a new params dict for deciding whether to pass in feature conditions/image conditions or not 
         """
         Apply the model to an input batch.
 
@@ -756,7 +756,10 @@ class UNetModel(nn.Module):
 
         hs = []
         emb = self.time_embed(timestep_embedding(timesteps, self.model_channels))
-
+        
+        if not params['check_image_condition']:
+            ## hard coding making the input condition equals to zeros...ie...making it redundant 
+            input_condition = th.zeros_like(input_condition) # input images are quite different domain as compare to cityscapes thus, we can see the change clearly miou increased from 15.4 to 16.2 for two images.
         x = th.cat([x, input_condition], dim=1)
         context = None
 
@@ -783,6 +786,9 @@ class UNetModel(nn.Module):
                             h = th.cat([h, feature3, feature4], dim=1)
                 elif self.feature_cond_encoder['type'] == 'dino':
                     if self.feature_cond_encoder['scale'] == 'single':
+                        if not params['check_feature_condition']:
+                            # feature condition to zero
+                            feature_condition = th.zeros_like(feature_condition) # just a trial # 0.031 mIoU for 2 images 
                         h = th.cat([h, feature_condition], dim=1)
                     else:
                         raise NotImplementedError()

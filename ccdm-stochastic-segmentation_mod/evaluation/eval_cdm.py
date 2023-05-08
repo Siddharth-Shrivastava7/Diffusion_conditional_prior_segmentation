@@ -71,8 +71,8 @@ def _build_datasets(params: dict) -> Tuple[DataLoader, torch.Tensor, int, int, d
     batch_size = params['batch_size']  # if single_gpu or non-DDP 
     
     ## using subset of dataset being used for faster inference on results
-    lst = [3,4]
-    validation_dataset = torch.utils.data.Subset(validation_dataset, lst)
+    # lst = [3,4] # have to change later
+    # validation_dataset = torch.utils.data.Subset(validation_dataset, lst)
     
     validation_loader = DataLoader(validation_dataset,
                                    batch_size=batch_size,
@@ -181,7 +181,7 @@ class Evaluator:
         return self.feature_cond_encoder(x)
 
     @torch.no_grad()    
-    def predict_single(self, condition, image, feature_condition, label_ref_logits=None, names = None):
+    def predict_single(self, image, condition, feature_condition, label_ref_logits=None, names = None, params = None):
         # predict a single segmentation (BNHW) for image (BCHW) where N = num_classes
         label_shape = (image.shape[0], self.num_classes, *image.shape[2:])
         if isinstance(names, tuple) and names[0]: # assuming bt = 1 
@@ -211,7 +211,7 @@ class Evaluator:
         else:
             ## random onehots >>> mIoU = 1.6 and 1.6 (same in both sizes) >> coming to 7.1 in conditional posterior generation (128x256) and 7.5 in (256x512)
             xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
-        prediction = self.predict(xt, condition, feature_condition, label_ref_logits)
+        prediction = self.predict(xt, condition, feature_condition, label_ref_logits, params=params)
         
         # have to remove later
         # xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample()
@@ -221,21 +221,21 @@ class Evaluator:
         return prediction
 
     @torch.no_grad()
-    def predict(self, xt: Tensor, condition: Tensor, feature_condition: Tensor, label_ref_logits: Optional[Tensor] = None) -> Tensor:
+    def predict(self, xt: Tensor, condition: Tensor, feature_condition: Tensor, label_ref_logits: Optional[Tensor] = None, params = None) -> Tensor:
         self.average_model.eval()
         if isinstance(self.feature_cond_encoder, nn.Module):  # addtional code for ensuring that, feature conditional encoder is used only when it is there
             self.feature_cond_encoder.eval() 
-        ret = self.average_model(x=xt, condition=condition, feature_condition=feature_condition, label_ref_logits=label_ref_logits)
+        ret = self.average_model(x=xt, condition=condition, feature_condition=feature_condition, label_ref_logits=label_ref_logits, params= params)
 
         assert ("diffusion_out" in ret)
         return ret["diffusion_out"]
 
     @torch.no_grad()
-    def predict_multiple(self, image, condition, feature_condition, names = None):
+    def predict_multiple(self, image, condition, feature_condition, names = None, params = None):
         assert (self.num_evaluations > 1), f'predict_multiple assumes evaluations > 1 instead got {self.evaluations}'
         # predict a params['evaluations'] * segmentations each of shape (BNHW) for image (BCHW) where N = num_classes
         for i in range(self.num_evaluations):
-            prediction_onehot_i = self.predict_single(image, condition, feature_condition, names=names)
+            prediction_onehot_i = self.predict_single(image, condition, feature_condition, names=names, params=params)
             if self.eval_voting_strategy == 'confidence':
                 if i == 0:
                     prediction_onehot_total = torch.zeros_like(prediction_onehot_i, dtype=float)
@@ -263,9 +263,9 @@ class Evaluator:
         condition = self.predict_condition(image)  # condition is the image itself  # I have made this up but it is consistent with the paper
         feature_condition = self.predict_feature_condition(image) 
         if self.num_evaluations == 1:
-            prediction_onehot = self.predict_single(image, condition, feature_condition, names=names)  # (BNHW)
+            prediction_onehot = self.predict_single(image, condition, feature_condition, names=names, params=self.params)  # (BNHW)
         else:
-            prediction_onehot = self.predict_multiple(image, condition, feature_condition, names=names)
+            prediction_onehot = self.predict_multiple(image, condition, feature_condition, names=names, params=self.params)
             # add predict_multiple
 
         # debug only shows 1st element of the batch

@@ -1,4 +1,4 @@
-output_path: "/home/sidd_s/scratch/ccdm_logs/darkzurich_majority_single_conditionalposterior_bt1_50steps"
+output_path: "/home/sidd_s/scratch/ccdm_logs/darkzurich_majority_single_conditionalposterior_bt1_no_feature_condition"
 evaluation_path: "./evaluation/results"
 evaluations: 8  # for multiple evaluations with majority vote and for LIDC number of samples
 evaluation_vote_strategy: "majority"  # One of ["majority", "confidence"]  
@@ -68,5 +68,5 @@ load_from: '/home/sidd_s/scratch/ccdm_logs/output_cityscapes_256x512_bt16/best_c
 
 
 ## two additional conditional checking if needed or not
-check_feature_condition: True
+check_feature_condition: False
 check_image_condition: True
