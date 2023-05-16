@@ -38,7 +38,7 @@ LOGGER = logging.getLogger(__name__)
 Model = Union[DenoisingModel, nn.parallel.DataParallel, nn.parallel.DistributedDataParallel]
 
 ## replacing from existing torchdevice to current desired torch.device
-torch_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+torch_device = torch.device('cuda:7' if torch.cuda.is_available() else 'cpu')
 
 
 def _build_datasets(params: dict) -> Tuple[DataLoader, torch.Tensor, int, int, dict]:
@@ -132,7 +132,7 @@ class Evaluator:
                                                                                   f"in not in {self.eligible_eval_vote_strategies}"
 
         # compute cm with torch-only code
-        self.cm = torch.zeros(size=(num_classes - 1, num_classes - 1), device=idist.device()) 
+        self.cm = torch.zeros(size=(num_classes - 1, num_classes - 1), device=torch_device) 
         
         ## changing the existing the gpu code to desired one to work with
         self.model = self.model.to(torch_device) 
@@ -140,7 +140,7 @@ class Evaluator:
 
     def load(self, filename: str):
         LOGGER.info("Loading state from %s...", filename)
-        checkpoint = torch.load(filename, map_location=idist.device())
+        checkpoint = torch.load(filename, map_location=torch_device)
         self.load_objects(checkpoint)
         # v = pathlib.Path(filename)
         # self.checkpoint_dir = str(v.parent) #  specifying it earlier 
@@ -211,12 +211,12 @@ class Evaluator:
         else:
             ## random onehots >>> mIoU = 1.6 and 1.6 (same in both sizes) >> coming to 7.1 in conditional posterior generation (128x256) and 7.5 in (256x512)
             xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
-        prediction = self.predict(xt, condition, feature_condition, label_ref_logits, params=params)
+        # prediction = self.predict(xt, condition, feature_condition, label_ref_logits, params=params)
         
         # have to remove later
         # xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample()
         # prediction = self.predict(xt, condition, feature_condition, label_ref_logits)
-        # prediction = xt 
+        prediction = xt 
     
         return prediction
 
@@ -255,8 +255,8 @@ class Evaluator:
 
         # prep data
         image, label, label_orig, names = batch ## for now, it is hard coded, later need to change for Darkzurich instance dataset and for other datasets 
-        image = image.to(idist.device())    
-        label_onehot = label.to(idist.device())
+        image = image.to(torch_device)    
+        label_onehot = label.to(torch_device)
         label = label_onehot.argmax(dim=1).long()  # one_hot to int, (BHW)
 
         # forward step
@@ -278,7 +278,7 @@ class Evaluator:
         if self.eval_resolution == 'original':
             # replace label with original labels of shape (B H_orig W_orig)
             # upsample prediction_onehot to (H_orig,W_orig) with bilinear interpolation
-            label = label_orig.to(idist.device())
+            label = label_orig.to(torch_device)
             b, h_orig, w_orig = label.shape
             prediction_onehot = torch.nn.functional.interpolate(prediction_onehot, (h_orig, w_orig), mode='bilinear')
 
@@ -479,7 +479,7 @@ def run_inference(params: dict, params_path: str):
     engine_test.run(data_loader, max_epochs=1)
     print([p for p in zip(sorted(evaluator.pred_list), sorted(evaluator.label_list))])
 
-    check = (engine_test.state.metrics['cm'].cuda() == evaluator.cm).sum()
+    check = (engine_test.state.metrics['cm'].to(torch_device) == evaluator.cm).sum()
     print(check)
     miou, ious = evaluator.get_miou_and_ious()
     LOGGER.info(f"my miou is {miou} and ious per class are {[(train_ids_to_class_names[i], round(iou.item(), 4)) for i, iou in enumerate(ious)]}")
