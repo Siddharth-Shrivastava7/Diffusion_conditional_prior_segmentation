@@ -268,7 +268,8 @@ def get_dataloader(
         pin_memory=False,
         drop_last=False,
         num_workers=0,
-        distributed=False
+        distributed=False, 
+        download = False
 ):
     assert isinstance(val_size, float) and 0 <= val_size < 1
 
@@ -280,7 +281,7 @@ def get_dataloader(
     if name == "celeba":
         data_kwargs["split"] = split
     elif name in {"mnist", "cifar10"}:
-        data_kwargs["download"] = False
+        data_kwargs["download"] = download
         data_kwargs["train"] = split != "test"
     dataset = dataset(**data_kwargs)
 

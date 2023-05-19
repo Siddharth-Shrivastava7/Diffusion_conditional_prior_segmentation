@@ -136,7 +136,7 @@ def train(rank=0, args=None, temp_dir=""):
     num_workers = args.num_workers
     trainloader, sampler = get_dataloader(
         dataset, batch_size=train_configs.batch_size, split=split, val_size=0., random_seed=seed,
-        root=root, drop_last=True, pin_memory=True, num_workers=num_workers, distributed=distributed
+        root=root, drop_last=True, pin_memory=True, num_workers=num_workers, distributed=distributed, download=args.download
     )  # drop_last to have a static input shape; num_workers > 0 to enable asynchronous data loading
 
     chkpt_dir = args.chkpt_dir
@@ -256,6 +256,7 @@ def main():
     parser.add_argument("--rigid-launch", action="store_true", help="whether to use torch multiprocessing spawn")
     parser.add_argument("--num-gpus", default=1, type=int, help="number of gpus for distributed training")
     parser.add_argument("--dry-run", action="store_true", help="test-run till the first model update completes")
+    parser.add_argument("--download", action="store_true", help="whether to download dataset")
 
     args = parser.parse_args()
 
