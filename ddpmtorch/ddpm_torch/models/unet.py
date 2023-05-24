@@ -12,10 +12,10 @@ except ImportError:
     from ddpm_torch.functions import get_timestep_embedding
 
 
-DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)
+DEFAULT_NONLINEARITY = nn.SiLU()  # f(x)=x*sigmoid(x)   ## ok, relu is not there,surprising...can change this later!
 
 
-class DEFAULT_NORMALIZER(nn.GroupNorm):
+class DEFAULT_NORMALIZER(nn.GroupNorm):  ## group normalisation being used 
     def __init__(self, num_channels, num_groups=32):
         super().__init__(num_groups=num_groups, num_channels=num_channels)
 
@@ -204,7 +204,7 @@ class UNet(nn.Module):
 
     def forward(self, x, t):
         t_emb = get_timestep_embedding(t, self.hid_channels)
-        t_emb = self.embed(t_emb)
+        t_emb = self.embed(t_emb)   
 
         # downsample
         hs = [self.in_conv(x)]

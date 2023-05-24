@@ -48,7 +48,7 @@ def generate(rank, args, counter=0):
         skip_schedule = args.skip_schedule
         eta = args.eta
         subseq_size = args.subseq_size
-        subsequence = get_selection_schedule(skip_schedule, size=subseq_size, timesteps=num_diffusion_timesteps)
+        subsequence = get_selection_schedule(skip_schedule, size=subseq_size, timesteps=num_diffusion_timesteps) 
         diffusion = DDIM(betas, **diffusion_kwargs, eta=eta, subsequence=subsequence)
     else:
         diffusion = GaussianDiffusion(betas, **diffusion_kwargs)
@@ -125,7 +125,7 @@ def main():
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-path", default="", type=str)
-    parser.add_argument("--save-dir", default="./images/eval", type=str)
+    parser.add_argument("--save-dir", default="/home/sidd_s/scratch/results/ddpm/images/generate/", type=str)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--use-ema", action="store_true")
     parser.add_argument("--use-ddim", action="store_true")

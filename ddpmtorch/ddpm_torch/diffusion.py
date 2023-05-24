@@ -61,16 +61,16 @@ class GaussianDiffusion:
         sqrt_alphas_bar_prev = torch.sqrt(alphas_bar_prev)
         self.sqrt_recip_alphas_bar = torch.sqrt(1. / self.alphas_bar)
         self.sqrt_recip_m1_alphas_bar = torch.sqrt(1. / self.alphas_bar - 1.)  # m1: minus 1
-        self.posterior_var = betas * (1. - alphas_bar_prev) / (1. - self.alphas_bar)
-        self.posterior_logvar_clipped = torch.log(torch.cat([self.posterior_var[[1]], self.posterior_var[1:]]))
-        self.posterior_mean_coef1 = betas * sqrt_alphas_bar_prev / (1. - self.alphas_bar)
-        self.posterior_mean_coef2 = torch.sqrt(alphas) * (1. - alphas_bar_prev) / (1. - self.alphas_bar)
+        self.posterior_var = betas * (1. - alphas_bar_prev) / (1. - self.alphas_bar) ## for calculating covariance matrix [var] of q(x_{t-1} | x_t, x_0) => posterior 
+        self.posterior_logvar_clipped = torch.log(torch.cat([self.posterior_var[[1]], self.posterior_var[1:]])) ## where it is clipped??
+        self.posterior_mean_coef1 = betas * sqrt_alphas_bar_prev / (1. - self.alphas_bar) ## coeffient of posterior q(x_{t-1} | x_t, x_0) mean term 1 
+        self.posterior_mean_coef2 = torch.sqrt(alphas) * (1. - alphas_bar_prev) / (1. - self.alphas_bar) ## coeffient of posterior q(x_{t-1} | x_t, x_0) mean term 2 
 
         # for fixed model_var_type's
         self.fixed_model_var, self.fixed_model_logvar = {
             "fixed-large": (self.betas, torch.log(torch.cat([self.posterior_var[[1]], self.betas[1:]]))),
             "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
-        }[self.model_var_type]
+        }[self.model_var_type]   ## what variation we will get while changing fixed-large {default} to fixed-small ... have to look over later@! 
 
     @staticmethod
     def _extract(
@@ -79,7 +79,7 @@ class GaussianDiffusion:
         if x is not None:
             dtype = x.dtype
             device = x.device
-            ndim = x.ndim
+            ndim = x.ndim 
         out = torch.as_tensor(arr, dtype=dtype, device=device).gather(0, t)
         return out.reshape((-1, ) + (1, ) * (ndim - 1))
 
@@ -224,10 +224,10 @@ class GaussianDiffusion:
         # mse: unweighted
         if self.loss_type == "kl":
             losses = self._loss_term_bpd(
-                denoise_fn, x_0=x_0, x_t=x_t, t=t, clip_denoised=False, return_pred=False)
+                denoise_fn, x_0=x_0, x_t=x_t, t=t, clip_denoised=False, return_pred=False) # bpd is bits per dimension 
         elif self.loss_type == "mse":
             assert self.model_var_type != "learned"
-            if self.model_mean_type == "mean":
+            if self.model_mean_type == "mean": ## ok, have to check what this influences ... Alright it is predicting what ... either mean or original image or being noise predictor...authors found that predicting noise network usually provides better performance 
                 target = self.q_posterior_mean_var(x_0=x_0, x_t=x_t, t=t)[0]
             elif self.model_mean_type == "x_0":
                 target = x_0
@@ -235,7 +235,7 @@ class GaussianDiffusion:
                 target = noise
             else:
                 raise NotImplementedError(self.model_mean_type)
-            model_out = denoise_fn(x_t, t)
+            model_out = denoise_fn(x_t, t) # its a unet...wooo
             losses = flat_mean((target - model_out).pow(2))
         else:
             raise NotImplementedError(self.loss_type)

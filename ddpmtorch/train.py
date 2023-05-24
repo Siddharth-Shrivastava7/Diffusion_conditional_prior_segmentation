@@ -60,7 +60,7 @@ def train(rank=0, args=None, temp_dir=""):
 
     betas = get_beta_schedule(
         diffusion_configs.beta_schedule, beta_start=diffusion_configs.beta_start,
-        beta_end=diffusion_configs.beta_end, timesteps=diffusion_configs.timesteps)
+        beta_end=diffusion_configs.beta_end, timesteps=diffusion_configs.timesteps) ## can change later cosine beta scheduling as well...as we usually have seeing better performance of cosine as compare to linear...later!
     diffusion = GaussianDiffusion(betas=betas, **diffusion_configs)
 
     # denoise parameters
@@ -245,7 +245,7 @@ def main():
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="/home/sidd_s/scratch/saved_models/ddpm", type=str)
     parser.add_argument("--chkpt-name", default="", type=str)
-    parser.add_argument("--chkpt-intv", default=5, type=int, help="frequency of saving a checkpoint")
+    parser.add_argument("--chkpt-intv", default=50, type=int, help="frequency of saving a checkpoint")
     parser.add_argument("--seed", default=1234, type=int, help="random seed")
     parser.add_argument("--resume", action="store_true", help="to resume training from a checkpoint")
     parser.add_argument("--chkpt-path", default="/home/sidd_s/scratch/saved_models/ddpm/ddpm_cityscapes_100.pt", type=str, help="checkpoint path used to resume training")

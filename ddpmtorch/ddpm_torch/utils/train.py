@@ -192,7 +192,7 @@ class Trainer:
             with tqdm(self.trainloader, desc=f"{e+1}/{self.epochs} epochs", disable=not self.is_leader) as t:
                 for i, x in enumerate(t):
                     if isinstance(x, (list, tuple)):
-                        x = x[0]  # exclude labels; unconditional model
+                        x = x[0]  # exclude labels; unconditional model ## modelling unconditional diffusion model (so not conditioned on labels)
                     global_steps += 1
                     self.step(x.to(self.device), global_steps=global_steps)
                     t.set_postfix(self.current_stats)

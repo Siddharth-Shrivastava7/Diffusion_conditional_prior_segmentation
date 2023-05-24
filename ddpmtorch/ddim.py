@@ -36,7 +36,7 @@ def get_selection_schedule(schedule, size, timesteps):
     if schedule == "linear":
         subsequence = torch.arange(0, timesteps, timesteps // size)
     else:
-        subsequence = torch.pow(torch.linspace(0, math.sqrt(timesteps * 0.8), size), 2).round().to(torch.int32)  # noqa
+        subsequence = torch.pow(torch.linspace(0, math.sqrt(timesteps * 0.8), size), 2).round().to(torch.int64)  # noqa
 
     return subsequence
 
