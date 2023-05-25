@@ -236,7 +236,7 @@ class UNet(nn.Module):
 
 
 if __name__ == "__main__":
-    model = UNet(3, 64, 3, (1, 2, 4), 3, (True, True, True))
+    model = UNet(3, 128, 3, (1, 2, 2,2), 2, (False, True, False, False), drop_rate=0.1)
     print(model)
     out = model(torch.randn(16, 3, 32, 32), t=torch.randint(1000, size=(16, )))
     print(out.shape) 
@@ -244,5 +244,5 @@ if __name__ == "__main__":
     for p in model.parameters():
         if p.requires_grad:
             tp+=p.numel()
-    print(f'{tp:,}')
-    
+    print(f'{tp:,}') 
+    summary(model, torch.randn(16, 3, 32, 32), torch.randint(1000, size=(16, )))

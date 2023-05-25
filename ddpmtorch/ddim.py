@@ -84,7 +84,7 @@ class DDIM(ddpm_torch.GaussianDiffusion):
                     torch.cat([self.posterior_var[[1]], self.betas[1:]]).clip(min=1e-20))),
             "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
         }[self.model_var_type]
-
+        
         self.subsequence = torch.as_tensor(subsequence)
 
     @torch.inference_mode()
