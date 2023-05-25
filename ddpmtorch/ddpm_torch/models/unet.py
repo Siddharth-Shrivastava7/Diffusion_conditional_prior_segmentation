@@ -1,6 +1,8 @@
 import math
 import torch
 import torch.nn as nn
+from torchsummary import summary 
+
 try:
     from ..modules import Linear, Conv2d, SamePad2d, Sequential
     from ..functions import get_timestep_embedding
@@ -237,4 +239,10 @@ if __name__ == "__main__":
     model = UNet(3, 64, 3, (1, 2, 4), 3, (True, True, True))
     print(model)
     out = model(torch.randn(16, 3, 32, 32), t=torch.randint(1000, size=(16, )))
-    print(out.shape)
+    print(out.shape) 
+    tp=0
+    for p in model.parameters():
+        if p.requires_grad:
+            tp+=p.numel()
+    print(f'{tp:,}')
+    
