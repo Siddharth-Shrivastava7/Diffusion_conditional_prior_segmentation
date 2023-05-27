@@ -193,7 +193,7 @@ class UNet(nn.Module):
             import torch
             import tensorflow as tf
             
-            x = np.arange(9.).reshape(3, 3)
+            x = np.arange(9.).reshape(3, 3) 
             print(torch.nn.functional.interpolate(torch.as_tensor(x).reshape(1, 1, 3, 3), size=7, mode="nearest"))  # asymmetric
             print(tf.squeeze(tf.compat.v1.image.resize(tf.reshape(tf.convert_to_tensor(x), shape=(3, 3, 1)), size=(7, 7), method="nearest", align_corners=True)))  # symmetric
             ---------------------------------------------------------------------------

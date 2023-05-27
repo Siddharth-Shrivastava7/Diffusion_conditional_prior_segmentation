@@ -147,11 +147,13 @@ def show_result_pyplot(model,
     if hasattr(model, 'module'):
         model = model.module
     img = model.show_result(
-        img, result, palette=palette, show=False, opacity=opacity)
-    plt.figure(figsize=fig_size)
-    plt.imshow(mmcv.bgr2rgb(img))
-    plt.title(title)
-    plt.tight_layout()
-    plt.show(block=block)
-    if out_file is not None:
-        mmcv.imwrite(img, out_file)
+        img, result, palette=palette, show=False, opacity=opacity, out_file = out_file)
+    # print('>>>>>>>>>>>>>>>', img.shape)
+    # plt.figure(figsize=fig_size)
+    # plt.imshow(mmcv.bgr2rgb(img)) # not required as saving the image
+    # plt.title(title)
+    # plt.tight_layout()
+    # plt.show(block=block)
+    ## below one is already executed
+    # if out_file is not None:
+    #     mmcv.imwrite(img, out_file)
