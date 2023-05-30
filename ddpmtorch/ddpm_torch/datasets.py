@@ -184,6 +184,46 @@ class CelebAHQ(tvds.VisionDataset):
     def __len__(self):
         return len(self.filename)
 
+## church dataset 
+@register_dataset
+class Lsunchurch(tvds.VisionDataset):
+   
+    base_folder = "lsunchruch_train"  # base 
+    resolution = (256, 256)
+    channels = 3
+    transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    _transform = transforms.PILToTensor()
+    
+    def __init__(
+            self,
+            root,
+            transform=None
+    ):
+        super().__init__(root, transform=transform or self._transform)
+        self.filename = sorted([
+            fname
+            for fname in os.listdir(os.path.join(root, self.base_folder))
+            if fname.endswith("jpg")
+        ])
+        np.random.RandomState(123).shuffle(self.filename)  # legacy order used by ProGAN
+
+    def __getitem__(self, index):
+        im = PIL.Image.open(os.path.join(  # noqa
+            self.root, self.base_folder, self.filename[index])).convert('RGB')
+
+        if self.transform is not None:
+            im = self.transform(im)
+
+        return im
+
+    def __len__(self):
+        return len(self.filename)    
+
+
 ## cityscapes dataset segmentation maps in at for generation
 @register_dataset
 class Cityscapes(tvds.VisionDataset):
@@ -226,10 +266,6 @@ class Cityscapes(tvds.VisionDataset):
 
     def __len__(self):
         return len(self.filename)
-
-
-
-
 
 
 

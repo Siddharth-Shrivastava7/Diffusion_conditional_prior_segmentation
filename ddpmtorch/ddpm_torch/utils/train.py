@@ -91,6 +91,8 @@ class Trainer:
         self.start_epoch = 0
         self.trainloader = trainloader
         self.sampler = sampler
+        
+        
         if shape is None:
             shape = next(iter(trainloader))[0].shape[1:]
         self.shape = shape

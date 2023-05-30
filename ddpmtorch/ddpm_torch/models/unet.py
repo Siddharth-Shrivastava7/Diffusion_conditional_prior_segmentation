@@ -236,13 +236,16 @@ class UNet(nn.Module):
 
 
 if __name__ == "__main__":
-    model = UNet(3, 128, 3, (1, 2, 2,2), 2, (False, True, False, False), drop_rate=0.1)
-    print(model)
-    out = model(torch.randn(16, 3, 32, 32), t=torch.randint(1000, size=(16, )))
+    # model = UNet(3, 128, 3, (1, 2, 2,2), 2, (False, True, False, False), drop_rate=0.1) # for small dataset 32x32 cifar10
+    model = UNet(3, 128, 3, (1, 1, 2, 2, 4, 4), 2, (False, False, False, False, True, False), drop_rate=0.0) # for lsun dataset 256x256 
+    # print(model)
+    # out = model(torch.randn(16, 3, 32, 32), t=torch.randint(1000, size=(16, ))) # cifar 10
+    out = model(torch.randn(16, 3, 256, 256), t=torch.randint(1000, size=(16, ))) # lsun bedroom
     print(out.shape) 
     tp=0
     for p in model.parameters():
         if p.requires_grad:
             tp+=p.numel()
-    print(f'{tp:,}') 
-    summary(model, torch.randn(16, 3, 32, 32), torch.randint(1000, size=(16, )))
+    print(f'{tp:,}')  ## 114M params for lsun bedroom and 25.7M params for cifar10
+    # summary(model, torch.randn(16, 3, 32, 32), torch.randint(1000, size=(16, ))) # cifar10 
+    summary(model, torch.randn(16, 3, 256, 256), torch.randint(1000, size=(16, ))) # lsun bedroom 
