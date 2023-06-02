@@ -105,7 +105,7 @@ model = dict(
     test_cfg=dict(mode='whole'))
 
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=2,  ## change for now, as reproducing the thing what author has given::to cross check him >> later change to 4 (for batch size of 16 using 4 GPUs)
     workers_per_gpu=4,
 )
 
