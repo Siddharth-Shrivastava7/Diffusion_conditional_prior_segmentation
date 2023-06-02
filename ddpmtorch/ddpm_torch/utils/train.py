@@ -172,6 +172,7 @@ class Trainer:
 
         num_samples = self.num_save_images
         nrow = math.floor(math.sqrt(num_samples))
+        print('>>>>>>>>>>>>', num_samples, self.world_size)
         if num_samples:
             assert num_samples % self.world_size == 0, "Number of samples should be divisible by WORLD_SIZE!"
             shape = (num_samples // self.world_size, ) + self.shape

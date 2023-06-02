@@ -188,7 +188,7 @@ class CelebAHQ(tvds.VisionDataset):
 @register_dataset
 class Lsunchurch(tvds.VisionDataset):
    
-    base_folder = "lsunchruch_train"  # base 
+    base_folder = "church_train"  # base 
     resolution = (256, 256)
     channels = 3
     transform = transforms.Compose([

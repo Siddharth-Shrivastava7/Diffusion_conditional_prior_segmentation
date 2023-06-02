@@ -240,8 +240,8 @@ def main():
     parser.add_argument("--train-device", default="cuda:0", type=str)
     parser.add_argument("--eval-device", default="cuda:0", type=str)
     parser.add_argument("--image-dir", default="/home/sidd_s/scratch/results/ddpm/images/train", type=str)
-    parser.add_argument("--image-intv", default=500, type=int)
-    parser.add_argument("--num-save-images", default=64, type=int, help="number of images to generate & save")
+    parser.add_argument("--image-intv", default=50, type=int)
+    parser.add_argument("--num-save-images", default=10, type=int, help="number of images to generate & save")
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="/home/sidd_s/scratch/saved_models/ddpm", type=str)
     parser.add_argument("--chkpt-name", default="", type=str)
@@ -275,6 +275,7 @@ def main():
           4. uses TCP initialization by default
         **5. supports multi-node training
         """
+        # import pdb;pdb.set_trace()
         train(args=args)
 
 
