@@ -20,6 +20,7 @@ from mmseg.models import build_segmentor
 from mmseg.utils import (collect_env, get_device, get_root_logger,
                          setup_multi_processes)
 
+import pdb
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a segmentor')
@@ -110,6 +111,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+    
+    # pdb.set_trace()  # debugging using pdb 
 
     cfg = Config.fromfile(args.config)
     if args.cfg_options is not None:
