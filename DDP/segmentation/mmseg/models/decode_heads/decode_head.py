@@ -218,7 +218,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
     def forward_train(self, inputs, img_metas, gt_semantic_seg, train_cfg):
         """Forward function for training.
         Args:
-            inputs (list[Tensor]): List of multi-level img features.
+            inputs (list[Tensor]): List of multi-level img features. >>>>> just image features {NOT the concatenated img and gt features} <<<<
             img_metas (list[dict]): List of image info dict where each dict
                 has: 'img_shape', 'scale_factor', 'flip', and may also contain
                 'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.

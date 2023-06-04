@@ -99,18 +99,18 @@ class DDP(EncoderDecoder):
             conv_cfg=None,
             norm_cfg=None,
             act_cfg=None
-        )
+        ) # used for converting concatenated encoded i/p image and encoded;corrupted gt map to feature maps of dimension being half of the joint dimension of the concatenated inputs
 
         # time embeddings
         time_dim = self.decode_head.in_channels[0] * 4  # 1024
         sinu_pos_emb = LearnedSinusoidalPosEmb(learned_sinusoidal_dim)
         fourier_dim = learned_sinusoidal_dim + 1
 
-        self.time_mlp = nn.Sequential(  # [2,]
-            sinu_pos_emb,  # [2, 17]
-            nn.Linear(fourier_dim, time_dim),  # [2, 1024]
+        self.time_mlp = nn.Sequential(  # [2,] # is the input shape 
+            sinu_pos_emb,  # [2, 17] # output shape
+            nn.Linear(fourier_dim, time_dim),  # [17, 1024] # output shape
             nn.GELU(),
-            nn.Linear(time_dim, time_dim)  # [2, 1024]
+            nn.Linear(time_dim, time_dim)  # [1024, 1024] # output shape
         )
 
     def encode_decode(self, img, img_metas):
@@ -152,8 +152,8 @@ class DDP(EncoderDecoder):
         gt_down = gt_down.to(gt_semantic_seg.dtype)
         gt_down[gt_down == 255] = self.num_classes
 
-        gt_down = self.embedding_table(gt_down).squeeze(1).permute(0, 3, 1, 2)
-        gt_down = (torch.sigmoid(gt_down) * 2 - 1) * self.bit_scale
+        gt_down = self.embedding_table(gt_down).squeeze(1).permute(0, 3, 1, 2) # encoding of gt
+        gt_down = (torch.sigmoid(gt_down) * 2 - 1) * self.bit_scale # encoding of gt 
 
         # sample time
         times = torch.zeros((batch,), device=device).float().uniform_(self.sample_range[0],
@@ -168,7 +168,7 @@ class DDP(EncoderDecoder):
 
         # conditional input
         feat = torch.cat([x, noised_gt], dim=1)
-        feat = self.transform(feat)
+        feat = self.transform(feat) ## why reduce back to 256? (from 512) may be because decoder head was tuned to 256 channels input >> they used 6 layer deformable attention for that 
 
         losses = dict()
         input_times = self.time_mlp(noise_level)
