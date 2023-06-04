@@ -29,7 +29,17 @@ def alpha_cosine_log_snr(t, ns=0.0002, ds=0.00025):
 
 
 def log_snr_to_alpha_sigma(log_snr):
-    return torch.sqrt(torch.sigmoid(log_snr)), torch.sqrt(torch.sigmoid(-log_snr))
+    return torch.sqrt(torch.sigmoid(log_snr)), torch.sqrt(torch.sigmoid(-log_snr)) # converting log(alpha) -> alpha, and log(alpha) -> (1 - alpha) 
+''' 
+    sort of 1st thing of above came from: 
+        sqrt{1 / (1 + e^{log_snr})} = sqrt{1 / (1 + e^{-log(alpha)})} = sqrt{1 / (1 + (1/alpha))} = sqrt{alpha/(1 + alpha) ; now (1+alpha) -> 1 thus: 
+        sqrt{alpha} 
+
+    sort of 2nd thing of above came from: 
+        rationalising (multiplying denominator and numerator) with (1 - aplha) so, its like: 
+        (1-alpha) / {(1+aplha)*(1-aplha)} = (1-alpha) / (1-alpha^2) ; now, (1-alpha^2) -> 1 thus: 
+        (1 - alpha) => sqrt{1-alpha}
+'''
 
 
 class LearnedSinusoidalPosEmb(nn.Module):
@@ -116,7 +126,7 @@ class DDP(EncoderDecoder):
     def encode_decode(self, img, img_metas):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
-        x = self.extract_feat(img)[0]
+        x = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
         if self.diffusion == "ddim":
             out = self.ddim_sample(x, img_metas)
         elif self.diffusion == 'ddpm':
@@ -219,10 +229,10 @@ class DDP(EncoderDecoder):
         b, c, h, w, device = *x.shape, x.device
         time_pairs = self._get_sampling_timesteps(b, device=device)
         x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
-        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device)
+        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution
         for idx, (times_now, times_next) in enumerate(time_pairs):
-            feat = torch.cat([x, mask_t], dim=1)
-            feat = self.transform(feat)
+            feat = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
+            feat = self.transform(feat) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
             log_snr = self.log_snr(times_now)
             log_snr_next = self.log_snr(times_next)
 
@@ -232,12 +242,12 @@ class DDP(EncoderDecoder):
             alpha_next, sigma_next = log_snr_to_alpha_sigma(padded_log_snr_next)
 
             input_times = self.time_mlp(log_snr)
-            mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  # [bs, 150, ]
-            mask_pred = torch.argmax(mask_logit, dim=1)
-            mask_pred = self.embedding_table(mask_pred).permute(0, 3, 1, 2)
-            mask_pred = (torch.sigmoid(mask_pred) * 2 - 1) * self.bit_scale
-            pred_noise = (mask_t - alpha * mask_pred) / sigma.clamp(min=1e-8)
-            mask_t = mask_pred * alpha_next + pred_noise * sigma_next
+            mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  # [bs, 150, ] ## it is the map_pred :: the decoded y_0^{hat} from the map decoder 
+            mask_pred = torch.argmax(mask_logit, dim=1) ## the label map from the map decoder logit output
+            mask_pred = self.embedding_table(mask_pred).permute(0, 3, 1, 2) ## encoding the map pred from the map decoder part 
+            mask_pred = (torch.sigmoid(mask_pred) * 2 - 1) * self.bit_scale ## encoding the map pred from the map decoder part
+            pred_noise = (mask_t - alpha * mask_pred) / sigma.clamp(min=1e-8) ## eps calculating exactly same as what was mentioned in the paper 
+            mask_t = mask_pred * alpha_next + pred_noise * sigma_next ## this mask_t is basically the mask_{t+1}; they used it as mask_t since, it will be reused in the next iteration of the timesteps ## and this is main step of DDIM formulation...OLA!!!
 
         logit = mask_logit.mean(dim=0, keepdim=True)
         return logit
