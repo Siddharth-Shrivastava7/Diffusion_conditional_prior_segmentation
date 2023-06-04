@@ -283,7 +283,9 @@ class EncoderDecoder(BaseSegmentor):
                 output = output.flip(dims=(3,))
             elif flip_direction == 'vertical':
                 output = output.flip(dims=(2,))
-
+        '''
+            here, the output is the probability distribution!;)!
+        '''
         return output
 
     def simple_test(self, img, img_meta, rescale=True):
@@ -324,7 +326,7 @@ class EncoderDecoder(BaseSegmentor):
         for i in range(1, len(imgs)):
             cur_seg_logit = self.inference(imgs[i], img_metas[i], rescale)
             seg_logit += cur_seg_logit
-        seg_logit /= len(imgs)
+        seg_logit /= len(imgs) ## averaging over multiple probability distributions (since here logits is actually the softmax output::which can be trace back from self.inference module)
         if self.out_channels == 1:
             seg_pred = (seg_logit >
                         self.decode_head.threshold).to(seg_logit).squeeze(1)
