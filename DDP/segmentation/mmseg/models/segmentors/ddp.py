@@ -228,8 +228,20 @@ class DDP(EncoderDecoder):
     def ddim_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
         time_pairs = self._get_sampling_timesteps(b, device=device)
-        x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
-        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution
+        x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps) 
+        if img_metas[0]['filename'].find('dark_zurich')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
+            mic_pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
+            # mic_pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for DZ data input images
+            mic_pred = torch.tensor(np.array(Image.open(mic_pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
+            mic_pred = mic_pred.view(1,1, mic_pred.shape[0], mic_pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+            ## have to resize mic_pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
+            mic_pred_down = resize(mic_pred.float(), size=(h, w), mode="nearest")
+            mask_t = self.embedding_table(mic_pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
+            mask_t = (torch.sigmoid(mask_t) * 2 - 1) * self.bit_scale
+        else:
+            mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution
+        # mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
+        
         for idx, (times_now, times_next) in enumerate(time_pairs):
             feat = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
             feat = self.transform(feat) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)

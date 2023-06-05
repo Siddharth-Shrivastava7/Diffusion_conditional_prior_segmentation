@@ -35,7 +35,7 @@ mmseg/datasets/chase_db1.py
 mmseg/datasets/cityscapes.py
 mmseg/datasets/coco_stuff.py
 mmseg/datasets/custom.py
-mmseg/datasets/dark_zurich.py
+mmseg/datasets/darkzurich.py
 mmseg/datasets/dataset_wrappers.py
 mmseg/datasets/drive.py
 mmseg/datasets/hrf.py
