@@ -11,7 +11,7 @@ norm_cfg = dict(type='SyncBN', requires_grad=True)
 backbone_norm_cfg = dict(type='LN', requires_grad=True)
 model = dict(
     type='DDP',
-    timesteps=3, # time steps for i think sampling the number of steps 
+    timesteps=10, # time steps for i think sampling the number of steps 
     bit_scale=0.01, # scaling parameter 
     pretrained=None,
     backbone=dict(
