@@ -235,7 +235,7 @@ class GaussianDiffusion:
                 target = noise
             else:
                 raise NotImplementedError(self.model_mean_type)
-            model_out = denoise_fn(x_t, t) # its a unet...wooo
+            model_out = denoise_fn(x_t, t) 
             losses = flat_mean((target - model_out).pow(2))
         else:
             raise NotImplementedError(self.loss_type)
