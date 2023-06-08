@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'BDD100kDataset'
-data_root = 'data/bdd100k/'
+data_root = '/home/sidd_s/scratch/dataset/bdd100k_seg/bdd100k/seg/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 crop_size = (512, 1024)
@@ -37,19 +37,19 @@ data = dict(
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/10k/train',
-        ann_dir='labels/sem_seg/masks/train',
+        img_dir='images/train',
+        ann_dir='labels/train',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/10k/val',
-        ann_dir='labels/sem_seg/masks/val',
+        img_dir='images/val',
+        ann_dir='labels/val',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='images/10k/val',
-        ann_dir='labels/sem_seg/masks/val',
+        img_dir='images/val',
+        ann_dir='labels/val',
         pipeline=test_pipeline
     ))

@@ -11,6 +11,17 @@ from .. import builder
 from ..builder import SEGMENTORS
 from .base import BaseSegmentor
 
+from PIL import Image 
+import numpy as np
+
+
+
+def prob_2_entropy(prob):
+    """ convert probabilistic prediction maps to weighted self-information maps
+    """
+    n, c, h, w = prob.size()
+    return -torch.mul(prob, torch.log2(prob + 1e-30)) / np.log2(c)
+
 
 @SEGMENTORS.register_module()
 class EncoderDecoder(BaseSegmentor):
@@ -228,7 +239,6 @@ class EncoderDecoder(BaseSegmentor):
 
     def whole_inference(self, img, img_meta, rescale):
         """Inference with full image."""
-
         seg_logit = self.encode_decode(img, img_meta)
         if rescale:
             # support dynamic shape for onnx
@@ -300,6 +310,27 @@ class EncoderDecoder(BaseSegmentor):
             # our inference backend only support 4D output
             seg_pred = seg_pred.unsqueeze(0)
             return seg_pred
+        
+        ## here need to change for bringing uncertainty into consideration 
+        # if img_meta[0]['filename'].find('dark_zurich')!=-1:    
+        #     ## seg logit is probability distribution here 
+        #     mic_pred_path = img_meta[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
+        #     mic_pred = torch.tensor(np.array(Image.open(mic_pred_path))).to(img.device) # loading MIC prediction {as a starting point to correct it further}  
+        #     mic_pred = mic_pred.view(1, mic_pred.shape[0], mic_pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+        #     mic_pred = mic_pred.long()
+            
+        #     ## uncertainty map from probability distribution 
+        #     entropy_map = torch.log(prob_2_entropy(seg_logit)) 
+        #     entropy_map = entropy_map.mean(dim=1) 
+        #     binary_map = (entropy_map.squeeze() < entropy_map.mean()).unsqueeze(dim=0)
+        #     # entropy_map = F.sigmoid(entropy_map)
+        #     seg_pred[binary_map] = mic_pred[binary_map]
+            
+        #     # label_entropy = entropy_map.argmax(dim=1)
+        #     # updating seg_pred with pixel with high entropy class with the original segmentation label
+        #     # seg_pred[seg_pred==label_entropy] = mic_pred[seg_pred==label_entropy]   
+        # seg_pred = resize(seg_pred.unsqueeze(dim=0).float(), size=(1080, 1920), mode="nearest").squeeze(dim=0) 
+            
         seg_pred = seg_pred.cpu().numpy()
         # unravel batch dim
         seg_pred = list(seg_pred)
