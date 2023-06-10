@@ -125,7 +125,7 @@ def main():
     parser.add_argument("--config-dir", default="./configs", type=str)
     parser.add_argument("--chkpt-dir", default="./chkpts", type=str)
     parser.add_argument("--chkpt-path", default="", type=str)
-    parser.add_argument("--save-dir", default="/home/sidd_s/scratch/results/ddpm/images/gen_2160/", type=str)
+    parser.add_argument("--save-dir", default="/home/sidd_s/scratch/results/ddpm/images/gen_x0/", type=str)
     parser.add_argument("--device", default="cuda:0", type=str)
     parser.add_argument("--use-ema", action="store_true")
     parser.add_argument("--use-ddim", action="store_true")

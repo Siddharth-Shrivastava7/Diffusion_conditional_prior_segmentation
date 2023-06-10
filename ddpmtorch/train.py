@@ -69,7 +69,7 @@ def train(rank=0, args=None, temp_dir=""):
     block_size = model_configs.pop("block_size", args.block_size)
     model_configs["in_channels"] = in_channels * block_size ** 2
     model_configs["out_channels"] = out_channels * block_size ** 2
-    _model = UNet(**model_configs)
+    _model = UNet(**model_configs) 
 
     if block_size > 1:
         pre_transform = torch.nn.PixelUnshuffle(block_size)  # space-to-depth

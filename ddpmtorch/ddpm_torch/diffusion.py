@@ -62,7 +62,7 @@ class GaussianDiffusion:
         self.sqrt_recip_alphas_bar = torch.sqrt(1. / self.alphas_bar)
         self.sqrt_recip_m1_alphas_bar = torch.sqrt(1. / self.alphas_bar - 1.)  # m1: minus 1
         self.posterior_var = betas * (1. - alphas_bar_prev) / (1. - self.alphas_bar) ## for calculating covariance matrix [var] of q(x_{t-1} | x_t, x_0) => posterior 
-        self.posterior_logvar_clipped = torch.log(torch.cat([self.posterior_var[[1]], self.posterior_var[1:]])) ## where it is clipped??
+        self.posterior_logvar_clipped = torch.log(torch.cat([self.posterior_var[[1]], self.posterior_var[1:]])) 
         self.posterior_mean_coef1 = betas * sqrt_alphas_bar_prev / (1. - self.alphas_bar) ## coeffient of posterior q(x_{t-1} | x_t, x_0) mean term 1 
         self.posterior_mean_coef2 = torch.sqrt(alphas) * (1. - alphas_bar_prev) / (1. - self.alphas_bar) ## coeffient of posterior q(x_{t-1} | x_t, x_0) mean term 2 
 
@@ -70,7 +70,7 @@ class GaussianDiffusion:
         self.fixed_model_var, self.fixed_model_logvar = {
             "fixed-large": (self.betas, torch.log(torch.cat([self.posterior_var[[1]], self.betas[1:]]))),
             "fixed-small": (self.posterior_var, self.posterior_logvar_clipped)
-        }[self.model_var_type]   ## what variation we will get while changing fixed-large {default} to fixed-small ... have to look over later@! 
+        }[self.model_var_type]   ## what variation we will get while 
 
     @staticmethod
     def _extract(
