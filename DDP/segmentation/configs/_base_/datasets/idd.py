@@ -23,5 +23,5 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         img_dir='images', 
-        ann_dir = 'labels',
+        ann_dir = 'labels_trainids',
         pipeline=test_pipeline))

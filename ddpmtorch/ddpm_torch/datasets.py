@@ -46,7 +46,6 @@ class CIFAR10(tvds.CIFAR10):
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),  
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        # transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) # cifar 10 and imagnet data are quite similar, so can use its mean and std as well!
     ])
     _transform = transforms.PILToTensor()
     train_size = 50000

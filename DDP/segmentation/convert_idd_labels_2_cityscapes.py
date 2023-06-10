@@ -18,11 +18,12 @@ def main():
         mapping_ar = np.zeros(k.max()+1, dtype=v.dtype)
         mapping_ar[k] = v  # dict bananyi, k mei dalo, v mei chala jaega
         label = mapping_ar[label]  # map label to new values of IDD label
-        print('>>>>>>>>>>', label.shape, np.unique(label))
+        # print('>>>>>>>>>>', label.shape, np.unique(np.uint8(label)))
         # plt.imsave(src.replace('labels','labels_trainids'), np.uint8(label), cmap='gray')
         # cv2.imwrite(src.replace('labels','labels_trainids'), label)
         label = Image.fromarray(np.uint8(label))
-        label.save(src.replace('labels','labels_trainids'))
+        # print(np.unique(np.array(label)))
+        label.save(src.replace('labels','labels_trainids'), "PNG") ## adding "PNG" helps to save the semantic label image in one channel with its label values preserved!
         # break
         
         
