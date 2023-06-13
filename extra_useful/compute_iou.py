@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 from PIL import Image
 from os.path import join
+import os
 
 
 def fast_hist(a, b, n):
@@ -33,17 +34,17 @@ def compute_mIoU(gt_dir, pred_dir, devkit_dir=''):
     mapping = np.array(info['label2train'], dtype=np.int)
     hist = np.zeros((num_classes, num_classes))
 
-    image_path_list = join(devkit_dir, 'zurich_val.txt')
-    label_path_list = join(devkit_dir, 'label_zurich.txt')
-    gt_imgs = open(label_path_list, 'r').read().splitlines()
-    gt_imgs = [join(gt_dir, x) for x in gt_imgs]
-    pred_imgs = open(image_path_list, 'r').read().splitlines()
-    pred_imgs = [join(pred_dir, x.split('/')[-1]) for x in pred_imgs]
+    # image_path_list = join(devkit_dir, 'zurich_val.txt')
+    # label_path_list = join(devkit_dir, 'label_zurich.txt')
+    # gt_imgs = open(label_path_list, 'r').read().splitlines()
+    gt_imgs = [join(gt_dir, x) for x in os.listdir(gt_dir)]
+    # pred_imgs = open(image_path_list, 'r').read().splitlines()
+    pred_imgs = [join(pred_dir, x.split('/')[-1].replace('_gt_labelTrainIds.png', '_rgb_anon.png')) for x in os.listdir(pred_dir)]
 
     for ind in range(len(gt_imgs)):
         pred = np.array(Image.open(pred_imgs[ind]))
         label = np.array(Image.open(gt_imgs[ind]))
-        label = label_mapping(label, mapping)
+        # label = label_mapping(label, mapping) # not mapping require since, already there are in train label form
         if len(label.flatten()) != len(pred.flatten()):
             print('Skipping: len(gt) = {:d}, len(pred) = {:d}, {:s}, {:s}'.format(len(label.flatten()), len(pred.flatten()), gt_imgs[ind], pred_imgs[ind]))
             continue
@@ -64,9 +65,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--gt_dir', default='/path/to/Dark_Zurich_val_anon/', type=str, help='directory which stores CityScapes val gt images')
-    parser.add_argument('--pred_dir', default='./result/dannet_PSPNet', type=str, help='directory which stores CityScapes val pred images')
-    parser.add_argument('--devkit_dir', default='./dataset/lists', help='base directory of cityscapes')
+    parser.add_argument('--gt_dir', default='/home/sidd_s/scratch/dataset/dark_zurich_val_morepred/gt/resized_val_256x512/', type=str, help='directory which stores CityScapes val gt images')
+    parser.add_argument('--pred_dir', default='/home/sidd_s/scratch/results/MIC/resized_dz_pred_256x512/', type=str, help='directory which stores CityScapes val pred images')
+    parser.add_argument('--devkit_dir', default='/home/sidd_s/Diffusion_conditional_prior_segmentation/extra_useful', help='base directory of cityscapes')
     args = parser.parse_args()
     main(args)
 

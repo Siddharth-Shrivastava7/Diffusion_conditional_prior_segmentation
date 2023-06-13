@@ -17,14 +17,15 @@ def main():
             if not os.path.exists(new_folder):
                 # print('>>>>>>>>>') 
                 os.makedirs(new_folder)
+            ## for pallete single channel label map images to resize 
             # im = Image.open(src)
             # im = im.resize((512, 256))
             # im.save(dst, "PNG")
             
-            im = np.array(Image.open(src), dtype=np.uint8)
-            im = Image.fromarray(im)
-            im = im.resize((512, 256))
-            im.save(dst)
+            ## for single channel label map images to resize 
+            im = Image.open(src)
+            im = im.resize((512, 256), Image.NEAREST)
+            im.save(dst, "PNG")
         else:
             continue 
 
