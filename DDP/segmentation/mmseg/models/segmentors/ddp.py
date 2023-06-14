@@ -234,24 +234,25 @@ class DDP(EncoderDecoder):
         # if img_metas[0]['filename'].find('cityscapes')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
         # if img_metas[0]['filename'].find('bdd100k')!=-1:
             # ## loading the predicted image
-            # # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-            # mic_pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
-            # # mic_pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
-            # # mic_pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
-            # # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
-            # # mic_pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/robustnet/saved_models/val/pred_trainids') ## cityscapes prediction by Robustnet
-            # # mic_pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
+            # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+            # # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
+            # # pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
+            # # pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
+            # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
+            # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
+            # # pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
             # # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', img_metas[0]['filename']) # image path of the dataset 
-            # # mic_pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
-            # # mic_pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/robustnet_pred/') # Robustnet prediction on DZ-val images
-            # mic_pred = torch.tensor(np.array(Image.open(mic_pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
-            # mic_pred[mic_pred==255] = self.num_classes ## for gt case 
-            # mic_pred = mic_pred.view(1,1, mic_pred.shape[0], mic_pred.shape[1]) ## shape => (1, 1, 1080, 1920)
-            # ## have to resize mic_pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
-            # mic_pred_down = resize(mic_pred.float(), size=(h, w), mode="nearest")
+            # # pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
+            # # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/robustnet_pred/') # Robustnet prediction on DZ-val images
+            # pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
+            # pred[pred==255] = self.num_classes ## for gt case 
+            # pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+            # ## have to resize pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
+            # pred_down = resize(pred.float(), size=(h, w), mode="nearest")
             # # encoding the predicted image
-            # mask_enc = self.embedding_table(mic_pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
-            # mask_enc = (torch.sigmoid(mask_enc) * 2 - 1) * self.bit_scale
+            # mask_enc = self.embedding_table(pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
+            # mask_enc = (torch.sigmoid(mask_enc) * 2 - 1) * self.bit_scale 
+            # # print(mask_enc.shape) # torch.Size([1, 256, 256, 512])
             # ## corrupting the predicted image 
             # # sample time
             # # times = torch.zeros((b,), device=device).float().uniform_(self.sample_range[0],
