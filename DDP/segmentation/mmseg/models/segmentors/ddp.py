@@ -235,11 +235,11 @@ class DDP(EncoderDecoder):
         # if img_metas[0]['filename'].find('bdd100k')!=-1:
             # ## loading the predicted image
             # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-            # # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
             # # pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
             # # pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
-            # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
-            # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
+            # # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
+            # # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
             # # pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
             # # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', img_metas[0]['filename']) # image path of the dataset 
             # # pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
