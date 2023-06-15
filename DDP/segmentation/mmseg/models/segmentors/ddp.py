@@ -14,6 +14,10 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
+## later can comment out
+
+
+
 
 def log(t, eps=1e-20):
     return torch.log(t.clamp(min=eps))
@@ -189,6 +193,77 @@ class DDP(EncoderDecoder):
                 [x], img_metas, gt_semantic_seg)
             losses.update(loss_aux)
         return losses
+
+
+    ## self aligned denoising training
+    def forward_train_self_aligned_denoising(self, img, img_metas, gt_semantic_seg):
+        """Forward function for training.
+        Args:
+            img (Tensor): Input images.
+            img_metas (list[dict]): List of image info dict where each dict
+                has: 'img_shape', 'scale_factor', 'flip', and may also contain
+                'filename', 'ori_shape', 'pad_shape', and 'img_norm_cfg'.
+                For details on the values of these keys see
+                `mmseg/datasets/pipelines/formatting.py:Collect`.
+            gt_semantic_seg (Tensor): Semantic segmentation masks
+                used if the architecture supports semantic segmentation task.
+        Returns:
+            dict[str, Tensor]: a dictionary of loss components
+        """
+
+        # backbone & neck
+        x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
+        batch, c, h, w, device, = *x.shape, x.device
+        # gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
+        # gt_down = gt_down.to(gt_semantic_seg.dtype)
+        # gt_down[gt_down == 255] = self.num_classes
+
+        # gt_down = self.embedding_table(gt_down).squeeze(1).permute(0, 3, 1, 2) # encoding of gt
+        # gt_down = (torch.sigmoid(gt_down) * 2 - 1) * self.bit_scale # encoding of gt 
+
+        city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
+        pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet 
+        pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
+        pred[pred==255] = self.num_classes ## for gt case 
+        pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+        pred_down = resize(pred.float(), size=(h, w), mode="nearest")
+        ## passing to map_decoder!\
+            
+            
+        
+        
+        ## encoding of gt_pred_down
+        gt_pred_down = self.embedding_table(gt_pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
+        gt_pred_down = (torch.sigmoid(gt_pred_down) * 2 - 1) * self.bit_scale 
+        
+
+
+        # sample time
+        times = torch.zeros((batch,), device=device).float().uniform_(self.sample_range[0],
+                                                                      self.sample_range[1])  # [bs]
+
+        # random noise
+        noise = torch.randn_like(gt_pred_down)
+        noise_level = self.log_snr(times)
+        padded_noise_level = self.right_pad_dims_to(img, noise_level)
+        alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
+        noised_gt = alpha * gt_pred_down + sigma * noise
+
+        # conditional input
+        feat = torch.cat([x, noised_gt], dim=1)
+        feat = self.transform(feat) ## why reduce back to 256? (from 512) may be because decoder head was tuned to 256 channels input >> they used 6 layer deformable attention for that 
+
+        losses = dict()
+        input_times = self.time_mlp(noise_level)
+        loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg)
+        losses.update(loss_decode)
+        if self.with_auxiliary_head:
+            loss_aux = self._auxiliary_head_forward_train(
+                [x], img_metas, gt_semantic_seg)
+            losses.update(loss_aux)
+        return losses
+    
+
 
     def _decode_head_forward_train(self, x, t, img_metas, gt_semantic_seg):
         """Run forward function and calculate loss for decode head in

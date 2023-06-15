@@ -17,6 +17,7 @@ from .loveda import LoveDADataset
 from .night_driving import NightDrivingDataset
 from .nightcity import NightCityDataset
 from .acdcnight import ACDCNightDataset
+from .acdcfoggy import ACDCFoggyDataset
 from .pascal_context import PascalContextDataset, PascalContextDataset59
 from .potsdam import PotsdamDataset
 from .stare import STAREDataset
@@ -30,5 +31,5 @@ __all__ = [
     'PascalContextDataset59', 'ChaseDB1Dataset', 'DRIVEDataset', 'HRFDataset',
     'STAREDataset', 'DarkZurichDataset', 'NightDrivingDataset',
     'COCOStuffDataset', 'LoveDADataset', 'MultiImageMixDataset',
-    'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset', 'DarkZurichDataset', 'NightCityDataset', 'ACDCNightDataset', 'IDDDataset'
+    'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset', 'DarkZurichDataset', 'NightCityDataset', 'ACDCNightDataset', 'IDDDataset', 'ACDCFoggyDataset'
 ]
