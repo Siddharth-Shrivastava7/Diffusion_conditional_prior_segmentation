@@ -1,16 +1,19 @@
 import os
- 
+from tqdm import tqdm
+
 # Function to rename multiple files
 def main():
    
-    folder = "/home/sidd_s/scratch/dataset/night_city/NightCity-label/label/val/trainid"
-    for count, filename in enumerate(os.listdir(folder)):
-        src =f"{folder}/{filename}" 
-        dst = f"{folder}/{filename.replace('_labelIds.png', '.png')}"
-         
-        # rename() function will
-        # rename all the files
-        os.rename(src, dst)
+    folder = "/home/sidd_s/scratch/dataset/Foggy_Driving_Full/gtFine/"
+    for filename in tqdm(os.listdir(folder)):
+        if filename.find('_labelTrainIds.png')!=-1:
+            src =f"{folder}/{filename}" 
+            fine_or_course = filename.split('_')[-2]
+            dst = f"{folder}/{filename.replace('_' + fine_or_course,'')}"
+            
+            # rename() function will
+            # rename all the files
+            os.rename(src, dst)
  
 # Driver Code
 if __name__ == '__main__':
