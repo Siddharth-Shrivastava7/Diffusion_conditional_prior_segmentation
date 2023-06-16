@@ -1,13 +1,13 @@
 # dataset settings
 dataset_type = 'ACDCFoggyDataset'
-data_root = '/home/sidd_s/scratch/dataset/'
+data_root = '/home/sidd_s/scratch/dataset/acdc_foggy_val/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',   
-        img_scale=(1024, 512),
+        img_scale=(1920, 1080),
         # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
         flip=False, ## for MS: multiscale testing:: flip is True and img_ratios are uncommented they are inherently taken accont in the code while using the "--aug-test" arg.
         transforms=[
@@ -22,6 +22,6 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='acdc_trainval/rgb_anon/fog/val/*', 
-        ann_dir = 'acdc_gt/gt/fog/val/*',
+        img_dir='images', 
+        ann_dir = 'gts',
         pipeline=test_pipeline))
