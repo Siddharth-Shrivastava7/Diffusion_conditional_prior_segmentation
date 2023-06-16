@@ -21,6 +21,8 @@ from .acdcfoggy import ACDCFoggyDataset
 from .acdcrain import ACDCRainDataset 
 from .acdcsnow import ACDCSnowDataset
 from .foggyzurich import FoggyZurichDataset
+from .cityscapesrainy import CityscapesRainyDataset
+from .cityscapesfoggy import CityscapesFoggyDataset
 from .foggydrivingfull import FoggyDrivingFullDataset
 from .pascal_context import PascalContextDataset, PascalContextDataset59
 from .potsdam import PotsdamDataset
@@ -36,5 +38,5 @@ __all__ = [
     'STAREDataset', 'DarkZurichDataset', 'NightDrivingDataset',
     'COCOStuffDataset', 'LoveDADataset', 'MultiImageMixDataset',
     'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset', 'DarkZurichDataset', 'NightCityDataset', 'ACDCNightDataset', 'IDDDataset', 'ACDCFoggyDataset', 'RainyCityscapesDataset', 'FoggyDrivingFullDataset', 
-    'ACDCRainDataset', 'ACDCSnowDataset', 'FoggyZurichDataset'
+    'ACDCRainDataset', 'ACDCSnowDataset', 'FoggyZurichDataset', 'CityscapesRainyDataset', 'CityscapesFoggyDataset'
 ]
