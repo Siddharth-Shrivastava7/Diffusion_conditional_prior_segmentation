@@ -133,4 +133,4 @@ lr_config = dict(
     by_epoch=False)
 
 find_unused_parameters = True
-evaluation = dict(interval=16000, metric='mIoU', save_best='mIoU')
+evaluation = dict(interval=500, metric='mIoU', save_best='mIoU') # changed to 500 for self aligned denoising
