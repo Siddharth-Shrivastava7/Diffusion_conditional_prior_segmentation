@@ -214,53 +214,55 @@ class DDP(EncoderDecoder):
         # backbone & neck
         x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *x.shape, x.device
+        
         # gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         # gt_down = gt_down.to(gt_semantic_seg.dtype)
         # gt_down[gt_down == 255] = self.num_classes
-
         # gt_down = self.embedding_table(gt_down).squeeze(1).permute(0, 3, 1, 2) # encoding of gt
         # gt_down = (torch.sigmoid(gt_down) * 2 - 1) * self.bit_scale # encoding of gt 
-
-        city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
-        pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet 
-        pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
-        pred[pred==255] = self.num_classes ## for gt case 
-        pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
-        pred_down = resize(pred.float(), size=(h, w), mode="nearest")
-        ## passing to map_decoder!\
-            
-            
+        # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
+        # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet 
+        # pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
+        # pred[pred==255] = self.num_classes ## for gt case 
+        # pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+        # pred_down = resize(pred.float(), size=(h, w), mode="nearest")
+        # ## passing to map_decoder! 
         
+        ## map_t and concate feats    
+        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) 
+        feat_init = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
+        feat_init = self.transform(feat_init) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
+    
+        ## map_pred 
+        times_ones = torch.ones((batch,), device=device).float() 
+        noise_level_ones = self.log_snr(times_ones)
+        input_times_ones = self.time_mlp(noise_level_ones)
+        map_pred_logits = self.decode_head.forward([feat_init], input_times_ones)
+        map_pred = torch.argmax(map_pred_logits, dim=1)
         
-        ## encoding of gt_pred_down
-        gt_pred_down = self.embedding_table(gt_pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
-        gt_pred_down = (torch.sigmoid(gt_pred_down) * 2 - 1) * self.bit_scale 
+        ##encode map_pred 
+        map_enc = self.embedding_table(map_pred).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
+        map_enc = (torch.sigmoid(map_enc) * 2 - 1) * self.bit_scale 
         
-
-
+        # corrupt the map_enc
         # sample time
         times = torch.zeros((batch,), device=device).float().uniform_(self.sample_range[0],
                                                                       self.sample_range[1])  # [bs]
-
         # random noise
-        noise = torch.randn_like(gt_pred_down)
+        noise = torch.randn_like(map_enc)
         noise_level = self.log_snr(times)
         padded_noise_level = self.right_pad_dims_to(img, noise_level)
         alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
-        noised_gt = alpha * gt_pred_down + sigma * noise
-
-        # conditional input
-        feat = torch.cat([x, noised_gt], dim=1)
-        feat = self.transform(feat) ## why reduce back to 256? (from 512) may be because decoder head was tuned to 256 channels input >> they used 6 layer deformable attention for that 
-
+        noised_map_enc = alpha * map_enc + sigma * noise
+        ## concat noised_map_enc and feats
+        feat = torch.cat([x, noised_map_enc], dim=1) 
+        feat = self.transform(feat)
+        # pred 
         losses = dict()
         input_times = self.time_mlp(noise_level)
         loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg)
         losses.update(loss_decode)
-        if self.with_auxiliary_head:
-            loss_aux = self._auxiliary_head_forward_train(
-                [x], img_metas, gt_semantic_seg)
-            losses.update(loss_aux)
+        
         return losses
     
 
