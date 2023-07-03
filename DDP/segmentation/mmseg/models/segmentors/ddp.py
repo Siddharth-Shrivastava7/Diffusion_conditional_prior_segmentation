@@ -229,7 +229,7 @@ class DDP(EncoderDecoder):
         # ## passing to map_decoder! 
         
         ## map_t and concate feats    
-        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) 
+        mask_t = torch.randn((batch, self.decode_head.in_channels[0], h, w), device=device) 
         feat_init = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
         feat_init = self.transform(feat_init) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
     

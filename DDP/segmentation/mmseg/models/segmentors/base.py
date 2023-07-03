@@ -94,7 +94,7 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
             return self.aug_test(imgs, img_metas, **kwargs)
 
     @auto_fp16(apply_to=('img', ))
-    def forward(self, img, img_metas, return_loss=True, **kwargs):
+    def forward(self, img, img_metas, return_loss=True, self_aligned_denoising = False, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
 
@@ -104,10 +104,13 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
         should be double nested (i.e.  List[Tensor], List[List[dict]]), with
         the outer list indicating test time augmentations.
         """
-        if return_loss:
-            return self.forward_train(img, img_metas, **kwargs)
-        else:
-            return self.forward_test(img, img_metas, **kwargs)
+        if self_aligned_denoising: 
+            return self.forward_train_self_aligned_denoising(img, img_metas, **kwargs) 
+        else: 
+            if return_loss:
+                return self.forward_train(img, img_metas, **kwargs)
+            else:
+                return self.forward_test(img, img_metas, **kwargs)
 
     def train_step(self, data_batch, optimizer, **kwargs):
         """The iteration step during training.
@@ -135,7 +138,9 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        losses = self(**data_batch)
+        # losses = self(**data_batch) 
+        ## hard coding for now 
+        losses = self(**data_batch, self_aligned_denoising = True)
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
