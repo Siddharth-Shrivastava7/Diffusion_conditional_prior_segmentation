@@ -340,7 +340,7 @@ class DDP(EncoderDecoder):
             # # noise_level = self.log_snr(times)
             # # padded_noise_level = self.right_pad_dims_to(x, noise_level)
             # # alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
-            # # mask_t = alpha * mask_enc + sigma * noise
+            # # mask_t = alpha * mask_enc + sigma * noise           
             # mask_t = mask_enc
         mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
         
