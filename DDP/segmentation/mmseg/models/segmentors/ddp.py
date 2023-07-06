@@ -126,6 +126,18 @@ class DDP(EncoderDecoder):
             nn.GELU(),
             nn.Linear(time_dim, time_dim)  # [1024, 1024] # output shape
         )
+        
+        
+        ### new add-on-module
+        self.transform_x_gtperturb = ConvModule(
+            self.decode_head.in_channels[0] * 2,
+            self.decode_head.in_channels[0],
+            1,
+            padding=0,
+            conv_cfg=None,
+            norm_cfg=None,
+            act_cfg=None
+        ) 
 
     def encode_decode(self, img, img_metas):
         """Encode images with backbone and decode into a semantic segmentation
@@ -215,7 +227,7 @@ class DDP(EncoderDecoder):
         x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *x.shape, x.device
         
-        ## extra addition :: starting from perturbed gt feature not the standard normal distrubution :: can be according to curriculum learning, gradually increasing the pertuberation of gt, for now lets try with a small and fixed one 
+        ## extra addition :: concatinating perturbed gt feature with x :: can be according to curriculum learning, gradually increasing the pertuberation of gt, for now lets try with a small and fixed one 
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
         gt_down[gt_down == 255] = self.num_classes 
@@ -228,11 +240,12 @@ class DDP(EncoderDecoder):
         gt_down_perturbed[gt_down_perturbed == any_random_class] = 255
         gt_down_perturbed[gt_down_perturbed == differnt_random_class] = any_random_class
         gt_down_perturbed[gt_down_perturbed==255] = differnt_random_class
+        ## pertubation the gt 
         gt_down_perturbed = self.embedding_table(gt_down_perturbed).squeeze(1).permute(0, 3, 1, 2) # encoding of gt
         gt_down_perturbed = (torch.sigmoid(gt_down_perturbed) * 2 - 1) * self.bit_scale # encoding of gt 
         # extra concat feat of original image encoding and perturbed gt # in order to improve it  
-        feat_init = torch.cat([x, gt_down_perturbed], dim=1)
-        feat_init = self.transform(feat_init)
+        x = torch.cat([x, gt_down_perturbed], dim=1)
+        x = self.transform_x_gtperturb(x)
     
         # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
         # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet 
@@ -244,9 +257,9 @@ class DDP(EncoderDecoder):
         
         ## orignial according self aligned training 
         ## map_t and concate feats    
-        # mask_t = torch.randn((batch, self.decode_head.in_channels[0], h, w), device=device) # instead of normal noise using gt perturbed noise  
-        # feat_init = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
-        # feat_init = self.transform(feat_init) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
+        mask_t = torch.randn((batch, self.decode_head.in_channels[0], h, w), device=device) # instead of normal noise using gt perturbed noise  
+        feat_init = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
+        feat_init = self.transform(feat_init) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
     
         ## map_pred 
         times_ones = torch.ones((batch,), device=device).float() 
