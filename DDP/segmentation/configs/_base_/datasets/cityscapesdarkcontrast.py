@@ -1,5 +1,5 @@
 # dataset settings
-dataset_type = 'CityscapesDarkBrightDataset'
+dataset_type = 'CityscapesDarkContrastDataset'
 data_root = '/home/sidd_s/scratch/dataset/cityscapes/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -37,19 +37,19 @@ data = dict(
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='leftImg8bit_darken_brightness_0.2/train',
+        img_dir='leftImg8bit_darken_contrast_0.1/train',
         ann_dir='gtFine/train',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='leftImg8bit_darken_brightness_0.2/val',
+        img_dir='leftImg8bit_darken_contrast_0.1/val',
         ann_dir='gtFine/val',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='leftImg8bit_darken_brightness_0.2/val',
+        img_dir='leftImg8bit_darken_contrast_0.1/val',
         ann_dir='gtFine/val',
         pipeline=test_pipeline
     ))

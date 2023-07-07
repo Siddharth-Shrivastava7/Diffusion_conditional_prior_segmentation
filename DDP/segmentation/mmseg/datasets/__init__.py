@@ -30,6 +30,7 @@ from .stare import STAREDataset
 from .voc import PascalVOCDataset
 from .idd import IDDDataset
 from .cityscapesdarkbright import CityscapesDarkBrightDataset
+from .cityscapesdarkcontrast import CityscapesDarkContrastDataset
 
 __all__ = [
     'CustomDataset', 'build_dataloader', 'ConcatDataset', 'RepeatDataset',
@@ -39,5 +40,5 @@ __all__ = [
     'STAREDataset', 'DarkZurichDataset', 'NightDrivingDataset',
     'COCOStuffDataset', 'LoveDADataset', 'MultiImageMixDataset',
     'iSAIDDataset', 'ISPRSDataset', 'PotsdamDataset', 'DarkZurichDataset', 'NightCityDataset', 'ACDCNightDataset', 'IDDDataset', 'ACDCFoggyDataset', 'RainyCityscapesDataset', 'FoggyDrivingFullDataset', 
-    'ACDCRainDataset', 'ACDCSnowDataset', 'FoggyZurichDataset', 'CityscapesRainyDataset', 'CityscapesFoggyDataset', 'CityscapesDarkBrightDataset'
+    'ACDCRainDataset', 'ACDCSnowDataset', 'FoggyZurichDataset', 'CityscapesRainyDataset', 'CityscapesFoggyDataset', 'CityscapesDarkBrightDataset', 'CityscapesDarkContrastDataset'
 ]

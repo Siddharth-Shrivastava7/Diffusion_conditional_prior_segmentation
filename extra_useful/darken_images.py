@@ -7,7 +7,7 @@ from tqdm import tqdm
 def main():
    
     folder = "/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/train"  
-    factor = 0.3
+    factor = 0.1
     
     for root, dirs, files in os.walk(folder, topdown=False):
         for name in tqdm(files): 
@@ -16,7 +16,6 @@ def main():
             if not os.path.exists(new_folder):
                 os.makedirs(new_folder)
             img = Image.open(path)
-            
             dst = f"{new_folder}/{name}" 
             # brightness = ImageEnhance.Brightness(img)
             # brightness.enhance(factor).save(dst) 

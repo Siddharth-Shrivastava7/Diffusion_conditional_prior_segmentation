@@ -1,6 +1,6 @@
 # dataset settings
 dataset_type = 'ACDCSnowDataset'
-data_root = '/home/sidd_s/scratch/dataset/'
+data_root = '/home/sidd_s/scratch/dataset/ACDC'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 test_pipeline = [
@@ -22,6 +22,6 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        img_dir='acdc_trainval/rgb_anon/snow/val', 
-        ann_dir = 'acdc_gt/gt/snow/val',
+        img_dir='rgb_anon/snow/val', 
+        ann_dir = 'gt/snow/val',
         pipeline=test_pipeline))
