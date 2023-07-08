@@ -56,6 +56,7 @@ class Linear(nn.Module):
             nn.init.zeros_(self.bias)
 
     def forward(self, input):
+        # print('*********', input.is_cuda, self.weight.is_cuda) 
         return F.linear(input, self.weight, self.bias)
 
     def extra_repr(self):

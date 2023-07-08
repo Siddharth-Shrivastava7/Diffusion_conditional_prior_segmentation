@@ -81,6 +81,7 @@ class DDP(EncoderDecoder):
                  sample_range=(0, 0.999),
                  noise_schedule='cosine',
                  diffusion='ddim',
+                 accumulation=False,
                  **kwargs):
         super(DDP, self).__init__(**kwargs)
 
@@ -91,6 +92,7 @@ class DDP(EncoderDecoder):
         self.time_difference = time_difference
         self.sample_range = sample_range
         self.use_gt = False
+        self.accumulation = accumulation
         self.embedding_table = nn.Embedding(self.num_classes + 1, self.decode_head.in_channels[0])
 
         print(f" timesteps: {timesteps},"
@@ -333,7 +335,7 @@ class DDP(EncoderDecoder):
     def ddim_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
         time_pairs = self._get_sampling_timesteps(b, device=device)
-        x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps) 
+        x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
         ## below holds the modification code for inferecing ddp with the starting point as the prediction of either DA or DG model 
         # if img_metas[0]['filename'].find('dark_zurich')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
         # if img_metas[0]['filename'].find('cityscapes')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
@@ -371,7 +373,7 @@ class DDP(EncoderDecoder):
             # # mask_t = alpha * mask_enc + sigma * noise           
             # mask_t = mask_enc
         mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
-        
+        outs = list()
         for idx, (times_now, times_next) in enumerate(time_pairs):
             # x_mod = torch.zeros_like(x)
             # feat = torch.cat([x_mod, mask_t], dim=1) 
@@ -393,7 +395,10 @@ class DDP(EncoderDecoder):
             mask_pred = (torch.sigmoid(mask_pred) * 2 - 1) * self.bit_scale ## encoding the map pred from the map decoder part
             pred_noise = (mask_t - alpha * mask_pred) / sigma.clamp(min=1e-8) ## eps calculating exactly same as what was mentioned in the paper 
             mask_t = mask_pred * alpha_next + pred_noise * sigma_next ## this mask_t is basically the mask_{t+1}; they used it as mask_t since, it will be reused in the next iteration of the timesteps ## and this is main step of DDIM formulation...OLA!!!
-
+            if self.accumulation:
+                outs.append(mask_logit.softmax(1))
+        if self.accumulation:
+            mask_logit = torch.cat(outs, dim=0)
         logit = mask_logit.mean(dim=0, keepdim=True)
         return logit
 
@@ -403,7 +408,8 @@ class DDP(EncoderDecoder):
         time_pairs = self._get_sampling_timesteps(b, device=device)
 
         x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
-        mask_t = torch.randn((self.randsteps, 256, h, w), device=device)
+        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device)
+        outs = list()
         for times_now, times_next in time_pairs:
             feat = torch.cat([x, mask_t], dim=1)
             feat = self.transform(feat)
@@ -433,5 +439,9 @@ class DDP(EncoderDecoder):
             )
             mask_t = mean + (0.5 * log_variance).exp() * noise
 
+            if self.accumulation:
+                outs.append(mask_logit.softmax(1))
+        if self.accumulation:
+            mask_logit = torch.cat(outs, dim=0)
         logit = mask_logit.mean(dim=0, keepdim=True)
         return logit
