@@ -230,24 +230,24 @@ class DDP(EncoderDecoder):
         batch, c, h, w, device, = *x.shape, x.device
         
         ## extra addition :: concatinating perturbed gt feature with x :: can be according to curriculum learning, gradually increasing the pertuberation of gt, for now lets try with a small and fixed one 
-        gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
-        gt_down = gt_down.to(gt_semantic_seg.dtype)
-        gt_down[gt_down == 255] = self.num_classes 
-        ## pertubation the gt 
-        any_random_class = torch.randint(0, 19, (1,))[0].item()
-        differnt_random_class = torch.randint(0, 19, (1,))[0].item()
-        while differnt_random_class==any_random_class: 
-            differnt_random_class = torch.randint(0, 19, (1,))[0].item()  
-        gt_down_perturbed = gt_down.detach().clone()    
-        gt_down_perturbed[gt_down_perturbed == any_random_class] = 255
-        gt_down_perturbed[gt_down_perturbed == differnt_random_class] = any_random_class
-        gt_down_perturbed[gt_down_perturbed==255] = differnt_random_class
-        ## pertubation the gt 
-        gt_down_perturbed = self.embedding_table(gt_down_perturbed).squeeze(1).permute(0, 3, 1, 2) # encoding of gt
-        gt_down_perturbed = (torch.sigmoid(gt_down_perturbed) * 2 - 1) * self.bit_scale # encoding of gt 
-        # extra concat feat of original image encoding and perturbed gt # in order to improve it  
-        x = torch.cat([x, gt_down_perturbed], dim=1)
-        x = self.transform_x_gtperturb(x)
+        # gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
+        # gt_down = gt_down.to(gt_semantic_seg.dtype)
+        # gt_down[gt_down == 255] = self.num_classes 
+        # ## pertubation the gt 
+        # any_random_class = torch.randint(0, 19, (1,))[0].item()
+        # differnt_random_class = torch.randint(0, 19, (1,))[0].item()
+        # while differnt_random_class==any_random_class: 
+        #     differnt_random_class = torch.randint(0, 19, (1,))[0].item()  
+        # gt_down_perturbed = gt_down.detach().clone()    
+        # gt_down_perturbed[gt_down_perturbed == any_random_class] = 255
+        # gt_down_perturbed[gt_down_perturbed == differnt_random_class] = any_random_class
+        # gt_down_perturbed[gt_down_perturbed==255] = differnt_random_class
+        # ## pertubation the gt 
+        # gt_down_perturbed = self.embedding_table(gt_down_perturbed).squeeze(1).permute(0, 3, 1, 2) # encoding of gt
+        # gt_down_perturbed = (torch.sigmoid(gt_down_perturbed) * 2 - 1) * self.bit_scale # encoding of gt 
+        # # extra concat feat of original image encoding and perturbed gt # in order to improve it  
+        # x = torch.cat([x, gt_down_perturbed], dim=1)
+        # x = self.transform_x_gtperturb(x)
     
         # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
         # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet 

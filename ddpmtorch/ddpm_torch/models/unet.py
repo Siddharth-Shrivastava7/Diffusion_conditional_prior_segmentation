@@ -250,4 +250,3 @@ if __name__ == "__main__":
     # print(f'{tp:,}')  ## 114M params for lsun bedroom and 25.7M params for cifar10
     # summary(model, torch.randn(16, 3, 32, 32), torch.randint(1000, size=(16, ))) # cifar10 
     summary(model, [(3, 256, 256), (1, )]) # lsun bedroom
-    # summary(model, [(3, 256, 256), torch.randint(1000, size=(1, ))]) 
