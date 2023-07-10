@@ -95,7 +95,7 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=2, ## changing due to insuffient memory prob to "2"
     workers_per_gpu=4,
 )
 optimizer = dict(
