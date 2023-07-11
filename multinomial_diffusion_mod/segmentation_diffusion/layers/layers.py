@@ -6,6 +6,7 @@ import torch.nn as nn
 from einops import rearrange
 from inspect import isfunction
 
+from torchsummary import summary 
 
 
 
@@ -222,3 +223,15 @@ class SegmentationUnet(nn.Module):
 
         final = self.final_conv(x).view(B, self.num_classes, *x_shape)
         return final
+
+
+if __name__ == "__main__":
+   
+    model = SegmentationUnet(
+        num_classes=19,
+        dim=64,
+        num_steps=4000,
+        dim_mults=(1, 2, 4, 8),
+        dropout=0.0
+    )
+    summary(model, [(1, ), (1, 256, 512)]) 
