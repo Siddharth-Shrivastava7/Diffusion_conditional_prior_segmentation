@@ -812,3 +812,8 @@ class UNetModel(nn.Module):
             ce_out = self.out_ce(h)
             ret["logits"] = ce_out
         return ret
+
+
+if __name__ == '__main__':
+    # model = UNetModel() # to fill 
+    pass 

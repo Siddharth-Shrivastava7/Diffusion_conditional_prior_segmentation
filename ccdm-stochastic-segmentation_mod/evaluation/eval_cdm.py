@@ -184,10 +184,10 @@ class Evaluator:
     def predict_single(self, image, condition, feature_condition, label_ref_logits=None, names = None, params = None):
         # predict a single segmentation (BNHW) for image (BCHW) where N = num_classes
         label_shape = (image.shape[0], self.num_classes, *image.shape[2:])
-        if isinstance(names, tuple) and names[0]: # assuming bt = 1 
+        # if isinstance(names, tuple) and names[0]: # assuming bt = 1 
             
             ## MIC val results >>> mIoU = 34.8 (with passing resized image 256x512 to MIC initially) >> coming to 7.6 in conditional posterior generation
-            xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/MIC_mod/seg/labelTrainIds', names[0])).convert('P')))
+            # xt = torch.tensor(np.array(Image.open(os.path.join('/home/sidd_s/MIC_mod/seg/labelTrainIds', names[0])).convert('P')))
             
             ## starting from DZ VAL GT >>> mIoU = 83.8 (128x256) and mIoU = 85.9 (256x512) >> 7.3 in conditional posterior generation (without feat enc) and  7.6 (with feat enc on size(256x512)) 
             # print(names[0])
@@ -205,19 +205,22 @@ class Evaluator:
             # # xt = F.interpolate(xt, size=(256,512)) 
             # # print('>>>>', xt.shape)
             
-            xt = one_hot(xt.squeeze().long(), self.num_classes).to(torch_device)
-            xt = xt.permute((2,0,1)).unsqueeze(dim=0)
+            # xt = one_hot(xt.squeeze().long(), self.num_classes).to(torch_device)
+            # xt = xt.permute((2,0,1)).unsqueeze(dim=0)
             # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')
-        else:
+        # else:
             ## random onehots >>> mIoU = 1.6 and 1.6 (same in both sizes) >> coming to 7.1 in conditional posterior generation (128x256) and 7.5 in (256x512)
-            xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
-        # prediction = self.predict(xt, condition, feature_condition, label_ref_logits, params=params)
+            # xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample() # sampling from P(X_T | I) {one hot vector} # instead of this use one hot label vector from the predicted the label output by Domain adpapted model in order to improve upon that 
         
         # have to remove later
         # xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample()
-        # prediction = self.predict(xt, condition, feature_condition, label_ref_logits)
-        prediction = xt 
-    
+        # prediction = xt 
+        
+        ### original 
+        xt = OneHotCategoricalBCHW(logits=torch.zeros(label_shape, device=image.device)).sample()
+        prediction = self.predict(xt, condition, feature_condition, label_ref_logits) 
+        ### original  
+        
         return prediction
 
     @torch.no_grad()

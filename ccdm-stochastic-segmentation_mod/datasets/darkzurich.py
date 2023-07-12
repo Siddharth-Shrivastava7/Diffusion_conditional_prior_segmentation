@@ -13,7 +13,7 @@ import ddpm
 from datasets.cityscapes_config import encode_target
 from typing import Any, Callable, List, Optional, Tuple, Union
 
-BASE_PATH = os.path.expandvars("/home/sidd_s/scratch/dataset/dark_zurich")
+BASE_PATH = os.path.expandvars("/home/sidd_s/scratch/dataset/DarkZurich")
 
 NUM_CLASSES = 20
 BACKGROUND_CLASS = 19
