@@ -9,7 +9,7 @@ import sys
 
 
 def main(argv):
-    params_file = "/home/sidd_s/ccdm-stochastic-segmentation/params.yml" ## changing to absolute path for debugging and understanding the code
+    params_file = "/home/sidd_s/Diffusion_conditional_prior_segmentation/ccdm-stochastic-segmentation_mod/params.yml" ## changing to absolute path for debugging and understanding the code
     if len(argv) == 2:
         if "params" in argv[1]:
             params_file = argv[1]

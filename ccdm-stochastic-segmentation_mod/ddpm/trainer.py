@@ -692,7 +692,7 @@ def run_train(local_rank: int, params: dict):
     output_path = expanduservars(params['output_path'])
     os.makedirs(output_path, exist_ok=True)
     LOGGER.info("experiment dir: %s", output_path)
-    archive_code(output_path)
+    archive_code(output_path, output_path) ## changed for working (jugaad :))
 
     LOGGER.info("Training params:\n%s", pprint.pformat(params))
 

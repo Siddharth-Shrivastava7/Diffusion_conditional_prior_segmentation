@@ -38,7 +38,7 @@ def expanduservars(path: str) -> str:
 
 
 def archive_code(path: str, params_path: str) -> None:
-    shutil.copy(params_path, path) ## changing to absolute path for debugging and understanding the code
+    # shutil.copy(params_path, path) ## changing to absolute path for debugging and understanding the code ##((not req it is there, for now))
     # Copy the current code to the output folder.
     os.system(f"git ls-files -z | xargs -0 tar -czf {os.path.join(path, 'code.tar.gz')}")
 
