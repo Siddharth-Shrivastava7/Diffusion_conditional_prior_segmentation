@@ -234,4 +234,5 @@ if __name__ == "__main__":
         dim_mults=(1, 2, 4, 8),
         dropout=0.0
     )
+    # model = model.cuda()
     summary(model, [(1, ), (1, 256, 512)]) 
