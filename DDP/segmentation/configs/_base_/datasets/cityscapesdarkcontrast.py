@@ -12,7 +12,7 @@ train_pipeline = [
     dict(type='RandomFlip', prob=0.5),
     ## changing the photometricdistortion :: introducing lower contrast images 
     dict(type='PhotoMetricDistortion', 
-        contrast_range=(0.05, 0.2)),
+        contrast_range=(0.19, 0.2)), ## changing for now
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size=crop_size, pad_val=0, seg_pad_val=255),
     dict(type='DefaultFormatBundle'),
