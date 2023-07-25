@@ -4,8 +4,9 @@ _base_ = [
     '../_base_/schedules/schedule_5k.py'
 ]
 custom_imports = dict(imports='mmcls.models', allow_failed_imports=False)
-load_from = 'https://huggingface.co/yfji/DDP-Weight/resolve/main/' \
-            'ddp_convnext_l_4x4_512x1024_160k_cityscapes.pth'  # noqa
+# load_from = 'https://huggingface.co/yfji/DDP-Weight/resolve/main/' \
+#             'ddp_convnext_l_4x4_512x1024_160k_cityscapes.pth'  # noqa
+load_from = '/home/sidd_s/scratch/DDP_workdirs/ddp_convnext_l_4x4_512x1024_160k_cityscapesdarkcontrast_0.2/best_mIoU_iter_2500.pth'
 # model settings
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
