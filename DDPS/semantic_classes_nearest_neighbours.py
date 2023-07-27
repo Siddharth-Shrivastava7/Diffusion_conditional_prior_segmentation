@@ -24,7 +24,7 @@ def main():
     
     input_embedding_vectors = np.array([embedding_table(torch.tensor(i)).detach().numpy() for i in range(19)]) 
    
-    model = NearestNeighbors(n_neighbors=2,
+    model = NearestNeighbors(n_neighbors=3,
                          metric='cosine',
                          algorithm='auto',
                          n_jobs=-1)
@@ -32,7 +32,7 @@ def main():
     distances, indices = model.kneighbors(input_embedding_vectors)
     print('cosine similarity >>',indices)
     
-    model = NearestNeighbors(n_neighbors=2,
+    model = NearestNeighbors(n_neighbors=3,
                          metric='euclidean',
                          algorithm='auto',
                          n_jobs=-1)
@@ -40,7 +40,7 @@ def main():
     distances, indices = model.kneighbors(input_embedding_vectors)
     print('euclidean distances >>',indices) 
     
-    model = NearestNeighbors(n_neighbors=2,
+    model = NearestNeighbors(n_neighbors=3,
                          metric='manhattan',
                          algorithm='auto',
                          n_jobs=-1)
