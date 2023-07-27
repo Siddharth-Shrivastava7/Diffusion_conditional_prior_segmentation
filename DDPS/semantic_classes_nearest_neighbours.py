@@ -23,14 +23,31 @@ def main():
     ''' 
     
     input_embedding_vectors = np.array([embedding_table(torch.tensor(i)).detach().numpy() for i in range(19)]) 
-    model = NearestNeighbors(n_neighbors=1,
+   
+    model = NearestNeighbors(n_neighbors=2,
                          metric='cosine',
                          algorithm='auto',
                          n_jobs=-1)
     model.fit(input_embedding_vectors)
     distances, indices = model.kneighbors(input_embedding_vectors)
-    print(indices)
+    print('cosine similarity >>',indices)
     
+    model = NearestNeighbors(n_neighbors=2,
+                         metric='euclidean',
+                         algorithm='auto',
+                         n_jobs=-1)
+    model.fit(input_embedding_vectors)
+    distances, indices = model.kneighbors(input_embedding_vectors)
+    print('euclidean distances >>',indices) 
+    
+    model = NearestNeighbors(n_neighbors=2,
+                         metric='manhattan',
+                         algorithm='auto',
+                         n_jobs=-1)
+    model.fit(input_embedding_vectors)
+    distances, indices = model.kneighbors(input_embedding_vectors)
+    print('manhattan distances >>',indices)  
+
 
 
 if __name__ == '__main__':
