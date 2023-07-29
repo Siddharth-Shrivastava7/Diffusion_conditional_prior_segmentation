@@ -227,7 +227,8 @@ class Unet(nn.Module):
         x = self.mid_block2(x, t)
 
         for block1, block2, attn, upsample in self.ups:
-            x = torch.cat((x, h.pop()), dim=1)
+            # print('***************************', x.shape, h[-1].shape, '************************') # *************************** torch.Size([1, 256, 134, 240]) torch.Size([1, 256, 135, 240]) ************************ for dz 
+            x = torch.cat((x, h.pop()), dim=1) 
             x = block1(x, t)
 
             x = torch.cat((x, h.pop()), dim=1)
