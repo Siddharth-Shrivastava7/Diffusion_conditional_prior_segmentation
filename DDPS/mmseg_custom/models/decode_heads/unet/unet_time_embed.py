@@ -232,32 +232,32 @@ class Unet(nn.Module):
             # print('***************************', x.shape, h[-1].shape, '************************') # *************************** torch.Size([1, 256, 134, 240]) torch.Size([1, 256, 135, 240]) ************************ for dz 
             
             '''
-                extra resizing :: matching the x.shape and h[-1].shape 
+                extra padding :: matching the x.shape and h[-1].shape [upsampling x to reach h[-1] dimension]
             '''
-            # h[-1] = resize(
-            #         input=h[-1],
-            #         size=x.shape[2:],
-            #         mode='nearest')
-            # not coming good with this
+            diffY = h[-1].size()[2] - x.size()[2]
+            diffX = h[-1].size()[3] - x.size()[3]
+
+            x = F.pad(x, (diffX // 2, diffX - diffX // 2,
+                            diffY // 2, diffY - diffY // 2))
             
             x = torch.cat((x, h.pop()), dim=1) 
             x = block1(x, t)
             
             '''
-                extra resizing :: matching the x.shape and h[-1].shape 
+                extra padding :: matching the x.shape and h[-1].shape [upsampling x to reach h[-1] dimension]
             '''
-            # h[-1] = resize(
-            #         input=h[-1],
-            #         size=x.shape[2:],
-            #         mode='nearest')
-            # not coming good with this
+            diffY = h[-1].size()[2] - x.size()[2]
+            diffX = h[-1].size()[3] - x.size()[3]
 
+            x = F.pad(x, (diffX // 2, diffX - diffX // 2,
+                            diffY // 2, diffY - diffY // 2))
+            
+            
             x = torch.cat((x, h.pop()), dim=1)
             x = block2(x, t)
             x = attn(x)
 
             x = upsample(x)
-
         x = torch.cat((x, r), dim=1)
 
         x = self.final_res_block(x, t)

@@ -56,7 +56,6 @@ test_pipeline = [
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1920, 1080),
-        # img_scale=(1024, 512),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
@@ -71,7 +70,7 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=2,
+    samples_per_gpu=1, # for testing, this thing is no effect so taking it as 1
     workers_per_gpu=2,
     test=dict(
         type='DarkZurich20Dataset',
