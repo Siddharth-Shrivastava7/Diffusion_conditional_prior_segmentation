@@ -10,6 +10,8 @@ from .attention import Attention, LinearAttention
 from .norm import PreNorm
 from .pos_emb import RandomOrLearnedSinusoidalPosEmb, SinusoidalPosEmb
 
+from mmseg.ops import resize
+
 # small helper modules
 
 
@@ -228,8 +230,27 @@ class Unet(nn.Module):
 
         for block1, block2, attn, upsample in self.ups:
             # print('***************************', x.shape, h[-1].shape, '************************') # *************************** torch.Size([1, 256, 134, 240]) torch.Size([1, 256, 135, 240]) ************************ for dz 
+            
+            '''
+                extra resizing :: matching the x.shape and h[-1].shape 
+            '''
+            # h[-1] = resize(
+            #         input=h[-1],
+            #         size=x.shape[2:],
+            #         mode='nearest')
+            # not coming good with this
+            
             x = torch.cat((x, h.pop()), dim=1) 
             x = block1(x, t)
+            
+            '''
+                extra resizing :: matching the x.shape and h[-1].shape 
+            '''
+            # h[-1] = resize(
+            #         input=h[-1],
+            #         size=x.shape[2:],
+            #         mode='nearest')
+            # not coming good with this
 
             x = torch.cat((x, h.pop()), dim=1)
             x = block2(x, t)

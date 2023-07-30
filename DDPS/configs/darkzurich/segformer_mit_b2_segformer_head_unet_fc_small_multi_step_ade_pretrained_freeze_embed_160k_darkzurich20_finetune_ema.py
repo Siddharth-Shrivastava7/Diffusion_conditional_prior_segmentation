@@ -56,6 +56,7 @@ test_pipeline = [
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1920, 1080),
+        # img_scale=(1024, 512),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
