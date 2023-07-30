@@ -105,7 +105,7 @@ model = dict(
     test_cfg=dict(mode='whole'))
 
 data = dict(
-    samples_per_gpu=1,  ## testing 
+    samples_per_gpu=2,  ## testing 
     workers_per_gpu=4,
 )
 
