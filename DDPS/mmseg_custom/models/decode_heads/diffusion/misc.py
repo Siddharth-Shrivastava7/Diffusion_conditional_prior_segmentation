@@ -40,5 +40,5 @@ def sample_categorical(logits):           # use gumbel to sample onehot vector f
     uniform = torch.rand_like(logits)
     gumbel_noise = -torch.log(-torch.log(uniform + 1e-30) + 1e-30)
     sample = (gumbel_noise + logits).argmax(dim=1).long()
-    # log_sample = index_to_log_onehot(sample, num_classes)
+    # log_sample = index_to_log_onehot(sample, num_classes) # this is in usual discrete space diffusion input
     return sample
