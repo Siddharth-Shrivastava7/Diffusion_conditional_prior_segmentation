@@ -234,24 +234,14 @@ class Unet(nn.Module):
             '''
                 extra padding :: matching the x.shape and h[-1].shape [upsampling x to reach h[-1] dimension]
             '''
-            diffY = h[-1].size()[2] - x.size()[2]
-            diffX = h[-1].size()[3] - x.size()[3]
+            # diffY = h[-1].size()[2] - x.size()[2]
+            # diffX = h[-1].size()[3] - x.size()[3]
 
-            x = F.pad(x, (diffX // 2, diffX - diffX // 2,
-                            diffY // 2, diffY - diffY // 2))
+            # x = F.pad(x, (diffX // 2, diffX - diffX // 2,
+            #                 diffY // 2, diffY - diffY // 2))
             
             x = torch.cat((x, h.pop()), dim=1) 
-            x = block1(x, t)
-            
-            '''
-                extra padding :: matching the x.shape and h[-1].shape [upsampling x to reach h[-1] dimension]
-            '''
-            diffY = h[-1].size()[2] - x.size()[2]
-            diffX = h[-1].size()[3] - x.size()[3]
-
-            x = F.pad(x, (diffX // 2, diffX - diffX // 2,
-                            diffY // 2, diffY - diffY // 2))
-            
+            x = block1(x, t)            
             
             x = torch.cat((x, h.pop()), dim=1)
             x = block2(x, t)
