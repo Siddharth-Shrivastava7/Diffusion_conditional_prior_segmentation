@@ -55,10 +55,12 @@ test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1920, 1080),
+        img_scale=(1024, 1024), # resizing because dim issue
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
+            # dict(type='RandomCrop', crop_size=(1072, 1920)), ## crop for resolving dimension issue in unet 
+            # dict(type = 'Pad', size = (1088, 1920), pad_val = 255), # padding in the input space rather than the denoising unet
             dict(type='RandomFlip'),
             dict(
                 type='Normalize',

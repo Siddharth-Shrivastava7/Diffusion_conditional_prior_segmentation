@@ -73,7 +73,7 @@ def q_pred(x_start, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_b
     log_cumprod_bt = extract(log_cumprod_bt, t, log_x_start.shape)         # bt~
     log_probs = torch.cat([
         log_add_exp(log_x_start + log_cumprod_at, log_cumprod_bt)
-    ], dim=1)
+    ], dim=1)  ## np.log(self.num_classes) is missing! (may its constant so they ignore, but it should be there as it may effect values here)
 
     sample_logits = sample_categorical(log_probs)
     return sample_logits

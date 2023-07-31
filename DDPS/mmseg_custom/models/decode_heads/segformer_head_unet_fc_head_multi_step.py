@@ -241,7 +241,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                     out_select = self.unet(out_select, t_select)
                     out_select = self.cls_seg(out_select).softmax(dim=1).argmax(dim=1).long()  # [B_multi_step, H, W]
             content = gt
-            x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W]
+            x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W] ## resizing of the mask (code_enc)
             if B_multi_step is not None:
                 x_interpolate[multi_step, ...] = out_select
             noise_step = self.diffusion_timesteps - t - 1  # t=0 means add 19 steps noise
