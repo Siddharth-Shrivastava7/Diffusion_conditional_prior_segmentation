@@ -9,7 +9,8 @@ def main():
     embedding_table = nn.Embedding(20, 256) 
 
     ## loading the embedding weights 
-    PATH = '/home/sidd_s/scratch/saved_models/DDP/embedding_table_pretrained_cityscapes.pth'
+    # PATH = '/home/sidd_s/scratch/saved_models/DDP/embedding_table_pretrained_cityscapes.pth'  ## from DDP 
+    PATH = '/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_multistep_cityscapes/embedding_model.pth'
     embedding_table.load_state_dict(torch.load(PATH))
     embedding_table.eval()
 
