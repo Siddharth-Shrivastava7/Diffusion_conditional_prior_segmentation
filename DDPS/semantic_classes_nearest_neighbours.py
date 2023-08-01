@@ -6,7 +6,7 @@ from sklearn.neighbors import NearestNeighbors
 
 def main():
     ## pretrained semantic classes embedding from DDP  ## as the low hanging fruit
-    embedding_table = nn.Embedding(20, 256) 
+    embedding_table = nn.Embedding(20, 16) 
 
     ## loading the embedding weights 
     # PATH = '/home/sidd_s/scratch/saved_models/DDP/embedding_table_pretrained_cityscapes.pth'  ## from DDP 
