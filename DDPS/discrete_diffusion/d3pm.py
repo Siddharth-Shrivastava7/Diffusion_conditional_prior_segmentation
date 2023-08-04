@@ -111,10 +111,13 @@ class CategoricalDiffusion(nn.Module):
                                for t in range(0, self.num_timesteps)]
         elif self.transition_mat_type == 'absorbing':
             q_one_step_mats = [self._get_absorbing_transition_mat(t)
+                               for t in range(0, self.num_timesteps)] 
+        elif self.transition_mat_type == 'nearestneighbor':
+            q_one_step_mats = [self._get_nearestneighbor_transition_mat(t) 
                                for t in range(0, self.num_timesteps)]
         else:
             raise ValueError(
-                f"transition_mat_type must be 'gaussian', 'uniform', 'absorbing' "
+                f"transition_mat_type must be 'gaussian', 'uniform', 'absorbing', 'nearestneighbor' "
                 f", but is {self.transition_mat_type}"
             )
         self.register("q_onestep_mats", torch.stack(q_one_step_mats, dim=0))
@@ -281,7 +284,55 @@ class CategoricalDiffusion(nn.Module):
         # Add beta_t to the num_pixel_vals/2-th column for the absorbing state.
         mat[:, self.num_pixel_vals // 2] += beta_t
 
-        return torch.from_numpy(mat)
+        return torch.from_numpy(mat) 
+    
+    def _get_nearestneighbor_transition_mat(self, t):
+        """Computes transition matrix for q(x_t|x_{t-1}).
+
+        Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
+
+        Args:
+          t: timestep. integer scalar.
+
+        Returns:
+          Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
+        """
+        beta_t = self.betas[t].numpy()
+
+        ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
+        list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,            0 ],
+                [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0.12,           0,           0,     0,     0.3,            0,              0,              1.32,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           10.84,           0,     3.71,     0,            0,              0,              1.99,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           9.97,           6.06,     0,     0,            0,              0,              2.18,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        1.38,           7.83,           0,     0,     0,            0,              0,              4.09,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           5.35,           0,     0,     2.23,            0,              0,              4.69,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           4.83,           0,     0,     1.22,            0,              0,              1.9,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           1.79,           0,     0,     0.31,            0,              0,              0,         0.53,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [1.6,       9.17,           0,           0,     0,     0,            0,              0,              9.71,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           11.51,           0,     0,     0.09,            0,              0,              1.01,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           3.65,           0,     0,     0,            0,              0,              0.53,         0,        0,      0,       0.97,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           1.47,           0,     0,     0,            0,              0,              0,         0,        0,      2.32,            0,      0,      0,       0,      0,        0,            5.16 ],
+                [0.77,        0,           0.41,           0,     0,     0,            0,              0,              0.25,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
+                [0,        0,           1.24,           0,     0,     0,            0,              0,              0.46,         0,        0,      0,       0,      3.96,         0,          0,         0,           0,      0 ],
+                [0.61,        0,           0.83,           0,     0,     0,            0,              0,              0,         0,        0,      0,       0,       0.55,      0,           0,         0,            0,    0 ],
+                [0,        0,           2.19,           0,     0,     0,            0,              0,              1.37,         0,        0,      0,       0,      0,      0,       0.38,      0,        0,            0 ],
+                [0,        0,           2.61,           0,     0,     0,            0,              0,              0,         0,        0,      2.06,       0,      0,      0,       0,      0,        0,            2.16 ],
+                [0,        1.58,           4.19,           0,     1.45,     0,            0,              0,              0,         0,        0,      0,       1.58,      0,      0,       0,      0,        0,            0 ]]
+
+        list_of_lists_arr = np.array(list_of_lists)  
+        ## one-hot adjacency matrix 
+        adjacency_matrix_one_hot = list_of_lists_arr 
+        adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
+
+        ## from google_research/d3pm/text/diffusion
+        adjacency_matrix_one_hot = adjacency_matrix_one_hot + adjacency_matrix_one_hot.T
+        transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
+        matrix = scipy.linalg.expm(
+                    np.array(beta_t * transition_rate, dtype=np.float64))
+        matrix / matrix.sum(0, keepdims=True) 
+        
+        return torch.from_numpy(matrix)
 
     def _at(self, a, t, x):
         """Extract coefficients at specified timesteps t and conditioning data x.

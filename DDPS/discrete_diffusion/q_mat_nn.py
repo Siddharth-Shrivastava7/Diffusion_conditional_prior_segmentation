@@ -5,10 +5,6 @@ import scipy
 ## Discrete Diffusion matrix adopted from D3PM-Pytorch github code 
 
 
-
-
-
-
 ## NearestNeighborDiffusion
 ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
 list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,            0 ],
