@@ -1,9 +1,7 @@
 import numpy as np
-import torch 
 import scipy
 
 ## Discrete Diffusion matrix adopted from D3PM-Pytorch github code 
-
 
 ## NearestNeighborDiffusion
 ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 

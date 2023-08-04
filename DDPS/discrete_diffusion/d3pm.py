@@ -24,8 +24,8 @@ import numpy as np
 from torch import nn
 from torch.nn import functional as F
 import scipy.special
+import scipy
 from loguru import logger
-
 
 def make_diffusion(hps):
     """HParams -> diffusion object."""
@@ -286,6 +286,7 @@ class CategoricalDiffusion(nn.Module):
 
         return torch.from_numpy(mat) 
     
+    ## we build it!!
     def _get_nearestneighbor_transition_mat(self, t):
         """Computes transition matrix for q(x_t|x_{t-1}).
 
@@ -326,7 +327,7 @@ class CategoricalDiffusion(nn.Module):
         adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
 
         ## from google_research/d3pm/text/diffusion
-        adjacency_matrix_one_hot = adjacency_matrix_one_hot + adjacency_matrix_one_hot.T
+        adjacency_matrix_one_hot = adjacency_matrix_one_hot + adjacency_matrix_one_hot.T ## for building the symmetricity of adjacency matrix
         transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
         matrix = scipy.linalg.expm(
                     np.array(beta_t * transition_rate, dtype=np.float64))
