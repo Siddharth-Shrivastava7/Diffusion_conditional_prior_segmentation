@@ -42,3 +42,5 @@ def sample_categorical(logits):           # use gumbel to sample onehot vector f
     sample = (gumbel_noise + logits).argmax(dim=1).long()
     # log_sample = index_to_log_onehot(sample, num_classes) # this is in usual discrete space diffusion input
     return sample
+
+
