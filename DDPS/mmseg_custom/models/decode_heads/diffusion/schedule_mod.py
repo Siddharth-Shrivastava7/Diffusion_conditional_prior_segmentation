@@ -3,6 +3,7 @@ import torch
 import math
 import scipy
 
+from torch.nn import functional as F
 from .misc import extract, log_add_exp, log_1_min_a, index_to_log_onehot, sample_categorical, log_onehot_to_index
 
 
@@ -143,7 +144,7 @@ def q_posterior_log(log_x_start, log_x_t, t, num_timesteps, num_classes, log_cum
     return log_probs
 
 ## diffusion based on Q-transition matrix 
-def _get_nearestneighbor_transition_mat(self, t):
+def _get_nearestneighbor_transition_mat(bt, t):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
     Args:
@@ -151,7 +152,8 @@ def _get_nearestneighbor_transition_mat(self, t):
     Returns:
         Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
     """
-    beta_t = self.betas[t].numpy()
+    beta_t = extract(bt, t, bt.shape)
+    beta_t = beta_t.numpy()
     ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
     list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,            0 ],
             [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
@@ -184,3 +186,24 @@ def _get_nearestneighbor_transition_mat(self, t):
                 np.array(beta_t * transition_rate, dtype=np.float64))
     matrix / matrix.sum(0, keepdims=True) 
     return torch.from_numpy(matrix)
+
+def q_mats_from_onestepsdot(bt, num_timesteps): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
+    q_onestep_mats = [_get_nearestneighbor_transition_mat(bt, t) 
+                               for t in range(0, num_timesteps)]
+    q_mats = [q_onestep_mats[0]]
+    for t in range(1, num_timesteps):
+        q_mat_t = torch.tensordot(q_mat_t, q_onestep_mats[t],
+                                      dims=[[1], [0]])
+        q_mats.append(q_mat_t)
+    return q_mats
+
+def q_pred_from_mats(x_start, t, num_timesteps, num_classes, bt): 
+    q_mats = q_mats_from_onestepsdot(bt, num_timesteps)
+    B, _, H, W = x_start.shape
+    q_mats_t = torch.index_select(q_mats, dim=0, index=t)
+    x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float32)
+    out = torch.matmul(x_start_onehot, q_mats_t)
+    out = out.view(B, num_classes, H, W)
+    logits = torch.log(out.clamp(min=1e-30)) ## rather than "torch.log(out + 1e-6)"
+    sample_logits = sample_categorical(logits)
+    return sample_logits

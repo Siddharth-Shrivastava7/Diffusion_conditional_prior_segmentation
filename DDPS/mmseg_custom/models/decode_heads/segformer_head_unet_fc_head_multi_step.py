@@ -12,7 +12,7 @@ from mmseg.ops import resize
 from mmseg.utils import get_root_logger
 
 from .unet import UnetTimeEmbedding
-from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior
+from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats
 
 
 NOISE_SCHEDULES = {
@@ -158,8 +158,10 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             t = (torch.ones([B], device=self.device) * i).long()
             noise_step = (torch.ones([B], device=self.device) * (self.diffusion_timesteps - i - 1)).long()
             if i != 0:
-                mask = q_pred(out, noise_step, self.diffusion_timesteps, self.num_classes,
-                              self.log_cumprod_at, self.log_cumprod_bt)
+                # mask = q_pred(out, noise_step, self.diffusion_timesteps, self.num_classes,
+                #               self.log_cumprod_at, self.log_cumprod_bt)
+                mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes,
+                            self.bt)
             mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]
             out = torch.cat([condition_embed, mask_embedding], dim=1)  # [B, C+c, H, W]
             out = self.unet(out, t)
