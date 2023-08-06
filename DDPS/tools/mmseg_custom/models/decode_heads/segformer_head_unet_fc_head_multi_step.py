@@ -12,7 +12,7 @@ from mmseg.ops import resize
 from mmseg.utils import get_root_logger
 
 from .unet import UnetTimeEmbedding
-from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats
+from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats, q_mats_from_onestepsdot
 
 
 NOISE_SCHEDULES = {
@@ -155,7 +155,12 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         B, C, H, W = out.shape
         condition_embed = out
         mask = torch.randint(0, self.num_classes, [B, H, W], device=self.device).long()
-        output_collect = []
+        output_collect = [] 
+        '''
+            with discrete diffusion using transition matrix 
+            Q_t = Q1.Q2...Qt
+        '''
+        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps)
         for i in self.get_timesteps():
             # timestep = (self.diffusion_timesteps - i - 1)
             t = (torch.ones([B], device=self.device) * i).long()
@@ -163,8 +168,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             if i != 0:
                 # mask = q_pred(out, noise_step, self.diffusion_timesteps, self.num_classes,
                 #               self.log_cumprod_at, self.log_cumprod_bt)
-                mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes,
-                            self.bt)
+                mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes, self.bt, q_mats)
             mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]
             out = torch.cat([condition_embed, mask_embedding], dim=1)  # [B, C+c, H, W]
             out = self.unet(out, t)
