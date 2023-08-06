@@ -240,6 +240,11 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             t = self.sample_t(B)  # [B], t=0 means random mask
             multi_step = (t != 0)  # [B], not predict from random mask
             B_multi_step = None
+            '''
+                with discrete diffusion using transition matrix 
+                Q_t = Q1.Q2...Qt
+            '''
+            q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps)
             if multi_step.sum() > 0:
                 with torch.no_grad():  # diffusion predict for t=0
                     out_select = out[multi_step, :, :, :].clone().detach()
@@ -255,8 +260,10 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             if B_multi_step is not None:
                 x_interpolate[multi_step, ...] = out_select
             noise_step = self.diffusion_timesteps - t - 1  # t=0 means add 19 steps noise
-            mask = q_pred(x_interpolate, noise_step.long(), self.diffusion_timesteps, self.num_classes,
-                          self.log_cumprod_at, self.log_cumprod_bt)
+            # mask = q_pred(x_interpolate, noise_step.long(), self.diffusion_timesteps, self.num_classes,
+            #               self.log_cumprod_at, self.log_cumprod_bt)
+            mask = q_pred_from_mats(x_interpolate, noise_step.long(), self.diffusion_timesteps, self.num_classes,
+                                self.bt, q_mats)
             mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]
             out = torch.cat([out, mask_embedding], dim=1)  # [B, C+c, H, W]
             out = self.unet(out, t)
@@ -289,11 +296,18 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         out = self.fusion_conv(torch.cat(outs, dim=1))
 
         B, C, H, W = out.shape
+        '''
+                with discrete diffusion using transition matrix 
+                Q_t = Q1.Q2...Qt
+            '''
+        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps)
         x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W]
         t = (torch.ones([B], device=self.device) * timestep).long()
         noise_step = (self.diffusion_timesteps - t - 1).long()
-        mask = q_pred(x_interpolate, noise_step, self.diffusion_timesteps, self.num_classes,
-                      self.log_cumprod_at, self.log_cumprod_bt)
+        # mask = q_pred(x_interpolate, noise_step, self.diffusion_timesteps, self.num_classes,
+        #               self.log_cumprod_at, self.log_cumprod_bt)
+        mask = q_pred_from_mats(x_interpolate, noise_step.long(), self.diffusion_timesteps, self.num_classes,
+                                self.bt, q_mats)
         mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]
         out = torch.cat([out, mask_embedding], dim=1)  # [B, C+c, H, W]
         out = self.unet(out, t)

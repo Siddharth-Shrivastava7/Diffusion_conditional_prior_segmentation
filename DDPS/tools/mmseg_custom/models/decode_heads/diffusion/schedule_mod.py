@@ -209,6 +209,8 @@ def q_pred_from_mats(x_start, t, num_timesteps, num_classes, bt, q_mats):
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
     out = torch.matmul(x_start_onehot, q_mats_t)
     out = out.view(B, num_classes, H, W)
-    logits = torch.log(out.clamp(min=1e-30)) ## rather than "torch.log(out + 1e-6) in d3pm pytorch code" ## is it necessary? if possible, see once without using it.
+    # logits = out ## random testing 
+    logits = torch.log(out.clamp(min=1e-30)) ## with relevant to original DDPS code 
+    # logits = torch.log(out + 1e-6) ## with relevant to d3pm code 
     sample_logits = sample_categorical(logits)
     return sample_logits
