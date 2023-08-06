@@ -1,10 +1,10 @@
 norm_cfg = dict(type='SyncBN', requires_grad=True)
-checkpoint = '/home/sidd_s/scratch/saved_models/mmseg/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+checkpoint = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
 model = dict(
     type='EncoderDecoderFreeze',
     freeze_parameters=['backbone', 'decode_head'],
     pretrained=
-    '/home/sidd_s/scratch/saved_models/mmseg/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
+    '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
     backbone=dict(
         type='MixVisionTransformerCustomInitWeights',
         in_channels=3,
@@ -23,7 +23,7 @@ model = dict(
     decode_head=dict(
         type='SegformerHeadUnetFCHeadSingleStep',
         pretrained=
-        '/home/sidd_s/scratch/saved_models/mmseg/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
+        '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth',
         dim=128,
         out_dim=256,
         unet_channels=272,
