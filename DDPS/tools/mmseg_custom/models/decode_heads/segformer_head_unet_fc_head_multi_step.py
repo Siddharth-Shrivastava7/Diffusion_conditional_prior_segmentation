@@ -168,7 +168,8 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             if i != 0:
                 # mask = q_pred(out, noise_step, self.diffusion_timesteps, self.num_classes,
                 #               self.log_cumprod_at, self.log_cumprod_bt)
-                mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes, self.bt, q_mats)
+                mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes,
+                                self.bt, q_mats)
             mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]
             out = torch.cat([condition_embed, mask_embedding], dim=1)  # [B, C+c, H, W]
             out = self.unet(out, t)
