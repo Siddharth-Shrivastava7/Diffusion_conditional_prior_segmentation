@@ -125,8 +125,11 @@ def main():
         cfg.work_dir = args.work_dir
     else:
         # use config filename as default work_dir if cfg.work_dir is None
-        cfg.work_dir = osp.join('./work_dirs',
-                                osp.splitext(osp.basename(args.config))[0])
+        # cfg.work_dir = osp.join('./work_dirs',
+        #                         osp.splitext(osp.basename(args.config))[0])
+        ## already mentioned in the cfg file
+        pass 
+        
     if args.load_from is not None:
         cfg.load_from = args.load_from
     if args.resume_from is not None:
@@ -145,7 +148,7 @@ def main():
     if args.gpus is None and args.gpu_ids is None:
         cfg.gpu_ids = [args.gpu_id]
 
-    cfg.auto_resume = args.auto_resume
+    # cfg.auto_resume = args.auto_resume # already mentioned in the cfg file 
 
     # init distributed env first, since logger depends on the dist info.
     if args.launcher == 'none':
