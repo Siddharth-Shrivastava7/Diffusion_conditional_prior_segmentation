@@ -175,7 +175,7 @@ lr_config = dict(
 runner = dict(type='IterBasedRunner', max_iters=80000)
 checkpoint_config = dict(by_epoch=False, interval=8000, max_keep_ckpts=1)
 evaluation = dict(
-    interval=1, metric='mIoU', pre_eval=True, save_best='mIoU')
+    interval=8000, metric='mIoU', pre_eval=True, save_best='mIoU')
 work_dir = '/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_cityscapes20_singlestep'
 gpu_ids = range(0, 8)
 auto_resume = True
