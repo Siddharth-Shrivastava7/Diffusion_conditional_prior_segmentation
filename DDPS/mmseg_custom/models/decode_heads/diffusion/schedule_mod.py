@@ -5,6 +5,10 @@ import scipy
 
 from torch.nn import functional as F
 from .misc import extract, log_add_exp, log_1_min_a, index_to_log_onehot, sample_categorical, log_onehot_to_index
+from .confusion_matrix import calculate_confusion_matrix_segformerb2
+
+global confusion_matrix
+confusion_matrix = calculate_confusion_matrix_segformerb2()
 
 
 def cos_alpha_schedule(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999, exp=3):
@@ -192,7 +196,10 @@ def _get_nearestneighbor_transition_mat(bt, t):
     #             np.array(bt[0].cpu().numpy() * transition_rate, dtype=np.float64)) ## using the one as given in d3pm original code
     
     ## using sinkhorn's theorem to approach doubly stochastic matrix  
-    matrix = adjacency_matrix_one_hot
+    # matrix = adjacency_matrix_one_hot
+    matrix = np.zeros((20,20)) ## num_classes x num_classes
+    matrix[:19, :19] = confusion_matrix
+    
     for _ in range(100): # number of iterations is a hyperparameter
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
