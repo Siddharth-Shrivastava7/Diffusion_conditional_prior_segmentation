@@ -86,8 +86,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
+    samples_per_gpu=2,
+    workers_per_gpu=2,
     train=dict(
         type='Cityscapes20Dataset',
         data_root='/home/sidd_s/scratch/dataset/cityscapes',
@@ -191,5 +191,5 @@ custom_hooks = [
         priority=49)
 ]
 work_dir = '/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_cityscapes20_multistep'
-gpu_ids = range(0, 4)
+gpu_ids = range(0, 8)
 auto_resume = True

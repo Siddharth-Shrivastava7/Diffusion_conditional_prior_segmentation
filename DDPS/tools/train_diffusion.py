@@ -145,8 +145,8 @@ def main():
                       'Because we only support single GPU mode in '
                       'non-distributed training. Use the first GPU '
                       'in `gpu_ids` now.')
-    if args.gpus is None and args.gpu_ids is None:
-        cfg.gpu_ids = [args.gpu_id]
+    if args.gpus is None and args.gpu_ids is None: 
+        cfg.gpu_ids = [args.gpu_id] 
 
     # cfg.auto_resume = args.auto_resume # already mentioned in the cfg file 
 
