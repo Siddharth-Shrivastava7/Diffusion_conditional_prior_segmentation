@@ -12,7 +12,7 @@ from mmseg.ops import resize
 from mmseg.utils import get_root_logger
 
 from .unet import UnetTimeEmbedding
-from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats, q_mats_from_onestepsdot
+from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats, q_mats_from_onestepsdot, calculate_confusion_matrix_segformerb2
 
 
 NOISE_SCHEDULES = {
@@ -113,6 +113,8 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         if inference_mode == 'q_posterior': 
             self.diffusion_loop = self.diffusion_loop_posterior
 
+        self.confusion_matrix = calculate_confusion_matrix_segformerb2()
+
     def cls_seg(self, feat):
         """Classify each pixel."""
         if self.dropout is not None:
@@ -160,7 +162,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             with discrete diffusion using transition matrix 
             Q_t = Q1.Q2...Qt
         '''
-        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps) 
+        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix) 
         # q_mats = q_mats_from_onestepsdot(self.at, self.diffusion_timesteps) ## testing once with alpha_t as mentioned in the paper, but the code has beta_t form and even the statement written in the paper (increasing alpha_t as time t) suggest that its not alpha_t, its the beta_t only...but still will exp with alpha_t as well
         for i in self.get_timesteps():
             # timestep = (self.diffusion_timesteps - i - 1)
@@ -246,7 +248,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 with discrete diffusion using transition matrix 
                 Q_t = Q1.Q2...Qt
             '''
-            q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps)
+            q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix)
             if multi_step.sum() > 0:
                 with torch.no_grad():  # diffusion predict for t=0
                     out_select = out[multi_step, :, :, :].clone().detach()
@@ -302,7 +304,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 with discrete diffusion using transition matrix 
                 Q_t = Q1.Q2...Qt
             '''
-        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps)
+        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix)
         x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W]
         t = (torch.ones([B], device=self.device) * timestep).long()
         noise_step = (self.diffusion_timesteps - t - 1).long()
