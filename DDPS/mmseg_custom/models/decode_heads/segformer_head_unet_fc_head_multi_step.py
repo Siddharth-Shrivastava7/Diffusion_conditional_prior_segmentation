@@ -160,7 +160,8 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             with discrete diffusion using transition matrix 
             Q_t = Q1.Q2...Qt
         '''
-        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps)
+        # q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps) ## testing once with alpha_t as mentioned in the paper, but the code has beta_t form and even the statement written in the paper (increasing alpha_t as time t) suggest that its not alpha_t, its the beta_t only...but still will exp with alpha_t as well
+        # q_mats = q_mats_from_onestepsdot(self.at, self.diffusion_timesteps)
         for i in self.get_timesteps():
             # timestep = (self.diffusion_timesteps - i - 1)
             t = (torch.ones([B], device=self.device) * i).long()
@@ -170,9 +171,12 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 #               self.log_cumprod_at, self.log_cumprod_bt)
                 mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes,
                                 self.bt, q_mats)
+                # mask = q_pred_from_mats(out, noise_step, self.diffusion_timesteps, self.num_classes,
+                #                 self.at, q_mats) ## alpha_t using in place of beta_t ... lets see what are the results for this 
             mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]
             out = torch.cat([condition_embed, mask_embedding], dim=1)  # [B, C+c, H, W]
             out = self.unet(out, t)
+            
             out = self.cls_seg(out)
             
             if self.guidance_scale != 1:

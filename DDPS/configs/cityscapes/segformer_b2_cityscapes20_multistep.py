@@ -1,10 +1,10 @@
 norm_cfg = dict(type='SyncBN', requires_grad=True)
-checkpoint = 'work_dirs/segformer_mit_b2_segformer_head_unet_fc_small_single_step_ade_pretrained_freeze_embed_80k_cityscapes20/best_mIoU_iter_64000.pth'
+checkpoint = '/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_cityscapes20_singlestep/best_mIoU_iter_64000.pth'
 model = dict(
     type='EncoderDecoderDiffusion',
     freeze_parameters=['backbone', 'decode_head'],
     pretrained=
-    'work_dirs/segformer_mit_b2_segformer_head_unet_fc_small_single_step_ade_pretrained_freeze_embed_80k_cityscapes20/best_mIoU_iter_64000.pth',
+    '/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_cityscapes20_singlestep/best_mIoU_iter_64000.pth',
     backbone=dict(
         type='MixVisionTransformerCustomInitWeights',
         in_channels=3,
@@ -23,7 +23,7 @@ model = dict(
     decode_head=dict(
         type='SegformerHeadUnetFCHeadMultiStep',
         pretrained=
-        'work_dirs/segformer_mit_b2_segformer_head_unet_fc_small_single_step_ade_pretrained_freeze_embed_80k_cityscapes20/best_mIoU_iter_64000.pth',
+        '/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_cityscapes20_singlestep/best_mIoU_iter_64000.pth',
         dim=256,
         out_dim=256,
         unet_channels=272,
