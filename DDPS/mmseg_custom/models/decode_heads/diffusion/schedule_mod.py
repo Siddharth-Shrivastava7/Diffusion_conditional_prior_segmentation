@@ -183,11 +183,23 @@ def _get_nearestneighbor_transition_mat(bt, t):
     adjacency_matrix_one_hot = list_of_lists_arr 
     adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
     ## from google_research/d3pm/text/diffusion
-    adjacency_matrix_one_hot = adjacency_matrix_one_hot + adjacency_matrix_one_hot.T ## for building the symmetricity of adjacency matrix
-    transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
-    matrix = scipy.linalg.expm(
-                np.array(beta_t * transition_rate, dtype=np.float64))
-    matrix / matrix.sum(0, keepdims=True) 
+    adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * 3) ## for building the symmetricity of adjacency matrix and k = 3
+    
+    # transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
+    # matrix = scipy.linalg.expm(
+    #             np.array(beta_t * transition_rate, dtype=np.float64)) 
+    # matrix = scipy.linalg.expm(
+    #             np.array(bt[0].cpu().numpy() * transition_rate, dtype=np.float64)) ## using the one as given in d3pm original code
+    
+    ## using sinkhorn's theorem to approach doubly stochastic matrix  
+    matrix = adjacency_matrix_one_hot
+    for _ in range(100): # number of iterations is a hyperparameter
+        matrix = matrix / matrix.sum(1, keepdims=True)
+        matrix = matrix / matrix.sum(0, keepdims=True)
+    matrix = matrix / matrix.sum(0, keepdims=True)  
+    # matrix = (1 - bt[-1].cpu().numpy()) * np.eye(20) + bt[-1].cpu().numpy() * matrix ## additional just for trying as given in d3pm original code
+    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
+    
     return torch.from_numpy(matrix).to(bt.device)
 
 def q_mats_from_onestepsdot(bt, num_timesteps): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
