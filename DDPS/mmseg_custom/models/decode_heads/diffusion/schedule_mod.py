@@ -211,6 +211,6 @@ def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats):
     out = out.view(B, num_classes, H, W)
     # logits = out ## random testing 
     logits = torch.log(out.clamp(min=1e-30)) ## with relevant to original DDPS code 
-    # logits = torch.log(out + 1e-6) ## with relevant to d3pm code 
+    # logits = torch.log(out + 1e-6) ## with relevant to d3pm pytorch code
     sample_logits = sample_categorical(logits)
     return sample_logits
