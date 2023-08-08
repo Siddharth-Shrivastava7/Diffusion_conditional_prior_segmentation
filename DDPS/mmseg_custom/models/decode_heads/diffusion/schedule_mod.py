@@ -202,7 +202,7 @@ def q_mats_from_onestepsdot(bt, num_timesteps): # return: Qt = Q_1.Q_2.Q_3...Q_t
     q_mats = torch.stack(q_mats, dim=0) 
     return q_mats
 
-def q_pred_from_mats(x_start, t, num_timesteps, num_classes, bt, q_mats): 
+def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
     B, H, W = x_start.shape # label map
     t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
