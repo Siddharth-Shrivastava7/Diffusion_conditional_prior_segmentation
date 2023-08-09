@@ -194,8 +194,8 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     ### building similarity matrix 
     ### Dealing with confusion matrix for similarity matrix 
     # matrix = np.zeros((20,20)) ## num_classes x num_classes 
-    matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
     np.fill_diagonal(confusion_matrix, 0) ## inplace function, as the proba of transferring to itself is quite high, wont ever transfer to any other class if this present so zeroing it out
+    matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
     matrix[:19, :19] = confusion_matrix 
     # print('********', np.unique(confusion_matrix))
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
