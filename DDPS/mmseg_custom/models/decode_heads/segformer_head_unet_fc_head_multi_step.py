@@ -230,7 +230,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                     mode=self.interpolate_mode,
                     align_corners=self.align_corners))
 
-        out = self.fusion_conv(torch.cat(outs, dim=1))
+        out = self.fusion_conv(torch.cat(outs, dim=1)) # out is the 'h' from the paper's algo...the initial predictions in terms of features(image representations) 
         
         if self.training and self.backbone_drop_out_ratio > 0:
             is_cond = torch.rand(size=(out.shape[0], *[1] * len(out.shape[1:])),
@@ -308,8 +308,9 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W]
         t = (torch.ones([B], device=self.device) * timestep).long()
         noise_step = (self.diffusion_timesteps - t - 1).long()
+        ## noise on the GT here, and NOT on the first prediction 
         # mask = q_pred(x_interpolate, noise_step, self.diffusion_timesteps, self.num_classes,
-        #               self.log_cumprod_at, self.log_cumprod_bt)
+        #               self.log_cumprod_at, self.log_cumprod_bt) 
         mask = q_pred_from_mats(x_interpolate, noise_step.long(), self.diffusion_timesteps, self.num_classes,
                                 q_mats)
         mask_embedding = self.embed(mask).permute(0, 3, 1, 2)  # [B, c, H, W]

@@ -44,6 +44,7 @@ def alpha_schedule(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.0000
     return at, bt, ct, att, btt, ctt
 
 
+## this is being used : with time_step(#diffusion steps): 20 and N(#classes): 20
 def alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999):
     att = torch.arange(0, time_step) / (time_step - 1) * (att_T - att_1) + att_1
     att = torch.cat((torch.tensor([1]), att))
@@ -54,6 +55,7 @@ def alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=
     return at, bt, att, btt
 
 
+## choices are between this and the above linear torch schedule one
 def cos_alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999, exp=2):
     att = torch.arange(0, time_step)
     att = (torch.cos((att + time_step) * math.pi * 0.5 / time_step) + 1)**exp
@@ -151,9 +153,9 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     Returns:
         Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
     """
-    # beta_t = bt[t]
+    beta_t = bt[t]
     
-    # beta_t = beta_t.cpu().numpy()
+    beta_t = beta_t.cpu().numpy()
     # ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
     # list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,           0, 0],
     #         [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0, 00],
@@ -178,7 +180,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     #         ] ## background class also added for now making its relative dependency with road, sidewalk and vegetation 
 
     # list_of_lists_arr = np.array(list_of_lists)  
-    # ## one-hot adjacency matrix 
+    # # ## one-hot adjacency matrix 
     # adjacency_matrix_one_hot = list_of_lists_arr 
     # adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
     ## from google_research/d3pm/text/diffusion
@@ -193,8 +195,17 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     ## using sinkhorn's theorem to approach doubly stochastic matrix  
     # matrix = adjacency_matrix_one_hot
     matrix = np.zeros((20,20)) ## num_classes x num_classes
-    matrix[:19, :19] = confusion_matrix
-    for _ in range(100): # number of iterations is a hyperparameter
+    matrix[:19, :19] = confusion_matrix 
+    
+    # print('********', np.unique(confusion_matrix))
+    
+    ## additional for symmetricity 
+    matrix = matrix + matrix.T
+    matrix = matrix / (2 * 3) 
+    
+    # matrix = beta_t * matrix ## extra term added 
+    
+    for _ in range(5): # number of iterations is a hyperparameter
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
     matrix = matrix / matrix.sum(0, keepdims=True)  
@@ -218,7 +229,7 @@ def q_mats_from_onestepsdot(bt, num_timesteps, confusion_matrix): # return: Qt =
 
 def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
     B, H, W = x_start.shape # label map
-    t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
+    # t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
     out = torch.matmul(x_start_onehot, q_mats_t)
