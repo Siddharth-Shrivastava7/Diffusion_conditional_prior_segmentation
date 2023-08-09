@@ -203,22 +203,22 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     matrix = matrix + matrix.T
     # matrix = matrix / (2 * 3)  ## not required cause not using k nearest neighbours 
     
-    ### building rate matrix  
-    ## matrix exponential for rate matrix 
-    transition_rate = matrix - np.diagflat(np.sum(matrix, axis=1)) 
+    # ### building rate matrix  
+    # ## matrix exponential for rate matrix 
+    # transition_rate = matrix - np.diagflat(np.sum(matrix, axis=1)) 
     
-    ### building base matrix 
-    matrix = scipy.linalg.expm(
-                np.array(beta_t * transition_rate, dtype=np.float64))  ## base matrix 
+    # ### building base matrix 
+    # matrix = scipy.linalg.expm(
+    #             np.array(beta_t * transition_rate, dtype=np.float64))  ## base matrix 
     
-    # ## sinkhorn algo for base matrix  ## for another time, if the above one not works, then
-    # for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo
-    #     matrix = matrix / matrix.sum(1, keepdims=True)
-    #     matrix = matrix / matrix.sum(0, keepdims=True)
+    ## sinkhorn algo for base matrix  ## for another time, if the above one not works, then
+    for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo
+        matrix = matrix / matrix.sum(1, keepdims=True)
+        matrix = matrix / matrix.sum(0, keepdims=True)
         
-    # # matrix = matrix / matrix.sum(0, keepdims=True)      
-    # # # # matrix = (1 - bt[-1].cpu().numpy()) * np.eye(20) + bt[-1].cpu().numpy() * matrix ## additional just for trying as given in d3pm original code
-    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
+    # matrix = matrix / matrix.sum(0, keepdims=True)      
+    # # # matrix = (1 - bt[-1].cpu().numpy()) * np.eye(20) + bt[-1].cpu().numpy() * matrix ## additional just for trying as given in d3pm original code
+    matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
     
     return torch.from_numpy(matrix).to(bt.device)
 

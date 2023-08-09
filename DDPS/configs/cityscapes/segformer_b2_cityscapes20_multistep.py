@@ -180,7 +180,7 @@ lr_config = dict(
 runner = dict(type='IterBasedRunner', max_iters=160000)
 checkpoint_config = dict(by_epoch=False, interval=8000, max_keep_ckpts=1)
 evaluation = dict(
-    interval=8000, metric='mIoU', pre_eval=True, save_best='mIoU')
+    interval=500, metric='mIoU', pre_eval=True, save_best='mIoU')
 custom_hooks = [
     dict(
         type='ConstantMomentumEMAHook',
