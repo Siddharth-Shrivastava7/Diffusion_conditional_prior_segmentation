@@ -213,9 +213,9 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # np.fill_diagonal(matrix, np.sum(matrix, axis=1)) ## adding each proba of transition equal to being staying there in the same class (for making it in same scale) >> thus high chance of being staying there
     matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
     matrix = beta_t * matrix_prev
-    np.fill_diagonal(matrix, ((1 - beta_t)*np.diag(matrix_prev)))
+    np.fill_diagonal(matrix, ((1 - beta_t)*np.sum(matrix_prev, axis=1)))
 
-    
+
     # ### building rate matrix  
     # ## matrix exponential for rate matrix 
     # transition_rate = matrix - np.diagflat(np.sum(matrix, axis=1)) 
@@ -227,7 +227,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
     
     # ## sinkhorn algo for base matrix
-    for _ in range(100): # number of iterations is a hyperparameter of sinkhorn's algo
+    for _ in range(100): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
     
@@ -258,7 +258,7 @@ def q_mats_from_onestepsdot(bt, num_timesteps, confusion_matrix): # return: Qt =
 
 def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
     B, H, W = x_start.shape # label map
-    # t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
+    t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
     out = torch.matmul(x_start_onehot, q_mats_t)
