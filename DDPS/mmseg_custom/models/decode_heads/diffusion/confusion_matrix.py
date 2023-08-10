@@ -187,9 +187,6 @@ def calculate_confusion_matrix_segformerb2():
 
     dataset = build_dataset(cfg.data.test)
     confusion_matrix = calculate_confusion_matrix(dataset, results) 
-    per_label_sums = confusion_matrix.sum(axis=1)[:, np.newaxis]
-    confusion_matrix = \
-        confusion_matrix.astype(np.float32) / per_label_sums 
     return confusion_matrix
 
 # ## derived from above confusion matrix of "oneformer" model on cityscapes val dataset ## 

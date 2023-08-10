@@ -157,7 +157,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     beta_t = beta_t.cpu().numpy()
     
     ## building similarity matrix, rate and base matrix using adjacency matrix 
-    # ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
+    ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
     # list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,           0, 0],
     #         [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0, 00],
     #         [0,        0.12,           0,           0,     0,     0.3,            0,              0,              1.32,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0, 0],
@@ -180,29 +180,41 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     #         [0.7,       0.2,            0,              0,      0,      0,            0,              0,              0.1,       0,         0,     0,         0,       0,       0,      0,      0,        0,            0,0]
     #         ] ## background class also added for now making its relative dependency with road, sidewalk and vegetation 
     # list_of_lists_arr = np.array(list_of_lists)  
-    # # ## one-hot adjacency matrix 
+    # # # ## one-hot adjacency matrix 
     # adjacency_matrix_one_hot = list_of_lists_arr 
     # adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
-    ## from google_research/d3pm/text/diffusion
+    # ## from google_research/d3pm/text/diffusion
     # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * 3) ## for building the symmetricity of adjacency matrix and k = 3
     # transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
     # matrix = scipy.linalg.expm(
     #             np.array(beta_t * transition_rate, dtype=np.float64)) 
     # matrix = scipy.linalg.expm(
     #             np.array(bt[0].cpu().numpy() * transition_rate, dtype=np.float64)) ## using the one as given in d3pm original code
+    # print('************', np.diag(matrix))
+    # print('^^^^^^^^^^^^^^^^', np.max(matrix), np.min(matrix))
     
-    ### building similarity matrix 
+    
+    ## building similarity matrix, rate and base matrix using confusion matrix 
     ### Dealing with confusion matrix for similarity matrix 
-    # matrix = np.zeros((20,20)) ## num_classes x num_classes 
-    np.fill_diagonal(confusion_matrix, 0) ## inplace function, as the proba of transferring to itself is quite high, wont ever transfer to any other class if this present so zeroing it out # commenting for now 
-    matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
-    matrix[:19, :19] = confusion_matrix 
-    np.fill_diagonal(matrix, 0)
+    # per_label_sums = confusion_matrix.sum(axis=1)[:, np.newaxis]
+    # confusion_matrix = \
+    #     confusion_matrix.astype(np.float32) / per_label_sums 
+    # matrix = np.zeros((20,20)) ## num_classes x num_classes  
+    # np.fill_diagonal(confusion_matrix, 0) ## inplace function, as the proba of transferring to itself is quite high, wont ever transfer to any other class if this present so zeroing it out # commenting for now 
+    # matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
+    matrix = np.ones((20,20))*(1/20) ## 20 is the number of classes; making a uniform transition matrix 
+    matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says 
+    np.fill_diagonal(matrix, 0) ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
     # print('********', np.unique(confusion_matrix))
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
     ## additional for symmetricity 
-    # matrix = matrix + matrix.T ## for a moment not using ## as if taking confusion matrix as the similarity matrix then, this cmd is not required
+    matrix = matrix + matrix.T ## as connectivity (similarity) should be symmetric among classes 
     # matrix = matrix / (2 * 3)  ## not required cause not using k nearest neighbours 
+    # np.fill_diagonal(matrix, np.sum(matrix, axis=1)) ## adding each proba of transition equal to being staying there in the same class (for making it in same scale) >> thus high chance of being staying there
+    matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    matrix = beta_t * matrix_prev
+    np.fill_diagonal(matrix, ((1 - beta_t)*np.diag(matrix_prev)))
+
     
     # ### building rate matrix  
     # ## matrix exponential for rate matrix 
@@ -214,14 +226,21 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     
     # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
     
-    ## sinkhorn algo for base matrix  ## for another time, if the above one not works, then
-    for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo
+    # ## sinkhorn algo for base matrix
+    for _ in range(100): # number of iterations is a hyperparameter of sinkhorn's algo
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
-        
+    
+    # print('*************', np.diag(matrix)) # [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+    # print('>>>>>>>>>>>>>>>>>>>', np.max(matrix))
     # matrix = matrix / matrix.sum(0, keepdims=True)      
     # # # matrix = (1 - bt[-1].cpu().numpy()) * np.eye(20) + bt[-1].cpu().numpy() * matrix ## additional just for trying as given in d3pm original code
-    matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
+    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
+    # print('^^^^^^^^^^', matrix)
+    # print('*************', np.diag(matrix))
+    # matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    # matrix = beta_t * matrix_prev
+    # np.fill_diagonal(matrix, ((1 - beta_t)*np.diag(matrix_prev)))
     
     return torch.from_numpy(matrix).to(bt.device)
 
