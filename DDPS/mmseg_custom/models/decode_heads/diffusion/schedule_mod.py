@@ -202,18 +202,21 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = np.zeros((20,20)) ## num_classes x num_classes  
     # np.fill_diagonal(confusion_matrix, 0) ## inplace function, as the proba of transferring to itself is quite high, wont ever transfer to any other class if this present so zeroing it out # commenting for now 
     # matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
+    # matrix = (torch.ones((20,20), device = bt.device, dtype = torch.float64)*(1/20)) ## in torch 
+    # matrix[:19, :19] = torch.tensor(confusion_matrix).to(bt.device) 
     matrix = np.ones((20,20))*(1/20) ## 20 is the number of classes; making a uniform transition matrix 
-    matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says 
+    matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says
     np.fill_diagonal(matrix, 0) ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
+    matrix = matrix + matrix.T ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
+    # matrix.fill_diagonal_(0)
     # print('********', np.unique(confusion_matrix))
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
-    ## additional for symmetricity 
-    matrix = matrix + matrix.T ## as connectivity (similarity) should be symmetric among classes 
     # matrix = matrix / (2 * 3)  ## not required cause not using k nearest neighbours 
     # np.fill_diagonal(matrix, np.sum(matrix, axis=1)) ## adding each proba of transition equal to being staying there in the same class (for making it in same scale) >> thus high chance of being staying there
-    matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
-    matrix = beta_t * matrix_prev
-    np.fill_diagonal(matrix, ((1 - beta_t)*np.sum(matrix_prev, axis=1)))
+    # matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    # matrix = beta_t * matrix_prev
+    # np.fill_diagonal(matrix, ((1 - beta_t)*np.sum(matrix_prev, axis=1)))
+    # print('>>>>>>>>>>', np.max(matrix))
 
     # ### building rate matrix  
     # ## matrix exponential for rate matrix 
@@ -227,10 +230,15 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     
     # matrix = torch.from_numpy(matrix).to(bt.device) ## cuda out of memory here...alas!
     # ## sinkhorn algo for base matrix
-    for _ in range(100): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
+    for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
     
+    matrix = matrix / matrix.sum(1, keepdims=True) # rows should sum up to one exactly even if column a bit off from one 
+    # print('>>>>>>>>>>', np.max(matrix))
+    # print('*******************',matrix) ## sort of symmetric mostly 
+    # print('RRRRRRRRRRRRRRRRRRR',matrix.sum(1, keepdims=True))  
+    # print('CCCCCCCCCCCCCCCCCCC',matrix.sum(0, keepdims=True)) ## its also close to 1 but not exactly one .. its fine 
     # print('*************', np.diag(matrix)) # [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
     # print('>>>>>>>>>>>>>>>>>>>', np.max(matrix))
     # matrix = matrix / matrix.sum(0, keepdims=True)      
@@ -238,12 +246,21 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
     # print('^^^^^^^^^^', matrix)
     # print('*************', np.diag(matrix))
-    # matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
-    # matrix = beta_t * matrix_prev
-    # np.fill_diagonal(matrix, ((1 - beta_t)*np.diag(matrix_prev)))
+    matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    matrix = beta_t * matrix_prev
+    np.fill_diagonal(matrix, (1 - beta_t*np.sum(matrix_prev, axis=1))) 
+    ## above 3 operations maintaining the doubly stochastic property of the matrix 
+    # print('>>>>>>>>>>>>>>>>>>>>>', matrix, 'ttttttttimeeee', t)
+    # print('RRRRRRRRRRRRRRRRRRR',matrix.sum(1, keepdims=True))  ## exactly 1 
+    # print('CCCCCCCCCCCCCCCCCCC',matrix.sum(0, keepdims=True))  ## quite close to 1
     
-    return torch.from_numpy(matrix).to(bt.device)
-    # return matrix
+    matrix = torch.from_numpy(matrix).to(bt.device) 
+    # torch.save(matrix, 'q_matrix'+ str(t) + '.pt') ## saving the tensor for analysing it
+    # print('time', t , 'matrix saved')
+    # print('*******************',matrix.dtype) # double = float64 
+    
+    # return torch.from_numpy(matrix).to(bt.device)
+    return matrix
 
 def q_mats_from_onestepsdot(bt, num_timesteps, confusion_matrix): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
     q_onestep_mats = [_get_nearestneighbor_transition_mat(bt, t, confusion_matrix) 
@@ -259,10 +276,14 @@ def q_mats_from_onestepsdot(bt, num_timesteps, confusion_matrix): # return: Qt =
 
 def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
     B, H, W = x_start.shape # label map
+    # torch.save(q_mats, 'q_mats.pt') ## saving the tensor for analysing it
+    # print('>>>>>>>>>>>>saving done')
     t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
     out = torch.matmul(x_start_onehot, q_mats_t)
+    # print('>>>>>>>>>>>>>>>', out.shape, out)
+    # print('<<<<<<<<<<<<<<?>>>>>>>>>>>>>',out.unique(), t) ## not too much differnce 
     out = out.view(B, num_classes, H, W)
     # logits = out ## random testing 
     logits = torch.log(out.clamp(min=1e-30)) ## with relevant to original DDPS code 
