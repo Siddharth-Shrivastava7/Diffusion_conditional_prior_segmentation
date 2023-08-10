@@ -215,7 +215,6 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     matrix = beta_t * matrix_prev
     np.fill_diagonal(matrix, ((1 - beta_t)*np.sum(matrix_prev, axis=1)))
 
-
     # ### building rate matrix  
     # ## matrix exponential for rate matrix 
     # transition_rate = matrix - np.diagflat(np.sum(matrix, axis=1)) 
@@ -226,6 +225,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     
     # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
     
+    matrix = torch.from_numpy(matrix).to(bt.device)
     # ## sinkhorn algo for base matrix
     for _ in range(100): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
         matrix = matrix / matrix.sum(1, keepdims=True)
@@ -242,7 +242,8 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = beta_t * matrix_prev
     # np.fill_diagonal(matrix, ((1 - beta_t)*np.diag(matrix_prev)))
     
-    return torch.from_numpy(matrix).to(bt.device)
+    # return torch.from_numpy(matrix).to(bt.device)
+    return matrix
 
 def q_mats_from_onestepsdot(bt, num_timesteps, confusion_matrix): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
     q_onestep_mats = [_get_nearestneighbor_transition_mat(bt, t, confusion_matrix) 
