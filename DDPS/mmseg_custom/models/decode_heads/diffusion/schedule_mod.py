@@ -211,16 +211,16 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = scipy.linalg.expm(
     #             np.array(beta_t * transition_rate, dtype=np.float64))  ## base matrix 
     
-    matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
+    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
     
     ## sinkhorn algo for base matrix  ## for another time, if the above one not works, then
-    for _ in range(100): # number of iterations is a hyperparameter of sinkhorn's algo
+    for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
         
     # matrix = matrix / matrix.sum(0, keepdims=True)      
     # # # matrix = (1 - bt[-1].cpu().numpy()) * np.eye(20) + bt[-1].cpu().numpy() * matrix ## additional just for trying as given in d3pm original code
-    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
+    matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
     
     return torch.from_numpy(matrix).to(bt.device)
 
