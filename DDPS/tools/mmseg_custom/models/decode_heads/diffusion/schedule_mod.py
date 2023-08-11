@@ -199,14 +199,14 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # per_label_sums = confusion_matrix.sum(axis=1)[:, np.newaxis]
     # confusion_matrix = \
     #     confusion_matrix.astype(np.float32) / per_label_sums 
-    # matrix = np.zeros((20,20)) ## num_classes x num_classes  
+    # matrix = np.zeros((20,20)) ## not giving background any chance of coming in the prediction; whatsoever ## num_classes x num_classes  
     # np.fill_diagonal(confusion_matrix, 0) ## inplace function, as the proba of transferring to itself is quite high, wont ever transfer to any other class if this present so zeroing it out # commenting for now 
     # matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
     # matrix = (torch.ones((20,20), device = bt.device, dtype = torch.float64)*(1/20)) ## in torch 
     # matrix[:19, :19] = torch.tensor(confusion_matrix).to(bt.device) 
-    matrix = np.ones((20,20))*(1/20) ## 20 is the number of classes; making a uniform transition matrix 
+    matrix = np.ones((20,20)) ## 20 is the number of classes; making a uniform transition matrix 
     matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says
-    # np.fill_diagonal(matrix, 0) ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
+    np.fill_diagonal(matrix, 0) ## making dia zero so as to be in use in matrix expo method ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
     # matrix = matrix + matrix.T ## no changes to introduced in confusion matrix calc ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
     # matrix = beta_t * matrix ## no changes to introduced in confusion matrix calc
     # matrix.fill_diagonal_(0)
@@ -214,8 +214,8 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
     # matrix = matrix / (2 * 3)  ## not required cause not using k nearest neighbours 
     # np.fill_diagonal(matrix, np.sum(matrix, axis=1)) ## adding each proba of transition equal to being staying there in the same class (for making it in same scale) >> thus high chance of being staying there
-    # matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
-    # matrix = beta_t * matrix_prev
+    matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    matrix = beta_t * matrix_prev
     # np.fill_diagonal(matrix, ((1 - beta_t)*np.sum(matrix_prev, axis=1)))
     # print('>>>>>>>>>>', np.max(matrix))
 
