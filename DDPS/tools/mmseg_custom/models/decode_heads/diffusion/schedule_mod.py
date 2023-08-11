@@ -206,9 +206,9 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix[:19, :19] = torch.tensor(confusion_matrix).to(bt.device) 
     matrix = np.ones((20,20))*(1/20) ## 20 is the number of classes; making a uniform transition matrix 
     matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says
-    np.fill_diagonal(matrix, 0) ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
-    matrix = matrix + matrix.T ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
-    matrix = beta_t * matrix
+    # np.fill_diagonal(matrix, 0) ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
+    # matrix = matrix + matrix.T ## no changes to introduced in confusion matrix calc ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
+    # matrix = beta_t * matrix ## no changes to introduced in confusion matrix calc
     # matrix.fill_diagonal_(0)
     # print('********', np.unique(confusion_matrix))
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
