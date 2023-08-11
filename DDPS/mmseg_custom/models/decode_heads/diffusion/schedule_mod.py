@@ -234,8 +234,8 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
         matrix = matrix / matrix.sum(1, keepdims=True)
         matrix = matrix / matrix.sum(0, keepdims=True)
-    
     matrix = matrix / matrix.sum(1, keepdims=True) # rows should sum up to one exactly even if column a bit off from one 
+    
     # print('>>>>>>>>>>', np.max(matrix))
     # print('*******************',matrix) ## sort of symmetric mostly 
     # print('RRRRRRRRRRRRRRRRRRR',matrix.sum(1, keepdims=True))  
