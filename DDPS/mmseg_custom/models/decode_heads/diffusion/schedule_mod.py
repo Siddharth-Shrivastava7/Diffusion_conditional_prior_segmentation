@@ -208,6 +208,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says
     np.fill_diagonal(matrix, 0) ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
     matrix = matrix + matrix.T ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
+    matrix = beta_t * matrix
     # matrix.fill_diagonal_(0)
     # print('********', np.unique(confusion_matrix))
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
@@ -226,7 +227,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = scipy.linalg.expm(
     #             np.array(beta_t * transition_rate, dtype=np.float64))  ## base matrix 
     
-    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
+    # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## not working with sinkhorn ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
     
     # matrix = torch.from_numpy(matrix).to(bt.device) ## cuda out of memory here...alas!
     # ## sinkhorn algo for base matrix
@@ -246,9 +247,10 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
     # print('^^^^^^^^^^', matrix)
     # print('*************', np.diag(matrix))
-    matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
-    matrix = beta_t * matrix_prev
-    np.fill_diagonal(matrix, (1 - beta_t*np.sum(matrix_prev, axis=1))) 
+    # matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    # matrix = beta_t * matrix_prev
+    # np.fill_diagonal(matrix, (1 - beta_t*np.sum(matrix_prev, axis=1)))  ## this is the one i which thought, it work but it didn't work...
+    # np.fill_diagonal(matrix, 0)
     ## above 3 operations maintaining the doubly stochastic property of the matrix 
     # print('>>>>>>>>>>>>>>>>>>>>>', matrix, 'ttttttttimeeee', t)
     # print('RRRRRRRRRRRRRRRRRRR',matrix.sum(1, keepdims=True))  ## exactly 1 
