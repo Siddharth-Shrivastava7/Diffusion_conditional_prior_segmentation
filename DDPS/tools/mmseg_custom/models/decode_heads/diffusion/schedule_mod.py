@@ -214,9 +214,9 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix):
     # print(np.max(confusion_matrix), np.min(confusion_matrix)) ## maximum is around 0.99 when dia is present else it is 0.15 
     # matrix = matrix / (2 * 3)  ## not required cause not using k nearest neighbours 
     # np.fill_diagonal(matrix, np.sum(matrix, axis=1)) ## adding each proba of transition equal to being staying there in the same class (for making it in same scale) >> thus high chance of being staying there
-    matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
-    matrix = beta_t * matrix_prev
-    # np.fill_diagonal(matrix, ((1 - beta_t)*np.sum(matrix_prev, axis=1)))
+    # matrix_prev = matrix  ## initially what was the matrix before multiplying the beta_t scalar 
+    # matrix = beta_t * (t+1) * matrix_prev
+    # np.fill_diagonal(matrix, ((1 - 20*beta_t)*np.sum(matrix_prev, axis=1)))
     # print('>>>>>>>>>>', np.max(matrix))
 
     # ### building rate matrix  
