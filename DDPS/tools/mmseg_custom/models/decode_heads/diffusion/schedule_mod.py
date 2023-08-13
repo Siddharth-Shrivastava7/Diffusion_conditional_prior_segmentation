@@ -150,7 +150,7 @@ def q_posterior_log(log_x_start, log_x_t, t, num_timesteps, num_classes, log_cum
     return log_probs
 
 ## diffusion based on Q-transition matrix 
-def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, matrix_expo = False):
+def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo = False):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
     Args:
@@ -158,7 +158,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, 
     Returns:
         Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
     """
-    beta_t = bt[t]
+    beta_t = betas[t]
     beta_t = beta_t.cpu().numpy()
     # beta_t = beta_t * 100 ## increasing beta_t value 
     
@@ -171,7 +171,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, 
                 dim, dim, -width // 2, dtype=np.float64)
         arr = band / band.sum(0, keepdims=True)
         matrix = beta_t * arr + (1 - beta_t) * np.eye(dim)
-        matrix = torch.from_numpy(matrix).to(bt.device)  
+        matrix = torch.from_numpy(matrix).to(betas.device)  
         return matrix
         
     else: # confusion matrix type transition
@@ -209,7 +209,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, 
             # matrix = beta_t * adjacency_matrix_one_hot ## noise scheduling param to control Q_t at each time step 
             transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
             ## cummulative steps matrix expo calc
-            betas_tt = torch.sum(bt[:t+1]).item() ## since t is starting from 0
+            betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0
             matrix = scipy.linalg.expm(
                         np.array(betas_tt * transition_rate, dtype=np.float64)) 
             # matrix = scipy.linalg.expm(
@@ -240,7 +240,7 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, 
             # matrix[:19, :19] = torch.tensor(confusion_matrix).to(bt.device) 
             matrix = np.ones((20,20)) ## main one to use ################# ## 20 is the number of classes; making a uniform transition matrix 
             matrix[:19, :19] = confusion_matrix  ## main one to use ##################### this is similarity matrix...main thing as this says
-            np.fill_diagonal(matrix, 0) ## main one to use ################### making dia zero so as to be in use in matrix expo method ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
+            # np.fill_diagonal(matrix, 0) ## main one to use ################### making dia zero so as to be in use in matrix expo method ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
             # np.fill_diagonal(matrix, (1-beta_t)*np.diag(confusion_matrix)) 
             # matrix = matrix + matrix.T ## no changes to introduced in confusion matrix calc ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
             # matrix = beta_t * matrix ## no changes to introduced in confusion matrix calc
@@ -285,17 +285,17 @@ def _get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, 
             # print('RRRRRRRRRRRRRRRRRRR',matrix.sum(1, keepdims=True))  ## exactly 1 
             # print('CCCCCCCCCCCCCCCCCCC',matrix.sum(0, keepdims=True))  ## quite close to 1
         
-        matrix = torch.from_numpy(matrix).to(bt.device) 
+        matrix = torch.from_numpy(matrix).to(betas.device) 
         # torch.save(matrix, 'q_matrix'+ str(t) + '.pt') ## saving the tensor for analysing it
         # print('time', t , 'matrix saved')
         # print('*******************',matrix.dtype) # double = float64 
         
-        # return torch.from_numpy(matrix).to(bt.device)
+        # return torch.from_numpy(matrix).to(betas.device)
         return matrix
 
-def q_mats_from_onestepsdot(bt, num_timesteps, confusion_matrix, band_diagonal, matrix_expo = False): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
+def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagonal, matrix_expo = False): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
     if matrix_expo:
-        q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal, matrix_expo) 
+        q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo) 
                                 for t in range(0, num_timesteps)]
         q_mats = q_cummulativesteps_mats
     else: 
