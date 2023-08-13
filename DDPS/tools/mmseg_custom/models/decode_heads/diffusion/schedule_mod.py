@@ -241,9 +241,9 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
             # matrix = np.random.uniform(0,np.max(confusion_matrix), (20,20)) ## uniform distribution for background class 
             # matrix = (torch.ones((20,20), device = bt.device, dtype = torch.float64)*(1/20)) ## in torch 
             # matrix[:19, :19] = torch.tensor(confusion_matrix).to(bt.device) 
-            matrix = np.ones((20,20)) ## main one to use ################# ## 20 is the number of classes; making a uniform transition matrix 
-            matrix[:19, :19] = confusion_matrix  ## main one to use ##################### this is similarity matrix...main thing as this says
-            # np.fill_diagonal(matrix, 0) ## main one to use ################### making dia zero so as to be in use in matrix expo method ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
+            # matrix = np.ones((20,20)) ## 20 is the number of classes; making a uniform transition matrix 
+            # matrix[:19, :19] = confusion_matrix  ## this is similarity matrix...main thing as this says
+            # np.fill_diagonal(matrix, 0) ## making dia zero so as to be in use in matrix expo method ## no changes to introduced in confusion matrix calc ## first making the matrix zeroing out the dia as there is severe dis balance, because of dia in confusion matrix 
             # np.fill_diagonal(matrix, (1-beta_t)*np.diag(confusion_matrix)) 
             # matrix = matrix + matrix.T ## no changes to introduced in confusion matrix calc ## as connectivity (similarity) should be symmetric among classes ## additional for symmetricity 
             # matrix = beta_t * matrix ## no changes to introduced in confusion matrix calc
@@ -256,10 +256,10 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
             # matrix = beta_t * (t+1) * matrix_prev
             # np.fill_diagonal(matrix, ((1 - 20*beta_t)*np.sum(matrix_prev, axis=1)))
             # print('>>>>>>>>>>', np.max(matrix))
-
             # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## not working with sinkhorn ## 1. similar to uniform and absorbtion state transition matrix, 2. for transition into another state is like corrupting which confusion matrix stores info..for staying in the same, is like correct which gradually lowers down as time t increases...so this formulation make sense, of bringing it above sinkhorn algorithm
-            
             # matrix = torch.from_numpy(matrix).to(bt.device) ## cuda out of memory here...alas!
+            matrix = confusion_matrix.copy()
+            matrix = beta_t * matrix
             # ## sinkhorn algo for base matrix
             for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
                 matrix = matrix / matrix.sum(1, keepdims=True)
@@ -301,7 +301,8 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
         q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo) 
                                 for t in range(0, num_timesteps)]
         ## adding background class performace as well with a probability of 0 everywhere
-        q_mats = q_cummulativesteps_mats
+        # q_mats = q_cummulativesteps_mats
+        q_mats = F.pad(input=q_cummulativesteps_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later
     else: 
         q_onestep_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal) 
                                 for t in range(0, num_timesteps)]
