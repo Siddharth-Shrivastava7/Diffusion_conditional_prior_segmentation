@@ -12,12 +12,13 @@ from mmseg.ops import resize
 from mmseg.utils import get_root_logger
 
 from .unet import UnetTimeEmbedding
-from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats, q_mats_from_onestepsdot, calculate_confusion_matrix_segformerb2
+from .diffusion import q_pred, alpha_schedule_torch, cos_alpha_schedule_torch, q_posterior, q_pred_from_mats, q_mats_from_onestepsdot, calculate_confusion_matrix_segformerb2, custom_linear_schedule
 
 
 NOISE_SCHEDULES = {
     'linear': alpha_schedule_torch,
-    'cos': cos_alpha_schedule_torch
+    'cos': cos_alpha_schedule_torch, 
+    'custom_linear': custom_linear_schedule
 }
 
 
@@ -45,6 +46,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                  guidance_scale=1.,
                  backbone_drop_out_ratio=0.,
                  alpha_schedule='linear',
+                 beta_schedule = 'custom_linear',
                  inference_mode='q_pred',
                  interpolate_mode='bilinear',
                  pretrained=None,
@@ -118,7 +120,9 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         self.confusion_matrix = calculate_confusion_matrix_segformerb2()
         self.band_diagonal = band_diagonal
         self.matrix_expo = matrix_expo
-
+        custom_betas = NOISE_SCHEDULES[beta_schedule](beta_start = 0.0001, beta_end = 0.02, timesteps=20)
+        self.register_buffer('custom_betas', custom_betas) 
+        
     def cls_seg(self, feat):
         """Classify each pixel."""
         if self.dropout is not None:
@@ -166,7 +170,8 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             with discrete diffusion using transition matrix 
             Q_t = Q1.Q2...Qt
         '''
-        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo) 
+        q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo)
+        # q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo) 
         # q_mats = q_mats_from_onestepsdot(self.at, self.diffusion_timesteps) ## testing once with alpha_t as mentioned in the paper, but the code has beta_t form and even the statement written in the paper (increasing alpha_t as time t) suggest that its not alpha_t, its the beta_t only...but still will exp with alpha_t as well
         for i in self.get_timesteps():
             # timestep = (self.diffusion_timesteps - i - 1)

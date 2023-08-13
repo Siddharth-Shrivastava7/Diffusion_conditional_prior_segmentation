@@ -68,6 +68,11 @@ def cos_alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ct
     return at, bt, att, btt
 
 
+## custom beta_schedule  (linear) 
+def custom_linear_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64):
+    betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype) 
+    return betas 
+
 def q_pred(x_start, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_bt):           # q(xt|x0)
     # log_x_start can be onehot or not
     log_x_start = index_to_log_onehot(x_start, num_classes)

@@ -29,20 +29,21 @@ model = dict(
         unet_channels=272,
         dim_mults=[1, 1, 1],
         cat_embedding_dim=16,
-        # diffusion_timesteps=10,
-        # collect_timesteps=[
-        #     0, 1, 2, 3, 4,5,6,7,8,9
-        # ],
         band_diagonal=False,
-        alpha_schedule='linear',
+        alpha_schedule='linear', ## not using alpha schedule rather going with beta scheduling
+        beta_schedule = 'custom_linear'
         matrix_expo = True,
+        diffusion_timesteps=10,
+        collect_timesteps=[
+            0, 1, 2, 3, 4,5,6,7,8,9
+        ],
         # diffusion_timesteps=20,
         # collect_timesteps=[
         #     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
         #     19
         # ],
-        diffusion_timesteps=1000,
-        collect_timesteps=[0, 10, 20, 30, 40, 50, 60, 70, 80, 90],
+        # diffusion_timesteps=1000,
+        # collect_timesteps=[0, 10, 20, 30, 40, 50, 60, 70, 80, 90],
         in_channels=[64, 128, 320, 512],
         in_index=[0, 1, 2, 3],
         channels=256,
