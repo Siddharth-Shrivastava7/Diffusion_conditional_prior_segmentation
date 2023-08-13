@@ -302,6 +302,7 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
                                 for t in range(0, num_timesteps)]
         ## adding background class performace as well with a probability of 0 everywhere
         # q_mats = q_cummulativesteps_mats
+        q_cummulativesteps_mats = torch.stack(q_cummulativesteps_mats, dim=0) 
         q_mats = F.pad(input=q_cummulativesteps_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later
     else: 
         q_onestep_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal) 
@@ -313,8 +314,8 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
                                         dims=[[1], [0]])
             # q_mat_t.fill_diagonal_(0) ## forcefully making it zero ## not using it 
             q_mats.append(q_mat_t)
-   
-    q_mats = torch.stack(q_mats, dim=0) 
+            q_mats = torch.stack(q_mats, dim=0) 
+        
     return q_mats
 
 def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
