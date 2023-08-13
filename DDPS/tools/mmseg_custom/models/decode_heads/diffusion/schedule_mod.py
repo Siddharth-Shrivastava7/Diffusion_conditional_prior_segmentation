@@ -69,8 +69,8 @@ def cos_alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ct
 
 
 ## custom beta_schedule  (linear) 
-def custom_linear_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64):
-    betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype) 
+def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64):
+    betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
     return betas 
 
 def q_pred(x_start, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_bt):           # q(xt|x0)
@@ -300,9 +300,10 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
     if matrix_expo:
         q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo) 
                                 for t in range(0, num_timesteps)]
+        ## adding background class performace as well with a probability of 0 everywhere
         q_mats = q_cummulativesteps_mats
     else: 
-        q_onestep_mats = [_get_nearestneighbor_transition_mat(bt, t, confusion_matrix, band_diagonal) 
+        q_onestep_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal) 
                                 for t in range(0, num_timesteps)]
         q_mat_t = q_onestep_mats[0]
         q_mats = [q_mat_t]
