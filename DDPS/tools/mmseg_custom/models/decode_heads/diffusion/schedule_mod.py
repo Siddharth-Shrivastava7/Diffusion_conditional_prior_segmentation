@@ -199,21 +199,24 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
                     [0,        1.58,           4.19,           0,     1.45,     0,            0,              0,              0,         0,        0,      0,       1.58,      0,      0,       0,      0,        0,            0,0],
                     [0.7,       0.2,            0,              0,      0,      0,            0,              0,              0.1,       0,         0,     0,         0,       0,       0,      0,      0,        0,            0,0]
                     ] ## background class also added for now making its relative dependency with road, sidewalk and vegetation 
-            list_of_lists_arr = np.array(list_of_lists)  
+            # list_of_lists_arr = np.array(list_of_lists)  
             # # # ## one-hot adjacency matrix 
-            adjacency_matrix_one_hot = list_of_lists_arr 
-            adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
-            # ## from google_research/d3pm/text/diffusion
-            adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * 3) ## for building the symmetricity of adjacency matrix and k = 3
-            # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T)
-            # matrix = beta_t * adjacency_matrix_one_hot ## noise scheduling param to control Q_t at each time step 
-            transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
-            ## cummulative steps matrix expo calc
-            betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0
+            # adjacency_matrix_one_hot = list_of_lists_arr 
+            # adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
+            # # ## from google_research/d3pm/text/diffusion
+            # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * 3) ## for building the symmetricity of adjacency matrix and k = 3
+            # # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T)
+            # # matrix = beta_t * adjacency_matrix_one_hot ## noise scheduling param to control Q_t at each time step 
+            # transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
+            
+            # using confusion matrix not the conventitional one hot transition matrix 
+            matrix_from_confusion = confusion_matrix.copy() ## it doesn't make sense to include background...so using confusion matrix as it is 
+            np.fill_diagonal(matrix_from_confusion, 0) ## first zeroing out elements of confusion matrix for making transition rate matrix 
+            matrix_from_confusion = matrix_from_confusion + matrix_from_confusion.T ## symmetricity required in transition rate 
+            transition_rate = matrix_from_confusion - np.diagflat(np.sum(matrix_from_confusion, axis=1)) ## transition rate matrix from confusion matrix 
+            betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
             matrix = scipy.linalg.expm(
                         np.array(betas_tt * transition_rate, dtype=np.float64)) 
-            # matrix = scipy.linalg.expm(
-            #             np.array(bt[0].cpu().numpy() * transition_rate, dtype=np.float64)) ## using the one as given in d3pm original code
             # print('************', np.diag(matrix))
             # print('^^^^^^^^^^^^^^^^', np.max(matrix), np.min(matrix))
             

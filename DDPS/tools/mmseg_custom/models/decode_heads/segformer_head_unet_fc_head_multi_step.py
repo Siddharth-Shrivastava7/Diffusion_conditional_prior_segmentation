@@ -120,7 +120,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         self.confusion_matrix = calculate_confusion_matrix_segformerb2()
         self.band_diagonal = band_diagonal
         self.matrix_expo = matrix_expo
-        custom_betas = NOISE_SCHEDULES[beta_schedule](beta_start = 0.0001, beta_end = 0.02, timesteps=20)
+        custom_betas = NOISE_SCHEDULES[beta_schedule](beta_start = 0.01, beta_end = 0.9, timesteps=self.diffusion_timesteps)
         self.register_buffer('custom_betas', custom_betas) 
         
     def cls_seg(self, feat):
