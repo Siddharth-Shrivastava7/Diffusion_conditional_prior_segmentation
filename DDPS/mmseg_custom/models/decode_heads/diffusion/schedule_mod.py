@@ -6,6 +6,9 @@ import scipy
 from torch.nn import functional as F
 from .misc import extract, log_add_exp, log_1_min_a, index_to_log_onehot, sample_categorical, log_onehot_to_index
 
+from .confusion_matrix import calculate_adjacency_matrix
+
+
 def cos_alpha_schedule(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999, exp=3):
     att = np.arange(0, time_step)
     att = (np.cos((att + time_step) * math.pi * 0.5 / time_step) + 1)**exp
@@ -68,11 +71,18 @@ def cos_alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ct
     return at, bt, att, btt
 
 
-## custom beta_schedule  (linear) 
-def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64):
-    betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
+## custom beta_schedule  (linear) / (expo)
+def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64, type = 'expo'):
+    # betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
     # betas = -torch.log(torch.linspace(beta_start, beta_end, timesteps, dtype=dtype))
-    # betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)**2 ## quadratic
+    # betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)**2 ## quadratic 
+    if type == 'expo':
+        betas = torch.logspace(beta_start, beta_end,steps=timesteps ,base = 10, dtype=dtype) ## expo space growth...increases slowly in the start and raipdy grows in the end! ## hyperparam tuned in such a way that classes in the dia confuses with the off dia classes 
+    elif type == 'linear':
+        betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
+    else:
+        raise ValueError(
+            f"Diffusion noise schedule of kind {type} is not supported.")
     return betas 
 
 def q_pred(x_start, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_bt):           # q(xt|x0)
@@ -152,7 +162,7 @@ def q_posterior_log(log_x_start, log_x_t, t, num_timesteps, num_classes, log_cum
     return log_probs
 
 ## diffusion based on Q-transition matrix 
-def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo = False):
+def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo = False, confusion = True, k_nn = 3):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
     Args:
@@ -167,7 +177,7 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
     if band_diagonal:
         ## width paramater to be decided 
         dim = 20 ## number of different classes 
-        width = 10 ## a hyper parameter 
+        width = 7 ## a hyper parameter 
         band = np.tri(
             dim, dim, width // 2, dtype=np.float64) - np.tri(
                 dim, dim, -width // 2, dtype=np.float64)
@@ -176,62 +186,57 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
         matrix = torch.from_numpy(matrix).to(betas.device)  
         return matrix
         
-    else: # confusion matrix type transition
+    else: # matrix_expo or sinkhorn method for base transition matrix
         if matrix_expo:
-            ## building similarity matrix, rate and base matrix using adjacency matrix 
-            ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
-            list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,           0, 0],
-                    [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0, 00],
-                    [0,        0.12,           0,           0,     0,     0.3,            0,              0,              1.32,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0, 0],
-                    [0,        0,           10.84,           0,     3.71,     0,            0,              0,              1.99,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           9.97,           6.06,     0,     0,            0,              0,              2.18,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        1.38,           7.83,           0,     0,     0,            0,              0,              4.09,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           5.35,           0,     0,     2.23,            0,              0,              4.69,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           4.83,           0,     0,     1.22,            0,              0,              1.9,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           1.79,           0,     0,     0.31,            0,              0,              0,         0.53,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [1.6,       9.17,           0,           0,     0,     0,            0,              0,              9.71,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           11.51,           0,     0,     0.09,            0,              0,              1.01,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           3.65,           0,     0,     0,            0,              0,              0.53,         0,        0,      0,       0.97,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           1.47,           0,     0,     0,            0,              0,              0,         0,        0,      2.32,            0,      0,      0,       0,      0,        0,            5.16,0],
-                    [0.77,        0,           0.41,           0,     0,     0,            0,              0,              0.25,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
-                    [0,        0,           1.24,           0,     0,     0,            0,              0,              0.46,         0,        0,      0,       0,      3.96,         0,          0,         0,           0,      0,0],
-                    [0.61,        0,           0.83,           0,     0,     0,            0,              0,              0,         0,        0,      0,       0,       0.55,      0,           0,         0,            0,    0,0],
-                    [0,        0,           2.19,           0,     0,     0,            0,              0,              1.37,         0,        0,      0,       0,      0,      0,       0.38,      0,        0,            0,0],
-                    [0,        0,           2.61,           0,     0,     0,            0,              0,              0,         0,        0,      2.06,       0,      0,      0,       0,      0,        0,            2.16,0],
-                    [0,        1.58,           4.19,           0,     1.45,     0,            0,              0,              0,         0,        0,      0,       1.58,      0,      0,       0,      0,        0,            0,0],
-                    [0.7,       0.2,            0,              0,      0,      0,            0,              0,              0.1,       0,         0,     0,         0,       0,       0,      0,      0,        0,            0,0]
-                    ] ## background class also added for now making its relative dependency with road, sidewalk and vegetation 
-            # list_of_lists_arr = np.array(list_of_lists)  
-            # # # ## one-hot adjacency matrix 
-            # adjacency_matrix_one_hot = list_of_lists_arr 
-            # adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
-            # # ## from google_research/d3pm/text/diffusion
-            # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * 3) ## for building the symmetricity of adjacency matrix and k = 3
-            # # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T)
-            # # matrix = beta_t * adjacency_matrix_one_hot ## noise scheduling param to control Q_t at each time step 
-            # transition_rate = adjacency_matrix_one_hot - np.diagflat(np.sum(adjacency_matrix_one_hot, axis=1))
-            
-            # using confusion matrix not the conventitional one hot transition matrix 
-            matrix_from_confusion = confusion_matrix.copy() ## it doesn't make sense to include background...so using confusion matrix as it is 
-            np.fill_diagonal(matrix_from_confusion, 0) ## first zeroing out elements of confusion matrix for making transition rate matrix 
-            matrix_from_confusion = matrix_from_confusion + matrix_from_confusion.T ## symmetricity required in transition rate 
-            transition_rate = matrix_from_confusion - np.diagflat(np.sum(matrix_from_confusion, axis=1)) ## transition rate matrix from confusion matrix 
-            betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
-            matrix = scipy.linalg.expm(
-                        np.array(betas_tt * transition_rate, dtype=np.float64)) 
-            # print('************', np.diag(matrix))
-            # print('^^^^^^^^^^^^^^^^', np.max(matrix), np.min(matrix))
-            
-            # ### building rate matrix  
-            # ## matrix exponential for rate matrix 
-            # transition_rate = matrix - np.diagflat(np.sum(matrix, axis=1)) 
-            
-            # ### building base matrix 
-            # matrix = scipy.linalg.expm(
-            #             np.array(beta_t * transition_rate, dtype=np.float64))  ## base matrix 
+            if confusion: ## using confusion matrix of the model, directly
+                # using confusion matrix not the conventitional one hot transition matrix 
+                matrix_from_confusion = confusion_matrix.copy() ## it doesn't make sense to include background...so using confusion matrix as it is 
+                np.fill_diagonal(matrix_from_confusion, 0) ## first zeroing out elements of confusion matrix for making transition rate matrix 
+                matrix_from_confusion = matrix_from_confusion + matrix_from_confusion.T ## symmetricity required in transition rate 
+                transition_rate = matrix_from_confusion - np.diagflat(np.sum(matrix_from_confusion, axis=1)) ## transition rate matrix from confusion matrix 
+                betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
+                matrix = scipy.linalg.expm(
+                            np.array(betas_tt * transition_rate, dtype=np.float64)) 
+                # print('************', np.diag(matrix))
+                # print('^^^^^^^^^^^^^^^^', np.max(matrix), np.min(matrix))
+            else: ## using adjacency matrix as mentioned in the paper 
+                ## building similarity matrix, rate and base matrix using adjacency matrix 
+                ## adjacency matrix of k=3 dervied from confusion matrix of oneformer model 
+                list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,           0, 0],
+                        [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0, 00],
+                        [0,        0.12,           0,           0,     0,     0.3,            0,              0,              1.32,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0, 0],
+                        [0,        0,           10.84,           0,     3.71,     0,            0,              0,              1.99,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           9.97,           6.06,     0,     0,            0,              0,              2.18,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        1.38,           7.83,           0,     0,     0,            0,              0,              4.09,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           5.35,           0,     0,     2.23,            0,              0,              4.69,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           4.83,           0,     0,     1.22,            0,              0,              1.9,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           1.79,           0,     0,     0.31,            0,              0,              0,         0.53,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [1.6,       9.17,           0,           0,     0,     0,            0,              0,              9.71,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           11.51,           0,     0,     0.09,            0,              0,              1.01,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           3.65,           0,     0,     0,            0,              0,              0.53,         0,        0,      0,       0.97,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           1.47,           0,     0,     0,            0,              0,              0,         0,        0,      2.32,            0,      0,      0,       0,      0,        0,            5.16,0],
+                        [0.77,        0,           0.41,           0,     0,     0,            0,              0,              0.25,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0,0],
+                        [0,        0,           1.24,           0,     0,     0,            0,              0,              0.46,         0,        0,      0,       0,      3.96,         0,          0,         0,           0,      0,0],
+                        [0.61,        0,           0.83,           0,     0,     0,            0,              0,              0,         0,        0,      0,       0,       0.55,      0,           0,         0,            0,    0,0],
+                        [0,        0,           2.19,           0,     0,     0,            0,              0,              1.37,         0,        0,      0,       0,      0,      0,       0.38,      0,        0,            0,0],
+                        [0,        0,           2.61,           0,     0,     0,            0,              0,              0,         0,        0,      2.06,       0,      0,      0,       0,      0,        0,            2.16,0],
+                        [0,        1.58,           4.19,           0,     1.45,     0,            0,              0,              0,         0,        0,      0,       1.58,      0,      0,       0,      0,        0,            0,0],
+                        [0.7,       0.2,            0,              0,      0,      0,            0,              0,              0.1,       0,         0,     0,         0,       0,       0,      0,      0,        0,            0,0]
+                        ] ## background class also added for now making its relative dependency with road, sidewalk and vegetation 
+                # list_of_lists_arr = np.array(list_of_lists)  
+                # # # ## one-hot adjacency matrix 
+                # adjacency_matrix_one_hot = list_of_lists_arr 
+                # adjacency_matrix_one_hot[list_of_lists_arr > 0] = 1 
+                # # ## from google_research/d3pm/text/diffusion
+                # adjacency_matrix_one_hot = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * 3) ## for building the symmetricity of adjacency matrix and k = 3
+                adjacency_matrix_one_hot = calculate_adjacency_matrix(confusion_matrix=confusion_matrix, k=k_nn) ## for k nearest neighbours
+                adjacency_matrix_soft = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * k_nn)
+                transition_rate = adjacency_matrix_soft - np.diagflat(np.sum(adjacency_matrix_soft, axis=1))
+                # ### building base matrix 
+                matrix = scipy.linalg.expm(
+                            np.array(beta_t * transition_rate, dtype=np.float64))  
             
             # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix
-        
         else:
             ## building similarity matrix, rate and base matrix using confusion matrix 
             ### Dealing with confusion matrix for similarity matrix 
@@ -298,16 +303,16 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
         # return torch.from_numpy(matrix).to(betas.device)
         return matrix
 
-def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagonal, matrix_expo = False): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
+def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagonal, matrix_expo = False, confusion = True, k_nn = 3): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
     if matrix_expo:
-        q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo) 
+        q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo, confusion, k_nn) 
                                 for t in range(0, num_timesteps)]
         ## adding background class performace as well with a probability of 0 everywhere
         # q_mats = q_cummulativesteps_mats
         q_cummulativesteps_mats = torch.stack(q_cummulativesteps_mats, dim=0) 
         q_mats = F.pad(input=q_cummulativesteps_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later
     else: 
-        q_onestep_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal) 
+        q_onestep_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo, confusion) 
                                 for t in range(0, num_timesteps)]
         q_mat_t = q_onestep_mats[0]
         q_mats = [q_mat_t]
@@ -316,7 +321,7 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
                                         dims=[[1], [0]])
             # q_mat_t.fill_diagonal_(0) ## forcefully making it zero ## not using it 
             q_mats.append(q_mat_t)
-            q_mats = torch.stack(q_mats, dim=0) 
+        q_mats = torch.stack(q_mats, dim=0) 
         
     return q_mats
 

@@ -47,11 +47,16 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                  backbone_drop_out_ratio=0.,
                  alpha_schedule='linear',
                  beta_schedule = 'custom',
+                 beta_schedule_custom = 'expo', 
+                 beta_schedule_custom_start = -5.5, 
+                 beta_schedule_custom_end = -4.5, 
                  inference_mode='q_pred',
                  interpolate_mode='bilinear',
                  pretrained=None,
                  band_diagonal = False,
-                 matrix_expo = False,
+                 matrix_expo = True,
+                 confusion = True,
+                 k_nn = 3,
                  **kwargs):
         super().__init__(input_transform='multiple_select', **kwargs)
         self.pretrained = pretrained
@@ -120,8 +125,13 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
         self.confusion_matrix = calculate_confusion_matrix_segformerb2()
         self.band_diagonal = band_diagonal
         self.matrix_expo = matrix_expo
-        custom_betas = NOISE_SCHEDULES[beta_schedule](beta_start = 1e-8, beta_end = 1e-6, timesteps=self.diffusion_timesteps)
-        self.register_buffer('custom_betas', custom_betas) 
+        self.beta_schedule_custom = beta_schedule_custom 
+        self.beta_schedule_custom_start = beta_schedule_custom_start  
+        self.beta_schedule_custom_end = beta_schedule_custom_end
+        custom_betas = NOISE_SCHEDULES[beta_schedule](beta_start = self.beta_schedule_custom_start, beta_end = self.beta_schedule_custom_end, timesteps=self.diffusion_timesteps, type=self.beta_schedule_custom)
+        self.register_buffer('custom_betas', custom_betas)  
+        self.confusion = confusion
+        self.k_nn = k_nn
         
     def cls_seg(self, feat):
         """Classify each pixel."""
@@ -170,9 +180,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             with discrete diffusion using transition matrix 
             Q_t = Q1.Q2...Qt
         '''
-        # q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo)
-        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo) 
-        # q_mats = q_mats_from_onestepsdot(self.at, self.diffusion_timesteps) ## testing once with alpha_t as mentioned in the paper, but the code has beta_t form and even the statement written in the paper (increasing alpha_t as time t) suggest that its not alpha_t, its the beta_t only...but still will exp with alpha_t as well
+        q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
         for i in self.get_timesteps():
             # timestep = (self.diffusion_timesteps - i - 1)
             t = (torch.ones([B], device=self.device) * i).long()
@@ -257,8 +265,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 with discrete diffusion using transition matrix 
                 Q_t = Q1.Q2...Qt
             '''
-            q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo)
-            # q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo)
+            q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
             if multi_step.sum() > 0:
                 with torch.no_grad():  # diffusion predict for t=0
                     out_select = out[multi_step, :, :, :].clone().detach()
@@ -314,8 +321,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 with discrete diffusion using transition matrix 
                 Q_t = Q1.Q2...Qt
         '''
-        # q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo)
-        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo)
+        q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
         x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W]
         t = (torch.ones([B], device=self.device) * timestep).long()
         noise_step = (self.diffusion_timesteps - t - 1).long()

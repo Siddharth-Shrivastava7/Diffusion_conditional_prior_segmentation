@@ -79,12 +79,11 @@ def calculate_adjacency_matrix(confusion_matrix, k=3):
     indices_which_are_topk_as_bool = (indices_as_ranks >= confusion_matrix.shape[1] - k) # shape[1] used as we need to find it along row 
     adjacency_matrix = confusion_matrix * indices_which_are_topk_as_bool
     # print(adjacency_matrix)   
-    
     ## for one hot adjacency matrix 
-    # adjacency_matrix_as_one_hot = adjacency_matrix
-    # adjacency_matrix_as_one_hot[adjacency_matrix_as_one_hot>0] = 1 
+    adjacency_matrix_as_one_hot = adjacency_matrix.copy()
+    adjacency_matrix_as_one_hot[adjacency_matrix_as_one_hot>0] = 1 
     
-    return adjacency_matrix
+    return adjacency_matrix_as_one_hot
 
 def plot_confusion_matrix(confusion_matrix,
                           labels,

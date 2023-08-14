@@ -32,7 +32,12 @@ model = dict(
         band_diagonal=False,
         alpha_schedule='linear', ## not using alpha schedule rather going with beta scheduling
         beta_schedule = 'custom',
+        beta_schedule_custom = 'expo', 
+        beta_schedule_custom_start = -5.5, 
+        beta_schedule_custom_end = -4.5, 
         matrix_expo = True,
+        confusion = True,
+        k_nn = 3,
         diffusion_timesteps=20,
         collect_timesteps=[
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
