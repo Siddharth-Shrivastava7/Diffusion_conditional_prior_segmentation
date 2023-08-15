@@ -1,0 +1,13 @@
+{
+    "config": "configs/darkzurich/segformer_mit_b2_segformer_head_unet_fc_small_multi_step_ade_pretrained_freeze_embed_160k_darkzurich20_finetune_ema.py",
+    "metric": {
+        "mIoU": [
+            0.23,
+            0.2302,
+            0.23,
+            0.23,
+            0.2297
+        ],
+        "copy_paste_iou": "23.0,23.02,23.0,23.0,22.97"
+    }
+}

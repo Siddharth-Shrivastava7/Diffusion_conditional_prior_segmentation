@@ -266,7 +266,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 with discrete diffusion using transition matrix 
                 Q_t = Q1.Q2...Qt
             '''
-            q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
+            q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
             if multi_step.sum() > 0:
                 with torch.no_grad():  # diffusion predict for t=0
                     out_select = out[multi_step, :, :, :].clone().detach()
@@ -322,7 +322,7 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
                 with discrete diffusion using transition matrix 
                 Q_t = Q1.Q2...Qt
         '''
-        q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
+        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
         x_interpolate = F.interpolate(content.float(), [H, W], mode='nearest').long().squeeze(1)  # [B, H, W]
         t = (torch.ones([B], device=self.device) * timestep).long()
         noise_step = (self.diffusion_timesteps - t - 1).long()
