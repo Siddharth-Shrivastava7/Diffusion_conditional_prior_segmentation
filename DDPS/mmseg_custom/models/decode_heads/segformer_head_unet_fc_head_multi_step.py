@@ -180,7 +180,8 @@ class SegformerHeadUnetFCHeadMultiStep(BaseDecodeHead):
             with discrete diffusion using transition matrix 
             Q_t = Q1.Q2...Qt
         '''
-        q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
+        # q_mats = q_mats_from_onestepsdot(self.custom_betas, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
+        q_mats = q_mats_from_onestepsdot(self.bt, self.diffusion_timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
         for i in self.get_timesteps():
             # timestep = (self.diffusion_timesteps - i - 1)
             t = (torch.ones([B], device=self.device) * i).long()
