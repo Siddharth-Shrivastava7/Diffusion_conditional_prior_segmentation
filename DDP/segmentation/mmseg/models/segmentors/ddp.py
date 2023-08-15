@@ -14,7 +14,9 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-## later can comment out
+'''
+    All we need to change is here, mostly; for bringing in discrete diffusion into the picture!
+'''
 
 
 
@@ -141,7 +143,7 @@ class DDP(EncoderDecoder):
             act_cfg=None
         ) 
 
-    def encode_decode(self, img, img_metas):
+    def encode_decode(self, img, img_metas): ## it is being called at the test time! 
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         x = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
@@ -158,7 +160,7 @@ class DDP(EncoderDecoder):
             align_corners=self.align_corners)
         return out
 
-    def forward_train(self, img, img_metas, gt_semantic_seg):
+    def forward_train(self, img, img_metas, gt_semantic_seg): ## it is being called at the TRAIN time! 
         """Forward function for training.
         Args:
             img (Tensor): Input images.
@@ -210,7 +212,7 @@ class DDP(EncoderDecoder):
 
 
     ## self aligned denoising training
-    def forward_train_self_aligned_denoising(self, img, img_metas, gt_semantic_seg):
+    def forward_train_self_aligned_denoising(self, img, img_metas, gt_semantic_seg): ## it is being called at the TRAIN time!
         """Forward function for training.
         Args:
             img (Tensor): Input images.

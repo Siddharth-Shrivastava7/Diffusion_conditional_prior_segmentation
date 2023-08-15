@@ -213,7 +213,7 @@ class EncoderDecoder(BaseSegmentor):
                 y1 = max(y2 - h_crop, 0)
                 x1 = max(x2 - w_crop, 0)
                 crop_img = img[:, :, y1:y2, x1:x2]
-                crop_seg_logit = self.encode_decode(crop_img, img_meta)
+                crop_seg_logit = self.encode_decode(crop_img, img_meta) ## encode_decode of ddp module is being used as it has ddim/ddpm sampler
                 preds += F.pad(crop_seg_logit,
                                (int(x1), int(preds.shape[3] - x2), int(y1),
                                 int(preds.shape[2] - y2)))
@@ -239,7 +239,7 @@ class EncoderDecoder(BaseSegmentor):
 
     def whole_inference(self, img, img_meta, rescale):
         """Inference with full image."""
-        seg_logit = self.encode_decode(img, img_meta)
+        seg_logit = self.encode_decode(img, img_meta) ## encode_decode of ddp module is being used as it has ddim/ddpm sampler
         if rescale:
             # support dynamic shape for onnx
             if torch.onnx.is_in_onnx_export():
@@ -298,12 +298,12 @@ class EncoderDecoder(BaseSegmentor):
         '''
         return output
 
-    def simple_test(self, img, img_meta, rescale=True):
+    def simple_test(self, img, img_meta, rescale=True):  ## it is being called at the test time! 
         """Simple test with single image."""
         seg_logit = self.inference(img, img_meta, rescale)
         if self.out_channels == 1:
             seg_pred = (seg_logit >
-                        self.decode_head.threshold).to(seg_logit).squeeze(1)
+                        self.decode_head.threshold).to(seg_logit).squeeze(1) 
         else:
             seg_pred = seg_logit.argmax(dim=1)
         if torch.onnx.is_in_onnx_export():
@@ -345,7 +345,7 @@ class EncoderDecoder(BaseSegmentor):
         seg_logit = seg_logit.cpu().numpy()
         return seg_logit
 
-    def aug_test(self, imgs, img_metas, rescale=True):
+    def aug_test(self, imgs, img_metas, rescale=True): ## it is being called at the test time!
         """Test with augmentations.
 
         Only rescale=True is supported.
