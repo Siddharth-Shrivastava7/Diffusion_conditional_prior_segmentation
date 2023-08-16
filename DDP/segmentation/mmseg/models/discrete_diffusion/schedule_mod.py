@@ -28,8 +28,6 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
             t_end = (t + 1) / timesteps
             betas.append(np.minimum( 1 - cos_fun_sch(t_end) / cos_fun_sch(t_start) , 0.999)) ## max_beta is 0.999 
         betas = torch.from_numpy(np.array(betas), dtype = dtype)
-        
-        pass
     else:
         raise ValueError(
             f"Diffusion noise schedule of kind {type} is not supported.")
