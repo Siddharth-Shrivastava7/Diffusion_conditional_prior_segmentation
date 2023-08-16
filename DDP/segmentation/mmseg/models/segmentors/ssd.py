@@ -20,30 +20,6 @@ from .encoder_decoder import EncoderDecoder
 
 from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred_from_mats
 
-def log(t, eps=1e-20):
-    return torch.log(t.clamp(min=eps))
-
-def beta_linear_log_snr(t):
-    return -torch.log(expm1(1e-4 + 10 * (t ** 2)))
-
-
-def alpha_cosine_log_snr(t, ns=0.0002, ds=0.00025):
-    return -log((torch.cos((t + ns) / (1 + ds) * math.pi * 0.5) ** -2) - 1,
-                eps=1e-5)  # not sure if this accounts for beta being clipped to 0.999 in discrete version
-
-def log_snr_to_alpha_sigma(log_snr):
-    return torch.sqrt(torch.sigmoid(log_snr)), torch.sqrt(torch.sigmoid(-log_snr)) # converting log(alpha) -> alpha, and log(alpha) -> (1 - alpha) 
-''' 
-    sort of 1st thing of above came from: 
-        sqrt{1 / (1 + e^{log_snr})} = sqrt{1 / (1 + e^{-log(alpha)})} = sqrt{1 / (1 + (1/alpha))} = sqrt{alpha/(1 + alpha) ; now (1+alpha) -> 1 thus: 
-        sqrt{alpha} 
-
-    sort of 2nd thing of above came from: 
-        rationalising (multiplying denominator and numerator) with (1 - aplha) so, its like: 
-        (1-alpha) / {(1+aplha)*(1-aplha)} = (1-alpha) / (1-alpha^2) ; now, (1-alpha^2) -> 1 thus: 
-        (1 - alpha) => sqrt{1-alpha}
-'''
-
 
 @SEGMENTORS.register_module()
 class SSD(EncoderDecoder):

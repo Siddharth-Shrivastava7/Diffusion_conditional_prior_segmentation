@@ -8,68 +8,9 @@ from .misc import extract, log_add_exp, log_1_min_a, index_to_log_onehot, sample
 
 from .confusion_matrix import calculate_adjacency_matrix
 
-
-def cos_alpha_schedule(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999, exp=3):
-    att = np.arange(0, time_step)
-    att = (np.cos((att + time_step) * math.pi * 0.5 / time_step) + 1)**exp
-    att = att * (att_1 - att_T) + att_T
-    att = np.concatenate(([1], att))
-    at = att[1:] / att[:-1]
-
-    ctt = np.arange(0, time_step)
-    ctt = (np.cos((ctt + time_step) * math.pi * 0.5 / time_step) + 1)**exp
-    ctt = ctt * (ctt_1 - ctt_T) + ctt_T
-    ctt = np.concatenate(([0], ctt))
-
-    one_minus_ctt = 1 - ctt
-    one_minus_ct = one_minus_ctt[1:] / one_minus_ctt[:-1]
-    ct = 1 - one_minus_ct
-    bt = (1 - at - ct) / N
-    att = np.concatenate((att[1:], [1]))
-    ctt = np.concatenate((ctt[1:], [0]))
-    btt = (1 - att - ctt) / N
-    return at, bt, ct, att, btt, ctt
-
-
-def alpha_schedule(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999):
-    att = np.arange(0, time_step) / (time_step - 1) * (att_T - att_1) + att_1
-    att = np.concatenate(([1], att))
-    at = att[1:] / att[:-1]
-    ctt = np.arange(0, time_step) / (time_step - 1) * (ctt_T - ctt_1) + ctt_1
-    ctt = np.concatenate(([0], ctt))
-    one_minus_ctt = 1 - ctt
-    one_minus_ct = one_minus_ctt[1:] / one_minus_ctt[:-1]
-    ct = 1 - one_minus_ct
-    bt = (1 - at - ct) / N
-    att = np.concatenate((att[1:], [1]))
-    ctt = np.concatenate((ctt[1:], [0]))
-    btt = (1 - att - ctt) / N
-    return at, bt, ct, att, btt, ctt
-
-
-## this is being used : with time_step(#diffusion steps): 20 and N(#classes): 20
-def alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999):
-    att = torch.arange(0, time_step) / (time_step - 1) * (att_T - att_1) + att_1
-    att = torch.cat((torch.tensor([1]), att))
-    at = att[1:] / att[:-1]
-    bt = (1 - at) / N
-    att = torch.cat((att[1:], torch.tensor([1])))
-    btt = (1 - att) / N
-    return at, bt, att, btt
-
-
-## choices are between this and the above linear torch schedule one
-def cos_alpha_schedule_torch(time_step, N=100, att_1=0.99999, att_T=0.000009, ctt_1=0.000009, ctt_T=0.99999, exp=2):
-    att = torch.arange(0, time_step)
-    att = (torch.cos((att + time_step) * math.pi * 0.5 / time_step) + 1)**exp
-    att = att * (att_1 - att_T) + att_T
-    att = torch.cat((torch.tensor([1]), att))
-    at = att[1:] / att[:-1]
-    bt = (1 - at) / N
-    att = torch.cat((att[1:], torch.tensor([1])))
-    btt = (1 - att) / N
-    return at, bt, att, btt
-
+def cos_fun_sch(step): 
+    return math.cos((step + 0.008) / 1.008 * math.pi / 2) ** 2
+    
 
 ## custom beta_schedule  (linear) / (expo)
 def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64, type = 'expo'):
@@ -79,7 +20,16 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
     if type == 'expo':
         betas = torch.logspace(beta_start, beta_end,steps=timesteps ,base = 10, dtype=dtype) ## expo space growth...increases slowly in the start and raipdy grows in the end! ## hyperparam tuned in such a way that classes in the dia confuses with the off dia classes 
     elif type == 'linear':
-        betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
+        betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype) 
+    elif type == 'cosine': ## adapted from google research/d3pm
+        betas = []
+        for t in range(timesteps):
+            t_start = t / timesteps
+            t_end = (t + 1) / timesteps
+            betas.append(np.minimum( 1 - cos_fun_sch(t_end) / cos_fun_sch(t_start) , 0.999)) ## max_beta is 0.999 
+        betas = torch.from_numpy(np.array(betas), dtype = dtype)
+        
+        pass
     else:
         raise ValueError(
             f"Diffusion noise schedule of kind {type} is not supported.")
