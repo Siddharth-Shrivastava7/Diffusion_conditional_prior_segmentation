@@ -4,7 +4,6 @@ import math
 import scipy
 
 from torch.nn import functional as F
-from .misc import extract, log_add_exp, log_1_min_a, index_to_log_onehot, sample_categorical, log_onehot_to_index
 
 from .confusion_matrix import calculate_adjacency_matrix
 
@@ -33,81 +32,6 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
             f"Diffusion noise schedule of kind {type} is not supported.")
     return betas 
 
-def q_pred(x_start, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_bt):           # q(xt|x0)
-    # log_x_start can be onehot or not
-    log_x_start = index_to_log_onehot(x_start, num_classes)
-    t = (t + (num_timesteps + 1)) % (num_timesteps + 1)
-    log_cumprod_at = extract(log_cumprod_at, t, log_x_start.shape)         # at~
-    log_cumprod_bt = extract(log_cumprod_bt, t, log_x_start.shape)         # bt~
-    log_probs = torch.cat([
-        log_add_exp(log_x_start + log_cumprod_at, log_cumprod_bt)
-    ], dim=1)  ## np.log(self.num_classes) is missing! (may its constant so they ignore, but it should be there as it may effect values here)
-
-    sample_logits = sample_categorical(log_probs)
-    return sample_logits
-
-
-def q_pred_log(log_x_start, t, num_timesteps, log_cumprod_at, log_cumprod_bt):       # q(xt|x0)
-    t = (t + (num_timesteps + 1)) % (num_timesteps + 1)
-    log_cumprod_at = extract(log_cumprod_at, t, log_x_start.shape)         # at~
-    log_cumprod_bt = extract(log_cumprod_bt, t, log_x_start.shape)         # bt~
-    log_probs = torch.cat([
-        log_add_exp(log_x_start + log_cumprod_at, log_cumprod_bt)
-    ], dim=1)
-    return log_probs
-
-
-def q_pred_log_one_step(log_x_start, t, log_at, log_bt):
-    log_at = extract(log_at, t, log_x_start.shape)         # at~
-    log_bt = extract(log_bt, t, log_x_start.shape)         # bt~
-    log_probs_one_step = torch.cat([
-        log_add_exp(log_x_start + log_at, log_bt)
-    ], dim=1)
-    return log_probs_one_step
-
-
-def q_posterior(x_start, x_t, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_bt, log_at, log_bt):       
-    log_x_start = index_to_log_onehot(x_start, num_classes)
-    log_x_t = index_to_log_onehot(x_t, num_classes)
-     
-    # compute q(x_t|x_0)
-    log_xt_given_x_start = q_pred_log(log_x_start, t, num_timesteps, log_cumprod_at, log_cumprod_bt)     
-    
-    # compute q(x_t|x_t-1,x_0) = q(x_t|x_t-1)
-    # [1] Argmax Flows and Multinomial Diffusion: Learning Categorical Distributions     
-    # the following actually compute q(x_t+1|x_t), but [1] says it is the same as q(x_t|x_t-1)
-    # see the appendix of [1]               
-    log_xt_given_x_t_minus_1 = q_pred_log_one_step(log_x_t, t, log_at, log_bt)     
-    
-    # compute q(x_t-1|x_0)
-    log_xt_minus_1_given_x_start = q_pred_log(log_x_start, t-1, num_timesteps, log_cumprod_at, log_cumprod_bt)
-    
-    log_EV_xtmin_given_xt_given_xstart = log_xt_given_x_t_minus_1 + log_xt_minus_1_given_x_start - log_xt_given_x_start
-    
-    log_probs = torch.clamp(log_EV_xtmin_given_xt_given_xstart, -70, 0)
-
-    sample_logits = sample_categorical(log_probs)
-    return sample_logits
-
-
-def q_posterior_log(log_x_start, log_x_t, t, num_timesteps, num_classes, log_cumprod_at, log_cumprod_bt, log_at, log_bt):       
-    # compute q(x_t|x_0)
-    log_xt_given_x_start = q_pred_log(log_x_start, t, num_timesteps, log_cumprod_at, log_cumprod_bt)     
-    
-    # compute q(x_t|x_t-1,x_0) = q(x_t|x_t-1)
-    # [1] Argmax Flows and Multinomial Diffusion: Learning Categorical Distributions     
-    # the following actually compute q(x_t+1|x_t), but [1] says it is the same as q(x_t|x_t-1)
-    # see the appendix of [1]               
-    log_xt_given_x_t_minus_1 = q_pred_log_one_step(log_x_t, t, log_at, log_bt)     
-    
-    # compute q(x_t-1|x_0)
-    log_xt_minus_1_given_x_start = q_pred_log(log_x_start, t-1, num_timesteps, log_cumprod_at, log_cumprod_bt)
-    
-    log_EV_xtmin_given_xt_given_xstart = log_xt_given_x_t_minus_1 + log_xt_minus_1_given_x_start - log_xt_given_x_start
-    
-    log_probs = torch.clamp(log_EV_xtmin_given_xt_given_xstart, -70, 0)
-
-    return log_probs
 
 ## diffusion based on Q-transition matrix 
 def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo = False, confusion = True, k_nn = 3):
@@ -278,8 +202,6 @@ def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats):
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
     out = torch.matmul(x_start_onehot, q_mats_t)  
-    out = out.view(B, num_classes, H, W)
-    logits = torch.log(out.clamp(min=1e-30))   
-    # logits = torch.log(out + 1e-6) ## with relevant to d3pm pytorch code
-    sample_logits = sample_categorical(logits)
-    return sample_logits
+    out = out.view(B, num_classes, H, W) 
+    out_sample = out.argmax(dim=1)  ## not required to use gumbel softmax trick 
+    return out_sample 
