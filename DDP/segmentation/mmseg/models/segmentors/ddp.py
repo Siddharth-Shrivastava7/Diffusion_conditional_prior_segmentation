@@ -14,9 +14,6 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-'''
-    All we need to change is here, mostly; for bringing in discrete diffusion into the picture!
-'''
 
 
 
