@@ -197,7 +197,7 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
         
     return q_mats
 
-def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
+def q_pred_from_mats(x_start, t, num_classes, q_mats): 
     B, H, W = x_start.shape # label map 
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)

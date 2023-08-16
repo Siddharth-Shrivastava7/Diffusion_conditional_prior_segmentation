@@ -21,6 +21,22 @@ from .encoder_decoder import EncoderDecoder
 from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred_from_mats, custom_schedule
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
+class SinusoidalPosEmb(nn.Module):
+    def __init__(self, dim, num_steps):
+        super().__init__()
+        self.dim = dim
+        self.num_steps = float(num_steps)
+
+    def forward(self, x):
+        device = x.device
+        half_dim = self.dim // 2
+        emb = math.log(10000) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = x[:, None] * emb[None, :]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        if self.dim % 2 == 1:
+            emb = F.pad(emb, [0, 1])  # padding the last dimension
+        return emb
 
 @SEGMENTORS.register_module()
 class SSD(EncoderDecoder):
@@ -65,7 +81,19 @@ class SSD(EncoderDecoder):
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
         ## base transition matrices     
-        self.q_mats = q_mats_from_onestepsdot(self.bt, self.timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
+        self.q_mats = q_mats_from_onestepsdot(self.bt, self.timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn) 
+        
+        # time embeddings   
+        time_dim = self.decode_head.in_channels[0] * 4  # 1024  ## like DDP 
+        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0], num_steps=self.timesteps)
+        fourier_dim = self.decode_head.in_channels[0] ## same dimension in discrete space 
+        ## similar to DDP 
+        self.time_mlp = nn.Sequential(  # [2,] # is the input shape 
+            sinu_pos_emb,  # [2, 256] # output shape
+            nn.Linear(fourier_dim, time_dim),  # [256, 1024] # output shape
+            nn.GELU(),
+            nn.Linear(time_dim, time_dim)  # [1024, 1024] # output shape
+        )
         
     def forward_train(self, img, img_metas, gt_semantic_seg):
         """Forward function for training.
@@ -91,7 +119,7 @@ class SSD(EncoderDecoder):
         # sample time ## discrete time sample 
         times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long() 
         ## corrupt the gt in its discrete space 
-        noised_gt = q_pred_from_mats(gt_down, times, self.timesteps, 
+        noised_gt = q_pred_from_mats(gt_down, times, 
                                    self.num_classes, self.q_mats)
         noised_gt_enc = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
@@ -100,3 +128,28 @@ class SSD(EncoderDecoder):
         feat = self.transform(feat) 
         
         losses = dict()
+        input_times = self.time_mlp(times)
+        loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg)
+        losses.update(loss_decode)
+        if self.with_auxiliary_head:
+            loss_aux = self._auxiliary_head_forward_train(
+                [x], img_metas, gt_semantic_seg)
+            losses.update(loss_aux)
+        return losses
+    
+    def _decode_head_forward_train(self, x, t, img_metas, gt_semantic_seg):
+        """Run forward function and calculate loss for decode head in
+        training."""
+        losses = dict()
+        loss_decode = self.decode_head.forward_train(x, t, img_metas,
+                                                     gt_semantic_seg,
+                                                     self.train_cfg)
+
+        losses.update(add_prefix(loss_decode, 'decode'))
+        return losses
+
+    def _decode_head_forward_test(self, x, t, img_metas):
+        """Run forward function and calculate loss for decode head in
+        inference."""
+        seg_logits = self.decode_head.forward_test(x, t, img_metas, self.test_cfg)
+        return seg_logits
