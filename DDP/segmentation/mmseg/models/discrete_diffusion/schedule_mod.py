@@ -274,18 +274,12 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
     return q_mats
 
 def q_pred_from_mats(x_start, t, num_timesteps, num_classes, q_mats): 
-    B, H, W = x_start.shape # label map
-    # torch.save(q_mats, 'q_mats.pt') ## saving the tensor for analysing it
-    # print('>>>>>>>>>>>>saving done')
-    t = (t + (num_timesteps + 1)) % (num_timesteps + 1)  # having consistency with the original DDPS algo...so using this
+    B, H, W = x_start.shape # label map 
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
-    out = torch.matmul(x_start_onehot, q_mats_t)
-    # print('>>>>>>>>>>>>>>>', out.shape, out)
-    # print('<<<<<<<<<<<<<<?>>>>>>>>>>>>>',out.unique(), t) ## not too much differnce 
+    out = torch.matmul(x_start_onehot, q_mats_t)  
     out = out.view(B, num_classes, H, W)
-    # logits = out ## random testing 
-    logits = torch.log(out.clamp(min=1e-30)) ## with relevant to original DDPS code 
+    logits = torch.log(out.clamp(min=1e-30))   
     # logits = torch.log(out + 1e-6) ## with relevant to d3pm pytorch code
     sample_logits = sample_categorical(logits)
     return sample_logits

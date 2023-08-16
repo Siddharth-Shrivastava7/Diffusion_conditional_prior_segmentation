@@ -18,7 +18,8 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred_from_mats
+from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred_from_mats, custom_schedule
+from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 
 @SEGMENTORS.register_module()
@@ -30,6 +31,13 @@ class SSD(EncoderDecoder):
     """
     def __init__(self,
                 timesteps = 20, 
+                band_diagonal = False,
+                matrix_expo = True,
+                confusion = True,
+                k_nn = 3,
+                beta_schedule_custom = 'expo', 
+                beta_schedule_custom_start = -5.5, 
+                beta_schedule_custom_end = -4.5,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -45,7 +53,19 @@ class SSD(EncoderDecoder):
             act_cfg=None
         ) # used for converting concatenated encoded i/p image and encoded;corrupted gt map to feature maps of dimension being half of the joint dimension of the concatenated inputs
         
+        self.confusion_matrix = calculate_confusion_matrix_segformerb2()
+        self.band_diagonal = band_diagonal
+        self.matrix_expo = matrix_expo
+        self.beta_schedule_custom = beta_schedule_custom 
+        self.beta_schedule_custom_start = beta_schedule_custom_start  
+        self.beta_schedule_custom_end = beta_schedule_custom_end
+        self.confusion = confusion
+        self.k_nn = k_nn
         
+        self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
+        
+        ## base transition matrices     
+        self.q_mats = q_mats_from_onestepsdot(self.bt, self.timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn)
         
     def forward_train(self, img, img_metas, gt_semantic_seg):
         """Forward function for training.
@@ -63,5 +83,20 @@ class SSD(EncoderDecoder):
         """
         x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *x.shape, x.device
-    
-    
+        gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
+        gt_down = gt_down.to(gt_semantic_seg.dtype)
+        gt_down[gt_down == 255] = self.num_classes
+        
+        ## corruption of discrete data gt 
+        # sample time ## discrete time sample 
+        times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long() 
+        ## corrupt the gt in its discrete space 
+        noised_gt = q_pred_from_mats(gt_down, times, self.timesteps, 
+                                   self.num_classes, self.q_mats)
+        noised_gt_enc = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
+        
+        ## conditional input 
+        feat = torch.cat([x, noised_gt_enc], dim = 1)
+        feat = self.transform(feat) 
+        
+        losses = dict()
