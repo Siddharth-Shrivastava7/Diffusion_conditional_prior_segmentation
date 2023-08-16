@@ -85,7 +85,7 @@ class SSD(EncoderDecoder):
         
         # time embeddings   
         time_dim = self.decode_head.in_channels[0] * 4  # 1024  ## like DDP 
-        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0], num_steps=self.timesteps)
+        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0], num_steps=self.timesteps) ## here dim could be 16 (as well, if going similar to DDP)
         fourier_dim = self.decode_head.in_channels[0] ## same dimension in discrete space 
         ## similar to DDP 
         self.time_mlp = nn.Sequential(  # [2,] # is the input shape 
