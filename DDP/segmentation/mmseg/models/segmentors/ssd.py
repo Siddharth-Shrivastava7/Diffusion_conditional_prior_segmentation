@@ -188,8 +188,8 @@ class SSD(EncoderDecoder):
             feat = self.transform(feat)
             # denoising the mast at current time t
             mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
-            mask_pred = torch.argmax(mask_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through posterior calc 
-            ## posterior q(x_t-1 | x_t, x_0) 
+            mask_pred = torch.argmax(mask_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through p(x_t-1 | x_t)
+            ## p(x_t-1 | x_t) calculation 
             
             
             if self.accumulation:

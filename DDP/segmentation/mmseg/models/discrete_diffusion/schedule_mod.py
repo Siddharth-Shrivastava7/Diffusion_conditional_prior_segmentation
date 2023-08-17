@@ -211,11 +211,12 @@ def q_pred(x_start, t, num_classes, q_mats, return_logits = False):  ## calculat
     return out_sample 
 
 def q_posterior(x_start, x_t, t, num_classes, q_mats):
+    
     pass 
 
 
 def logits_to_categorical(logits):
-        uniform = torch.rand_like(logits)
-        gumbel_noise = -torch.log(-torch.log(uniform + 1e-30) + 1e-30)
-        sample = (gumbel_noise + logits).argmax(dim=1)
-        return sample
+    uniform = torch.rand_like(logits)
+    gumbel_noise = -torch.log(-torch.log(uniform + 1e-30) + 1e-30)
+    sample = (gumbel_noise + logits).argmax(dim=1)
+    return sample
