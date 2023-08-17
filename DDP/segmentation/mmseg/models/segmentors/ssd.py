@@ -22,10 +22,9 @@ from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred_fr
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 class SinusoidalPosEmb(nn.Module):
-    def __init__(self, dim, num_steps):
+    def __init__(self, dim):
         super().__init__()
         self.dim = dim
-        self.num_steps = float(num_steps)
 
     def forward(self, x):
         device = x.device
@@ -85,7 +84,7 @@ class SSD(EncoderDecoder):
         
         # time embeddings   
         time_dim = self.decode_head.in_channels[0] * 4  # 1024  ## like DDP 
-        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0], num_steps=self.timesteps) ## here dim could be 16 (as well, if going similar to DDP)
+        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0]) ## here dim could be 16 (as well, if going similar to DDP) ## but D3PM, multinomial diffusion and CCDM, also DDPS are taking input dim as #channels and out dim as  4*#ch...so this way of input channels being 256 procedding
         fourier_dim = self.decode_head.in_channels[0] ## same dimension in discrete space 
         ## similar to DDP 
         self.time_mlp = nn.Sequential(  # [2,] # is the input shape 
