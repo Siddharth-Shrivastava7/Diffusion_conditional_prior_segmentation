@@ -57,7 +57,7 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.timesteps = timesteps 
-        self.embedding_table = nn.Embedding(self.num_classes + 1, self.num_classes + 1) # instead of one hot encoding making class embedding module for discrete data space
+        self.embedding_table = nn.Embedding(self.num_classes + 1, self.num_classes + 1) # instead of one hot encoding making class embedding module for discrete data space ## (20,20)
         self.transform = ConvModule(
             self.decode_head.in_channels[0] + (self.num_classes + 1),
             self.decode_head.in_channels[0],
@@ -152,3 +152,28 @@ class SSD(EncoderDecoder):
         inference."""
         seg_logits = self.decode_head.forward_test(x, t, img_metas, self.test_cfg)
         return seg_logits
+    
+    def encode_decode(self, img, img_metas): ## it is being called at the test time! 
+        """Encode images with backbone and decode into a semantic segmentation
+        map of the same size as input."""
+        x = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
+        if self.diffusion == "uniform":
+            pass 
+        elif self.diffusion == 'similarity':
+            out = self.similarity_sample(x, img_metas)
+        else:
+            raise NotImplementedError
+        out = resize(
+            input=out,
+            size=img.shape[2:],
+            mode='bilinear',
+            align_corners=self.align_corners)
+        return out
+    
+    
+    @torch.no_grad() 
+    def similarity_sample(self, x, img_metas):
+        b, c, h, w, device = *x.shape, x.device
+        mask_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() 
+        
+        
