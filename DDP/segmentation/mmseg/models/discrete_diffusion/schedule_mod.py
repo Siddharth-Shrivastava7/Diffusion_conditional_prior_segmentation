@@ -34,7 +34,7 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
 
 
 ## diffusion based on Q-transition matrix 
-def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo = False, confusion = True, k_nn = 3):
+def similarity_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo = False, confusion = True, k_nn = 3):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
     Args:
@@ -177,14 +177,14 @@ def _get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagona
 
 def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagonal, matrix_expo = False, confusion = True, k_nn = 3): # return: Qt = Q_1.Q_2.Q_3...Q_t, input-arguments = set of betas values over diffusion timesteps and total number of diffusion timesteps
     if matrix_expo:
-        q_cummulativesteps_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo, confusion, k_nn) 
+        q_cummulativesteps_mats = [similarity_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo, confusion, k_nn) 
                                 for t in range(0, num_timesteps)]
         ## adding background class performace as well with a probability of 0 everywhere
         # q_mats = q_cummulativesteps_mats
         q_cummulativesteps_mats = torch.stack(q_cummulativesteps_mats, dim=0) 
         q_mats = F.pad(input=q_cummulativesteps_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later
     else: 
-        q_onestep_mats = [_get_nearestneighbor_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo, confusion) 
+        q_onestep_mats = [similarity_transition_mat(betas, t, confusion_matrix, band_diagonal, matrix_expo, confusion) 
                                 for t in range(0, num_timesteps)]
         q_mat_t = q_onestep_mats[0]
         q_mats = [q_mat_t]
@@ -197,7 +197,7 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
         
     return q_mats
 
-def q_pred_from_mats(x_start, t, num_classes, q_mats): 
+def q_pred(x_start, t, num_classes, q_mats): 
     B, H, W = x_start.shape # label map 
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
@@ -205,3 +205,4 @@ def q_pred_from_mats(x_start, t, num_classes, q_mats):
     out = out.view(B, num_classes, H, W) 
     out_sample = out.argmax(dim=1)  ## not required to use gumbel softmax trick 
     return out_sample 
+

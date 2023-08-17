@@ -1,5 +1,5 @@
 '''
-Self Similarity based Diffusion model
+Self/Structure Similarity based Diffusion model
 '''
 
 import torch
@@ -18,7 +18,7 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred_from_mats, custom_schedule
+from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred, custom_schedule
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 class SinusoidalPosEmb(nn.Module):
@@ -118,7 +118,7 @@ class SSD(EncoderDecoder):
         # sample time ## discrete time sample 
         times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long() 
         ## corrupt the gt in its discrete space 
-        noised_gt = q_pred_from_mats(gt_down, times, 
+        noised_gt = q_pred(gt_down, times, 
                                    self.num_classes, self.q_mats)
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
@@ -175,7 +175,7 @@ class SSD(EncoderDecoder):
     def similarity_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
         mask_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
-
+        outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=self.device) * i).long()
             input_times = self.time_mlp(times)
@@ -187,7 +187,15 @@ class SSD(EncoderDecoder):
             # denoising the mast at current time t
             mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
             mask_pred = torch.argmax(mask_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through posterior calc 
+            ## posterior q(x_t-1 | x_t, x_0) 
             
+            
+            if self.accumulation:
+                outs.append(mask_logit.softmax(1))
+        if self.accumulation:
+            mask_logit = torch.cat(outs, dim=0)
+        logit = mask_logit.mean(dim=0, keepdim=True)     
+        return logit    
             
 
         
