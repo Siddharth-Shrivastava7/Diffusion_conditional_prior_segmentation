@@ -39,12 +39,21 @@
             "console": "integratedTerminal",
             "cwd": "${fileDirname}",
             // below one for DDPS multistep training 
+            // "args": [
+            //     "--nnodes", "1", "--node_rank", "0", 
+            //     "--master_addr", "127.0.0.1", 
+            //     "--nproc_per_node", "8",  "--master_port", "29500",
+            //     "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/tools/train_diffusion.py",
+            //     "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/configs/cityscapes/segformer_b2_cityscapes20_multistep.py",
+            //     "--launcher", "pytorch"
+            // ]
+            // below one for DDP testing 
             "args": [
                 "--nnodes", "1", "--node_rank", "0", 
                 "--master_addr", "127.0.0.1", 
-                "--nproc_per_node", "8",  "--master_port", "29500",
-                "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/tools/train_diffusion.py",
-                "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/configs/cityscapes/segformer_b2_cityscapes20_multistep.py",
+                "--nproc_per_node", "4",  "--master_port", "29500",
+                "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/tools/test.py",
+                "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/darkzurich/ddp_convnext_l_4x4_1080x1920_test_darkzurich.py", "/home/sidd_s/scratch/saved_models/DDP/ddp_convnext_l_4x4_512x1024_160k_cityscapes.pth", "--eval", "mIoU",
                 "--launcher", "pytorch"
             ]
         }
