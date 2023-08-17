@@ -197,12 +197,25 @@ def q_mats_from_onestepsdot(betas, num_timesteps, confusion_matrix, band_diagona
         
     return q_mats
 
-def q_pred(x_start, t, num_classes, q_mats): 
+def q_pred(x_start, t, num_classes, q_mats, return_logits = False):  ## calculating q(x_t | x_0)
     B, H, W = x_start.shape # label map 
     q_mats_t = torch.index_select(q_mats, dim=0, index=t)
     x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
     out = torch.matmul(x_start_onehot, q_mats_t)  
     out = out.view(B, num_classes, H, W) 
-    out_sample = out.argmax(dim=1)  ## not required to use gumbel softmax trick 
+    if return_logits: 
+        logits = torch.log(out + 1e-20)  ## eplison taken as 1e-20
+        out_sample = logits_to_categorical(logits)
+    else:
+        out_sample = out.argmax(dim=1)  
     return out_sample 
 
+def q_posterior(x_start, x_t, t, num_classes, q_mats):
+    pass 
+
+
+def logits_to_categorical(logits):
+        uniform = torch.rand_like(logits)
+        gumbel_noise = -torch.log(-torch.log(uniform + 1e-30) + 1e-30)
+        sample = (gumbel_noise + logits).argmax(dim=1)
+        return sample

@@ -53,6 +53,7 @@ class SSD(EncoderDecoder):
                 beta_schedule_custom = 'expo', 
                 beta_schedule_custom_start = -5.5, 
                 beta_schedule_custom_end = -4.5,
+                return_logits = False,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -76,6 +77,7 @@ class SSD(EncoderDecoder):
         self.beta_schedule_custom_end = beta_schedule_custom_end
         self.confusion = confusion
         self.k_nn = k_nn
+        self.return_logits = return_logits
         
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
@@ -119,7 +121,7 @@ class SSD(EncoderDecoder):
         times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long() 
         ## corrupt the gt in its discrete space 
         noised_gt = q_pred(gt_down, times, 
-                                   self.num_classes, self.q_mats)
+                                   self.num_classes + 1, self.q_mats, self.return_logits)
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
         ## conditional input 
