@@ -210,13 +210,8 @@ def q_pred(x_start, t, num_classes, q_mats, return_logits = False):  ## calculat
         out_sample = out.argmax(dim=1)  
     return out_sample 
 
-def q_posterior(x_start, x_t, t, num_classes, q_mats, return_logits = False):
-
-
-    
-    pass 
-
-def p_reverse(x_start, x_t, t, num_classes, q_mats, return_logits = False):
+def q_posterior(x_start_pred_from_t, x_t, t, num_classes, q_mats, return_logits = False,
+                d3pm_posterior = True):
     
     ## two ways to arrive it; 
     '''
@@ -225,10 +220,31 @@ def p_reverse(x_start, x_t, t, num_classes, q_mats, return_logits = False):
         
         we will code both the ways!!
     '''
-        
-    
-    pass 
+    ## 1st way 
+    if d3pm_posterior:
+         
+    else: 
+        pass 
 
+    
+
+def p_reverse(x_start_pred_from_t, x_t, t, num_classes, q_mats, return_logits = False,
+              d3pm_posterior = True):
+    
+    ## two ways to arrive it; 
+    '''
+        1. The way D3PM arrived
+        2. The way CCDM/Multinomial Diffusion arrived
+        
+        we will code both the ways!!
+    '''
+    ## 1st way :: p(x_t-1 | x_t) = sum_x0(q(x_t-1, x_t | x_0) * p(x_0 | x_t))
+    
+    if d3pm_posterior:
+        x_t_minus_1 = q_posterior(x_start_pred_from_t, x_t, t, num_classes, q_mats, return_logits)
+    else:
+        pass 
+    return x_t_minus_1
 
 def logits_to_categorical(logits):
     uniform = torch.rand_like(logits)

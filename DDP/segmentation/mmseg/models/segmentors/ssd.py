@@ -54,6 +54,7 @@ class SSD(EncoderDecoder):
                 beta_schedule_custom_start = -5.5, 
                 beta_schedule_custom_end = -4.5,
                 return_logits = False,
+                d3pm_posterior = True, 
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -78,6 +79,7 @@ class SSD(EncoderDecoder):
         self.confusion = confusion
         self.k_nn = k_nn
         self.return_logits = return_logits
+        self.d3pm_posterior = d3pm_posterior 
         
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
@@ -187,21 +189,21 @@ class SSD(EncoderDecoder):
             feat = torch.cat([x, mask_t_emb], dim=1)
             feat = self.transform(feat)
             # denoising the mast at current time t
-            mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
-            mask_pred = torch.argmax(mask_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through p(x_t-1 | x_t)
+            mask_start_pred_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
+            mask_start_pred = torch.argmax(mask_start_pred_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through p(x_t-1 | x_t)
             ## p(x_t-1 | x_t) calculation 
             if i!=0:
-                mask_t_minus_1 = p_reverse(mask_pred, mask_t, times, 
-                                           self.num_classes + 1, self.q_mats, self.return_logits)
+                mask_t_minus_1 = p_reverse(mask_start_pred, mask_t, times, 
+                                           self.num_classes + 1, self.q_mats, self.return_logits, self.d3pm_posterior)
                 mask_t = mask_t_minus_1 # for recursively operating in the loop  
             else: 
-                x0_pred = mask_pred 
-            
+                # x0_pred = mask_start_pred 
+                pass 
             if self.accumulation: ## accumulating all the logits of x0_pred
-                outs.append(mask_logit.softmax(1))
+                outs.append(mask_start_pred_logit.softmax(1))
         if self.accumulation: ## accumulating all the logits of x0_pred
-            mask_logit = torch.cat(outs, dim=0)
-        logit = mask_logit.mean(dim=0, keepdim=True)     
+            mask_start_pred_logit = torch.cat(outs, dim=0)
+        logit = mask_start_pred_logit.mean(dim=0, keepdim=True)     
         return logit    
             
 
