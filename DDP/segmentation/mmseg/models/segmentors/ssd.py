@@ -120,10 +120,10 @@ class SSD(EncoderDecoder):
         ## corrupt the gt in its discrete space 
         noised_gt = q_pred_from_mats(gt_down, times, 
                                    self.num_classes, self.q_mats)
-        noised_gt_enc = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
+        noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
         ## conditional input 
-        feat = torch.cat([x, noised_gt_enc], dim = 1)
+        feat = torch.cat([x, noised_gt_emb], dim = 1)
         feat = self.transform(feat) 
         
         losses = dict()
@@ -174,6 +174,20 @@ class SSD(EncoderDecoder):
     @torch.no_grad() 
     def similarity_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
-        mask_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() 
-        
+        mask_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
+
+        for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
+            times = (torch.ones((b,), device=self.device) * i).long()
+            input_times = self.time_mlp(times)
+            ## converting the discrete labels into embedding (or one-hot, later if req) for passing into denoising network 
+            mask_t_emb = self.embedding_table(mask_t).squeeze(1).permute(0, 3, 1, 2)
+            # conditional input 
+            feat = torch.cat([x, mask_t_emb], dim=1)
+            feat = self.transform(feat)
+            # denoising the mast at current time t
+            mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
+            mask_pred = torch.argmax(mask_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through posterior calc 
+            
+            
+
         
