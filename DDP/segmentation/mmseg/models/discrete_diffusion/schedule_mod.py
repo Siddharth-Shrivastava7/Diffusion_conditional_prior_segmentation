@@ -210,7 +210,22 @@ def q_pred(x_start, t, num_classes, q_mats, return_logits = False):  ## calculat
         out_sample = out.argmax(dim=1)  
     return out_sample 
 
-def q_posterior(x_start, x_t, t, num_classes, q_mats):
+def q_posterior(x_start, x_t, t, num_classes, q_mats, return_logits = False):
+
+
+    
+    pass 
+
+def p_reverse(x_start, x_t, t, num_classes, q_mats, return_logits = False):
+    
+    ## two ways to arrive it; 
+    '''
+        1. The way D3PM arrived
+        2. The way CCDM/Multinomial Diffusion arrived
+        
+        we will code both the ways!!
+    '''
+        
     
     pass 
 

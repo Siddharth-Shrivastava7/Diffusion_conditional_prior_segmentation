@@ -18,7 +18,7 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred, custom_schedule
+from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred, custom_schedule, p_reverse
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 class SinusoidalPosEmb(nn.Module):
@@ -190,11 +190,16 @@ class SSD(EncoderDecoder):
             mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
             mask_pred = torch.argmax(mask_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through p(x_t-1 | x_t)
             ## p(x_t-1 | x_t) calculation 
+            if i!=0:
+                mask_t_minus_1 = p_reverse(mask_pred, mask_t, times, 
+                                           self.num_classes + 1, self.q_mats, self.return_logits)
+                mask_t = mask_t_minus_1 # for recursively operating in the loop  
+            else: 
+                x0_pred = mask_pred 
             
-            
-            if self.accumulation:
+            if self.accumulation: ## accumulating all the logits of x0_pred
                 outs.append(mask_logit.softmax(1))
-        if self.accumulation:
+        if self.accumulation: ## accumulating all the logits of x0_pred
             mask_logit = torch.cat(outs, dim=0)
         logit = mask_logit.mean(dim=0, keepdim=True)     
         return logit    
