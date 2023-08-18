@@ -105,7 +105,7 @@ class SSD(EncoderDecoder):
                                         dims=[[1], [0]])
                 self.q_mats.append(q_mat_t)
             self.q_mats = torch.stack(self.q_mats, dim=0)  
-        self.q_mats = F.pad(input=self.q_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later 
+        # self.q_mats = F.pad(input=self.q_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later 
             
         # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
         # Can be computed from self.q_mats and self.q_one_step_mats.
