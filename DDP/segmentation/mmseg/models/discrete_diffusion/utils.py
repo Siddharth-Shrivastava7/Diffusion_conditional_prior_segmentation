@@ -189,43 +189,6 @@ def similarity_transition_mat(betas, t, confusion_matrix, transition_mat_type, c
     return matrix
 
 
-def q_pred(x_start, t, num_classes, q_mats, using_logits = False):  ## calculating probabilities of q(x_t | x_0) and then Sampling from q(x_t | x_0) (i.e. add noise to the data).
-    B, H, W = x_start.shape # label map 
-    q_mats_t = torch.index_select(q_mats, dim=0, index=t)
-    x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
-    out = torch.matmul(x_start_onehot, q_mats_t)  
-    out = out.view(B, num_classes, H, W)  ## probabilities of q(x_t | x_0)
-    if using_logits: 
-        logits = torch.log(out + torch.finfo(torch.float32).eps)  # eps approx 1e-7
-        out_sample = logits_to_categorical(logits)
-    else:
-        out_sample = out.argmax(dim=1)  
-    return out_sample 
-
-def q_posterior(x_start, x_t, t, num_classes, q_mats, using_logits = False):
-    
-    """ Compute  q(x_{t-1} | x_t, x_start)."""
-    
-    return 
-
-
-def p_reverse(x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = False): 
-    """
-        x0_parameterisation 
-        
-        Predict the logits of p(x_{t-1}|x_t) by parameterizing this distribution
-        as = sum_{pred_x_start} q(x_{t-1}, x_t |pred_x_start)p(pred_x_start|x_t) 
-           = q(x_t |x_{t-1})q(x_{t-1}|pred_x_start), where pred_x_start ~ p(pred_x_start|x_t) ; approximating the expectation over p(pred_x_start|x_t) via single sample 
-           
-           can also refer: "https://beckham.nz/2022/07/11/d3pms.html"
-    """
-    x_t_minus_1 = q_posterior(x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = using_logits)
-    
-    if using_logits:
-       pass ## have to form later  
-    
-    return x_t_minus_1
-
 def logits_to_categorical(logits):
     uniform_noise = torch.rand_like(logits)
     ## # To avoid numerical issues clip the uniform noise to a minimum value

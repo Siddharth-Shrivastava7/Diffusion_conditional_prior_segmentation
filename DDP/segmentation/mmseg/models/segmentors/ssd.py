@@ -18,7 +18,7 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-from ..discrete_diffusion.schedule_mod import q_pred, custom_schedule, p_reverse, similarity_transition_mat
+from ..discrete_diffusion.utils import custom_schedule, similarity_transition_mat, logits_to_categorical
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 class SinusoidalPosEmb(nn.Module):
@@ -153,7 +153,7 @@ class SSD(EncoderDecoder):
         # sample time ## discrete time sample 
         times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long()  
         ## corrupt the gt in its discrete space 
-        noised_gt = q_pred(gt_down, times, 
+        noised_gt = self.q_pred(gt_down, times, 
                                    self.num_classes + 1, self.q_mats, self.using_logits) ## noised_gt has a categorical label entries
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
@@ -224,7 +224,7 @@ class SSD(EncoderDecoder):
             mask_start_pred = torch.argmax(mask_start_pred_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through p(x_t-1 | x_t)
             ## p(x_t-1 | x_t) calculation 
             if i!=0:
-                mask_t_minus_1 = p_reverse(mask_start_pred, mask_t, times, 
+                mask_t_minus_1 = self.p_reverse(mask_start_pred, mask_t, times, 
                                            self.num_classes + 1, self.q_mats, self.using_logits)
                 mask_t = mask_t_minus_1 # for recursively operating in the loop  
             else: 
@@ -236,6 +236,45 @@ class SSD(EncoderDecoder):
             mask_start_pred_logit = torch.cat(outs, dim=0)
         logit = mask_start_pred_logit.mean(dim=0, keepdim=True)     
         return logit    
+    
+    
+    def q_pred(self, x_start, t, num_classes, q_mats, using_logits = False): 
+        '''
+            calculating  probabilities of q(x_t | x_0) and then Sampling from q(x_t | x_0) (i.e. add noise to the data).
+        '''
+        B, H, W = x_start.shape # label map 
+        q_mats_t = torch.index_select(q_mats, dim=0, index=t)
+        x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
+        out = torch.matmul(x_start_onehot, q_mats_t)  
+        out = out.view(B, num_classes, H, W)  ## probabilities of q(x_t | x_0)
+        if using_logits: 
+            logits = torch.log(out + torch.finfo(torch.float32).eps)  # eps approx 1e-7
+            out_sample = logits_to_categorical(logits)
+        else:
+            out_sample = out.argmax(dim=1)  
+        return out_sample 
+    
+    def q_posterior(self, x_start, x_t, t, num_classes, q_mats, using_logits = False):
+    
+        """ Compute  q(x_{t-1} | x_t, x_start)."""
+    
+        return 
+    
+    
+    def p_reverse(self, x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = False): 
+        """
+            x0_parameterisation 
             
-
+            Predict the logits of p(x_{t-1}|x_t) by parameterizing this distribution
+            as = sum_{pred_x_start} q(x_{t-1}, x_t |pred_x_start)p(pred_x_start|x_t) 
+            = q(x_t |x_{t-1})q(x_{t-1}|pred_x_start), where pred_x_start ~ p(pred_x_start|x_t) ; approximating the expectation over p(pred_x_start|x_t) via single sample 
+            
+            can also refer: "https://beckham.nz/2022/07/11/d3pms.html"
+        """
+        x_t_minus_1 = self.q_posterior(x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = using_logits)
+        
+        if using_logits:
+            pass ## have to form later  
+    
+        return x_t_minus_1
         
