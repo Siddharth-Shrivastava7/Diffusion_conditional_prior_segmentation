@@ -1,5 +1,5 @@
 '''
-Self/Structure Similarity based Diffusion model
+Self/Structure/Semantic Similarity based Diffusion model
 '''
 
 import torch
@@ -18,7 +18,7 @@ import os
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-from ..discrete_diffusion.schedule_mod import q_mats_from_onestepsdot, q_pred, custom_schedule, p_reverse
+from ..discrete_diffusion.schedule_mod import q_pred, custom_schedule, p_reverse, similarity_transition_mat
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 class SinusoidalPosEmb(nn.Module):
@@ -46,8 +46,7 @@ class SSD(EncoderDecoder):
     """
     def __init__(self,
                 timesteps = 20, 
-                band_diagonal = False,
-                matrix_expo = True,
+                transition_mat_type = 'matrix_expo', 
                 confusion = True,
                 k_nn = 3,
                 beta_schedule_custom = 'expo', 
@@ -70,19 +69,49 @@ class SSD(EncoderDecoder):
         ) # used for converting concatenated encoded i/p image and encoded;corrupted gt map to feature maps of dimension being half of the joint dimension of the concatenated inputs
         
         self.confusion_matrix = calculate_confusion_matrix_segformerb2()
-        self.band_diagonal = band_diagonal
-        self.matrix_expo = matrix_expo
         self.beta_schedule_custom = beta_schedule_custom 
         self.beta_schedule_custom_start = beta_schedule_custom_start  
         self.beta_schedule_custom_end = beta_schedule_custom_end
         self.confusion = confusion
         self.k_nn = k_nn
         self.using_logits = using_logits
-        
+        self.transition_mat_type = transition_mat_type
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
-        ## base transition matrices     
-        self.q_mats = q_mats_from_onestepsdot(self.bt, self.timesteps, self.confusion_matrix, self.band_diagonal, self.matrix_expo, self.confusion, self.k_nn) 
+        
+        ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
+        self.q_onestep_mats =  [
+            similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_mat_type, self.confusion, self.k_nn, matrix_expo_cumulative = False) \
+            for t  in range(0, self.timesteps)
+        ]
+        
+        ## need to add background class here only !!
+        assert self.q_onestep_mats.shape == (self.timesteps,
+                                         self.num_classes + 1,
+                                         self.num_classes + 1) 
+        
+        ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
+        if self.transition_mat_type == 'matrix_expo':    
+            self.q_mats = [
+                        similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_mat_type, self.confusion, self.k_nn, matrix_expo_cumulative = True) \
+                        for t  in range(0, self.timesteps)
+            ]
+            self.q_mats = torch.stack(self.q_mats, dim=0)
+        else: 
+            q_mat_t = self.q_onestep_mats[0]
+            self.q_mats = [q_mat_t]
+            for t in range(1, self.timesteps):
+                q_mat_t = torch.tensordot(q_mat_t, self.q_onestep_mats[t],
+                                        dims=[[1], [0]])
+                self.q_mats.append(q_mat_t)
+            self.q_mats = torch.stack(self.q_mats, dim=0)  
+        self.q_mats = F.pad(input=self.q_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later 
+            
+        # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
+        # Can be computed from self.q_mats and self.q_one_step_mats.
+        # Only need transpose of q_onestep_mats for posterior computation.
+        self.transpose_q_onestep_mats = torch.transpose(self.q_onestep_mats,
+                                                  axes=(0, 2, 1))       ## have to check it again   
         
         # time embeddings   
         time_dim = self.decode_head.in_channels[0] * 4  # 1024  ## like DDP 
