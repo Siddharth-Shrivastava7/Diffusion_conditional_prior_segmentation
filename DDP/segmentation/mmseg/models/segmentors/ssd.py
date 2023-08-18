@@ -54,7 +54,6 @@ class SSD(EncoderDecoder):
                 beta_schedule_custom_start = -5.5, 
                 beta_schedule_custom_end = -4.5,
                 return_logits = False,
-                d3pm_posterior = True, 
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -79,7 +78,6 @@ class SSD(EncoderDecoder):
         self.confusion = confusion
         self.k_nn = k_nn
         self.return_logits = return_logits
-        self.d3pm_posterior = d3pm_posterior 
         
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
@@ -194,7 +192,7 @@ class SSD(EncoderDecoder):
             ## p(x_t-1 | x_t) calculation 
             if i!=0:
                 mask_t_minus_1 = p_reverse(mask_start_pred, mask_t, times, 
-                                           self.num_classes + 1, self.q_mats, self.return_logits, self.d3pm_posterior)
+                                           self.num_classes + 1, self.q_mats, self.return_logits)
                 mask_t = mask_t_minus_1 # for recursively operating in the loop  
             else: 
                 # x0_pred = mask_start_pred 
