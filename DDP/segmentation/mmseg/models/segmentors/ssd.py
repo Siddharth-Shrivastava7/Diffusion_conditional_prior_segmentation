@@ -137,8 +137,8 @@ class SSD(EncoderDecoder):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
-        batch, c, h, w, device, = *x.shape, x.device
+        img_feat = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
+        batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
         gt_down[gt_down == 255] = self.num_classes
@@ -155,7 +155,7 @@ class SSD(EncoderDecoder):
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
         ## conditional input 
-        feat = torch.cat([x, noised_gt_emb], dim = 1)
+        feat = torch.cat([img_feat, noised_gt_emb], dim = 1)
         feat = self.transform(feat) 
         
         losses = dict()
@@ -164,7 +164,7 @@ class SSD(EncoderDecoder):
         losses.update(loss_decode)
         if self.with_auxiliary_head:
             loss_aux = self._auxiliary_head_forward_train(
-                [x], img_metas, gt_semantic_seg)
+                [img_feat], img_metas, gt_semantic_seg)
             losses.update(loss_aux)
         return losses
     
@@ -188,11 +188,11 @@ class SSD(EncoderDecoder):
     def encode_decode(self, img, img_metas): ## it is being called at the test time! 
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
-        x = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
+        img_feat = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
         if self.diffusion == "uniform":
             pass 
         elif self.diffusion == 'similarity':
-            out = self.similarity_sample(x, img_metas)
+            out = self.similarity_sample(img_feat, img_metas)
         else:
             raise NotImplementedError
         out = resize(
@@ -204,23 +204,20 @@ class SSD(EncoderDecoder):
     
     
     @torch.no_grad() 
-    def similarity_sample(self, x, img_metas):
-        b, c, h, w, device = *x.shape, x.device
-        x_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
+    def similarity_sample(self, img_feat, img_metas):
+        b, c, h, w, device = *img_feat.shape, img_feat.device
+        x = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=self.device) * i).long()
-            ## p_logits would come in here 
-            
-            
-            
-            
-            if self.accumulation: ## accumulating all the logits of x0_pred
-                outs.append(mask_start_pred_logit.softmax(1))
-        if self.accumulation: ## accumulating all the logits of x0_pred
-            mask_start_pred_logit = torch.cat(outs, dim=0)
-        logit = mask_start_pred_logit.mean(dim=0, keepdim=True)     
-        return logit    
+            x,  x_start_pred_logits = self.p_sample(img_feat, img_metas, 
+                                                    x, times)
+            if self.accumulation: ## accumulating all the probas of x0_pred
+                outs.append(x_start_pred_logits.softmax(1))
+        if self.accumulation: ## accumulating all the probas of x0_pred
+            x_start_pred_logits = torch.cat(outs, dim=0)
+        logit = x_start_pred_logits.mean(dim=0, keepdim=True)     
+        return x, logit     
     
     
     def q_probs(self, q_mats, t, x_var_t):
@@ -262,7 +259,7 @@ class SSD(EncoderDecoder):
             out
         )
         
-    def p_logits(self, img_feats, img_metas, x_t, t): 
+    def p_logits(self, img_feat, img_metas, x_t, t): 
         """
             x0_parameterisation 
             
@@ -276,7 +273,7 @@ class SSD(EncoderDecoder):
         ## converting the discrete labels into embedding (or one-hot, later if req) for passing into denoising network 
         x_t_emb = self.embedding_table(x_t).squeeze(1).permute(0, 3, 1, 2)
         # conditional input 
-        feat = torch.cat([img_feats, x_t_emb], dim=1)
+        feat = torch.cat([img_feat, x_t_emb], dim=1)
         feat = self.transform(feat)
         # denoising the mast at current time t
         x_start_pred_logits = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
@@ -294,9 +291,10 @@ class SSD(EncoderDecoder):
         
         return model_logits, x_start_pred_logits
 
-    def p_sample(self, img_feats, img_metas, x_t, t): 
+    def p_sample(self, img_feat, img_metas, x_t, t): 
+        """Sample one timestep from the model p(x_{t-1} | x_t)."""
         
-        model_logits, x_start_pred_logits = self.p_logits(img_feats, img_metas, x_t, t)
+        model_logits, x_start_pred_logits = self.p_logits(img_feat, img_metas, x_t, t)
         
         # No noise when t == 0
         # NOTE: for t=0 this just "samples" from the argmax
@@ -310,4 +308,7 @@ class SSD(EncoderDecoder):
         gumbel_noise = - torch.log(-torch.log(uniform_noise))
         sample = (model_logits + nonzero_mask * gumbel_noise).argmax(dim=1)
         
-        return sample, F.Softmax(x_start_pred_logits, dim=1)
+        assert sample.shape == x_t.shape
+        assert x_start_pred_logits.shape == model_logits.shape
+        
+        return sample, x_start_pred_logits
