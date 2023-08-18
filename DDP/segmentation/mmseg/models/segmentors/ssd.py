@@ -144,7 +144,8 @@ class SSD(EncoderDecoder):
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
-        gt_down[gt_down == 255] = self.num_classes
+        gt_down[gt_down == 255] = self.num_classes - 1 ## assigning 19 label to background
+        gt_down = gt_down.squeeze() ## 'bhw' 
         
         ## corruption of discrete data gt 
         '''
@@ -230,7 +231,7 @@ class SSD(EncoderDecoder):
             when q_mats is onestep mats then, calculating  probabilities of q(x_t | x_{t-1}) 
         '''
         B, H, W = x_var_t.shape  
-        q_mats_t = torch.index_select(q_mats, dim=0, index=t)
+        q_mats_t = torch.index_select(q_mats.to(x_var_t.device), dim=0, index=t)
         x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes).to(torch.float64)
         out = torch.matmul(x_var_t_onehot, q_mats_t)  
         out = out.view(B, self.num_classes, H, W)  ## probabilities of q(x_t | x_0)
