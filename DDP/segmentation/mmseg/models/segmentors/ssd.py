@@ -84,6 +84,7 @@ class SSD(EncoderDecoder):
             similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_matrix_type, self.confusion, self.k_nn, matrix_expo_cumulative = False) \
             for t  in range(0, self.timesteps)
         ]
+        self.q_onestep_mats = torch.stack(self.q_onestep_mats, dim=0)
         assert self.q_onestep_mats.shape == (self.timesteps,
                                          self.num_classes,
                                          self.num_classes) 

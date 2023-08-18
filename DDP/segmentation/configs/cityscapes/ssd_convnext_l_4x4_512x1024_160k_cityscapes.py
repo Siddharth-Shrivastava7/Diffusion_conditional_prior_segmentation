@@ -12,7 +12,7 @@ backbone_norm_cfg = dict(type='LN', requires_grad=True)
 model = dict(
     type='SSD',
     timesteps=20, # time steps for reverse discrete diffusion  
-    # transition_matrix_type='matrix_expo', 
+    transition_matrix_type='matrix_expo', 
     confusion = True,
     k_nn = 3,
     beta_schedule_custom = 'expo', 

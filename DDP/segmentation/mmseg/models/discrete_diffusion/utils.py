@@ -66,11 +66,11 @@ def similarity_transition_mat(betas, t, confusion_matrix, transition_mat_type, c
             matrix_from_confusion = matrix_from_confusion + matrix_from_confusion.T ## symmetricity required in transition rate 
             transition_rate = matrix_from_confusion - np.diagflat(np.sum(matrix_from_confusion, axis=1)) ## transition rate matrix from confusion matrix 
             if matrix_expo_cumulative:
-                betas = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
+                betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
             else:
-                betas = beta_t ## for single step transitions using matrix expo 
+                betas_tt = beta_t ## for single step transitions using matrix expo 
             matrix = scipy.linalg.expm(
-                        np.array(betas * transition_rate, dtype=np.float64)) 
+                        np.array(betas_tt * transition_rate, dtype=np.float64)) 
             # print('************', np.diag(matrix))
             # print('^^^^^^^^^^^^^^^^', np.max(matrix), np.min(matrix))
         else: ## using adjacency matrix as mentioned in the paper 
@@ -108,13 +108,13 @@ def similarity_transition_mat(betas, t, confusion_matrix, transition_mat_type, c
             transition_rate = adjacency_matrix_soft - np.diagflat(np.sum(adjacency_matrix_soft, axis=1))
             
             if matrix_expo_cumulative:
-                betas = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
+                betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
             else:
-                betas = beta_t ## for single step transitions using matrix expo 
+                betas_tt = beta_t ## for single step transitions using matrix expo 
             
             # ### building base matrix 
             matrix = scipy.linalg.expm(
-                        np.array(betas * transition_rate, dtype=np.float64))  
+                        np.array(betas_tt * transition_rate, dtype=np.float64))  
         
         # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix
     elif transition_mat_type == 'sinkhorn_algorithm':
