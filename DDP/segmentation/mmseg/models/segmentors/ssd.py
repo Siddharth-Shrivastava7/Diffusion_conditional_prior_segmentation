@@ -57,9 +57,9 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.timesteps = timesteps 
-        self.embedding_table = nn.Embedding(self.num_classes + 1, self.num_classes + 1) # instead of one hot encoding making class embedding module for discrete data space ## (20,20)
+        self.embedding_table = nn.Embedding(self.num_classes + 1, self.decode_head.in_channels[0]) # instead of one hot encoding making class embedding module for discrete data space 
         self.transform = ConvModule(
-            self.decode_head.in_channels[0] + (self.num_classes + 1),
+            self.decode_head.in_channels[0] * 2,
             self.decode_head.in_channels[0],
             1,
             padding=0,
@@ -85,8 +85,8 @@ class SSD(EncoderDecoder):
             for t  in range(0, self.timesteps)
         ]
         assert self.q_onestep_mats.shape == (self.timesteps,
-                                         self.num_classes + 1,
-                                         self.num_classes + 1) 
+                                         self.num_classes,
+                                         self.num_classes) 
         
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
         if self.transition_mat_type == 'matrix_expo':    
@@ -104,8 +104,8 @@ class SSD(EncoderDecoder):
                 self.q_mats.append(q_mat_t)
             self.q_mats = torch.stack(self.q_mats, dim=0)  
         assert self.q_mats.shape == (self.timesteps,
-                                         self.num_classes + 1,
-                                         self.num_classes + 1) 
+                                         self.num_classes,
+                                         self.num_classes) 
         
         # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
         # Can be computed from self.q_mats and self.q_one_step_mats.
@@ -208,7 +208,7 @@ class SSD(EncoderDecoder):
     @torch.no_grad() 
     def similarity_sample(self, img_feat, img_metas):
         b, c, h, w, device = *img_feat.shape, img_feat.device
-        x = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
+        x = torch.randint(0, self.num_classes, [b,h,w], device=self.device).long() # stationary distribution 
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=self.device) * i).long()
@@ -230,9 +230,9 @@ class SSD(EncoderDecoder):
         '''
         B, H, W = x_var_t.shape  
         q_mats_t = torch.index_select(q_mats, dim=0, index=t)
-        x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes + 1).to(torch.float64)
+        x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes).to(torch.float64)
         out = torch.matmul(x_var_t_onehot, q_mats_t)  
-        out = out.view(B, self.num_classes + 1, H, W)  ## probabilities of q(x_t | x_0)
+        out = out.view(B, self.num_classes, H, W)  ## probabilities of q(x_t | x_0)
         return out 
     
     def q_sample(self, q_probs): 
@@ -289,7 +289,7 @@ class SSD(EncoderDecoder):
         )
         
         assert (model_logits.shape == x_start_pred_logits.shape == \
-            (x_t.shape[0], self.num_classes+1) + tuple(x_t.shape[2:]))
+            (x_t.shape[0], self.num_classes) + tuple(x_t.shape[2:]))
         
         return model_logits, x_start_pred_logits
 
