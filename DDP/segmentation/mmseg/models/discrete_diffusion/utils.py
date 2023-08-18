@@ -33,7 +33,7 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
     return betas 
 
 
-## diffusion based on Q-transition matrix 
+## Q-transition matrix based discerete diffusion
 def similarity_transition_mat(betas, t, confusion_matrix, transition_mat_type, confusion = True, k_nn = 3, matrix_expo_cumulative = False):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
