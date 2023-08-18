@@ -84,7 +84,6 @@ class SSD(EncoderDecoder):
             similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_mat_type, self.confusion, self.k_nn, matrix_expo_cumulative = False) \
             for t  in range(0, self.timesteps)
         ]
-        
         assert self.q_onestep_mats.shape == (self.timesteps,
                                          self.num_classes + 1,
                                          self.num_classes + 1) 
@@ -104,7 +103,6 @@ class SSD(EncoderDecoder):
                                         dims=[[1], [0]])
                 self.q_mats.append(q_mat_t)
             self.q_mats = torch.stack(self.q_mats, dim=0)  
-         
         assert self.q_mats.shape == (self.timesteps,
                                          self.num_classes + 1,
                                          self.num_classes + 1) 
