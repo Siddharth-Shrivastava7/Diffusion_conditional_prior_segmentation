@@ -209,20 +209,15 @@ class SSD(EncoderDecoder):
     @torch.no_grad() 
     def similarity_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
-        mask_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
+        x_t = torch.randint(0, self. num_classes+1, [b,h,w], device=self.device).long() # stationary distribution 
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=self.device) * i).long()
             ## p_logits would come in here 
             
-            ## p(x_t-1 | x_t) calculation 
-            if i!=0:
-                mask_t_minus_1 = self.p_reverse(mask_start_pred, mask_t, times, 
-                                           self.num_classes + 1, self.q_mats, self.using_logits)
-                mask_t = mask_t_minus_1 # for recursively operating in the loop  
-            else: 
-                # x0_pred = mask_start_pred 
-                pass 
+            
+            
+            
             if self.accumulation: ## accumulating all the logits of x0_pred
                 outs.append(mask_start_pred_logit.softmax(1))
         if self.accumulation: ## accumulating all the logits of x0_pred
@@ -231,7 +226,7 @@ class SSD(EncoderDecoder):
         return logit    
     
     
-    def q_probs(self, x_var_t, t, num_classes, q_mats):
+    def q_probs(self, q_mats, t, x_var_t):
         '''
             when q_mats is cumulative then, calculating  probabilities of q(x_t | x_0)
             
@@ -239,9 +234,9 @@ class SSD(EncoderDecoder):
         '''
         B, H, W = x_var_t.shape  
         q_mats_t = torch.index_select(q_mats, dim=0, index=t)
-        x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
+        x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes + 1).to(torch.float64)
         out = torch.matmul(x_var_t_onehot, q_mats_t)  
-        out = out.view(B, num_classes, H, W)  ## probabilities of q(x_t | x_0)
+        out = out.view(B, self.num_classes + 1, H, W)  ## probabilities of q(x_t | x_0)
         return out 
     
     def q_sample(self, q_probs, using_logits = False): 
@@ -258,12 +253,21 @@ class SSD(EncoderDecoder):
     def q_posterior_logits(self, x_start_pred_logits, x_t, t, using_logits = False):
         """ Compute logits of q(x_{t-1} | x_t, x_start)."""
         
-        fact1 = self.q_probs()
+        fact1 = self.q_probs(self.transpose_q_onestep_mats, t, x_t) # x_{t} x Q_t^{T}
+        fact2 = self.q_probs(self.q_mats, t - 1, F.Softmax(x_start_pred_logits, dim=1)) # x_{0} x Q_{t-1}^{\hat}
+        tzero_logits = x_start_pred_logits
         
-    
-        return 
+        # At t=0 we need the logits of q(x_{-1}|x_0, x_start)
+        # where x_{-1} == x_start. This should be equal the log of x_0.
+        out = torch.log(fact1 + torch.finfo(torch.float32).eps) + torch.log(fact2 + torch.finfo(torch.float32).eps) # log(fact1*fact2) = log(fact1) + log(fact2) 
+        t_broadcast = torch.broadcast_to(t[0], x_start_pred_logits.shape)
+        return torch.where(
+            t_broadcast == 0, 
+            tzero_logits, 
+            out
+        )
         
-    def p_logits(self, x_t, t, img_feats, img_metas): 
+    def p_logits(self, img_feats, img_metas, x_t, t): 
         """
             x0_parameterisation 
             
@@ -295,12 +299,10 @@ class SSD(EncoderDecoder):
         
         return model_logits, x_start_pred_logits
 
-    def p_sample(self, x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = False): 
+    def p_sample(self, img_feats, img_metas, x_t, t, using_logits = False): 
         
-        x_t_minus_1 = self.q_posterior(x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = using_logits)
         
-        if using_logits:
-            pass ## have to form later  
-    
-        return x_t_minus_1
+        
+        pass 
+        
         
