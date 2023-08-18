@@ -151,10 +151,7 @@ class SSD(EncoderDecoder):
         # sample time ## discrete time sample 
         times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long()  
         ## corrupt the gt in its discrete space 
-        ## self.q_pred has to change 
-        noised_gt = self.q_pred(gt_down, times, 
-                                   self.num_classes + 1, self.q_mats) ## noised_gt has a categorical label entries
-        
+        noised_gt = self.q_sample(self.q_probs(self.q_mats, times, gt_down)) 
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
         ## conditional input 
