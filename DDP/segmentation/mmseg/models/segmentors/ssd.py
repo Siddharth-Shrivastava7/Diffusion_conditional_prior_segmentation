@@ -52,7 +52,6 @@ class SSD(EncoderDecoder):
                 beta_schedule_custom = 'expo', 
                 beta_schedule_custom_start = -5.5, 
                 beta_schedule_custom_end = -4.5,
-                using_logits = False,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -74,7 +73,6 @@ class SSD(EncoderDecoder):
         self.beta_schedule_custom_end = beta_schedule_custom_end
         self.confusion = confusion
         self.k_nn = k_nn
-        self.using_logits = using_logits
         self.transition_mat_type = transition_mat_type
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
@@ -153,8 +151,10 @@ class SSD(EncoderDecoder):
         # sample time ## discrete time sample 
         times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long()  
         ## corrupt the gt in its discrete space 
+        ## self.q_pred has to change 
         noised_gt = self.q_pred(gt_down, times, 
-                                   self.num_classes + 1, self.q_mats, self.using_logits) ## noised_gt has a categorical label entries
+                                   self.num_classes + 1, self.q_mats) ## noised_gt has a categorical label entries
+        
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
         ## conditional input 
@@ -239,18 +239,16 @@ class SSD(EncoderDecoder):
         out = out.view(B, self.num_classes + 1, H, W)  ## probabilities of q(x_t | x_0)
         return out 
     
-    def q_sample(self, q_probs, using_logits = False): 
+    def q_sample(self, q_probs): 
         '''
-            Sampling from either q(x_t | x_0) or q(x_t | x_{t-1}) (i.e. add noise to the data).
+            Sampling from either q(x_t | x_0) or q(x_t | x_{t-1}) (i.e. add noise to the data). 
+            sampling from categorical distribution is done via gumbel max trick!
         '''
-        if using_logits: 
-            logits = torch.log(q_probs + torch.finfo(torch.float32).eps)  # eps approx 1e-7
-            out_sample = logits_to_categorical(logits)
-        else:
-            out_sample = q_probs.argmax(dim=1)  
+        logits = torch.log(q_probs + torch.finfo(torch.float32).eps)  # eps approx 1e-7
+        out_sample = logits_to_categorical(logits)
         return out_sample 
     
-    def q_posterior_logits(self, x_start_pred_logits, x_t, t, using_logits = False):
+    def q_posterior_logits(self, x_start_pred_logits, x_t, t):
         """ Compute logits of q(x_{t-1} | x_t, x_start)."""
         
         fact1 = self.q_probs(self.transpose_q_onestep_mats, t, x_t) # x_{t} x Q_t^{T}
@@ -299,10 +297,20 @@ class SSD(EncoderDecoder):
         
         return model_logits, x_start_pred_logits
 
-    def p_sample(self, img_feats, img_metas, x_t, t, using_logits = False): 
+    def p_sample(self, img_feats, img_metas, x_t, t): 
         
+        model_logits, x_start_pred_logits = self.p_logits(img_feats, img_metas, x_t, t)
         
+        # No noise when t == 0
+        # NOTE: for t=0 this just "samples" from the argmax
+        #   as opposed to "sampling" from the mean in the gaussian case. 
         
-        pass 
+        nonzero_mask = torch.broadcast_to((t[0]!=0)*1 , x_start_pred_logits.shape)
         
+        uniform_noise = torch.rand_like(model_logits)
+        ## # To avoid numerical issues clip the uniform noise to a minimum value
+        uniform_noise = torch.clamp(uniform_noise, min=torch.finfo(uniform_noise.dtype).tiny, max=1.)
+        gumbel_noise = - torch.log(-torch.log(uniform_noise))
+        sample = (model_logits + nonzero_mask * gumbel_noise).argmax(dim=1)
         
+        return sample, F.Softmax(x_start_pred_logits, dim=1)
