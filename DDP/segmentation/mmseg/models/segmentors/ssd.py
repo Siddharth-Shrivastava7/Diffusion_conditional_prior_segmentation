@@ -85,7 +85,6 @@ class SSD(EncoderDecoder):
             for t  in range(0, self.timesteps)
         ]
         
-        ## need to add background class here only !!
         assert self.q_onestep_mats.shape == (self.timesteps,
                                          self.num_classes + 1,
                                          self.num_classes + 1) 
@@ -105,13 +104,16 @@ class SSD(EncoderDecoder):
                                         dims=[[1], [0]])
                 self.q_mats.append(q_mat_t)
             self.q_mats = torch.stack(self.q_mats, dim=0)  
-        # self.q_mats = F.pad(input=self.q_mats, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later 
-            
+         
+        assert self.q_mats.shape == (self.timesteps,
+                                         self.num_classes + 1,
+                                         self.num_classes + 1) 
+        
         # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
         # Can be computed from self.q_mats and self.q_one_step_mats.
         # Only need transpose of q_onestep_mats for posterior computation.
-        self.transpose_q_onestep_mats = torch.transpose(self.q_onestep_mats,
-                                                  axes=(0, 2, 1))       ## have to check it again   
+        self.transpose_q_onestep_mats = torch.permute(self.q_onestep_mats,
+                                                  dims=(0, 2, 1))    
         
         # time embeddings   
         time_dim = self.decode_head.in_channels[0] * 4  # 1024  ## like DDP 
