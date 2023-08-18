@@ -46,7 +46,7 @@ class SSD(EncoderDecoder):
     """
     def __init__(self,
                 timesteps = 20, 
-                transition_mat_type = 'matrix_expo', 
+                transition_matrix_type = 'matrix_expo', 
                 confusion = True,
                 k_nn = 3,
                 beta_schedule_custom = 'expo', 
@@ -75,13 +75,13 @@ class SSD(EncoderDecoder):
         self.beta_schedule_custom_end = beta_schedule_custom_end
         self.confusion = confusion
         self.k_nn = k_nn
-        self.transition_mat_type = transition_mat_type
+        self.transition_matrix_type = transition_matrix_type
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
         
         ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
         self.q_onestep_mats =  [
-            similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_mat_type, self.confusion, self.k_nn, matrix_expo_cumulative = False) \
+            similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_matrix_type, self.confusion, self.k_nn, matrix_expo_cumulative = False) \
             for t  in range(0, self.timesteps)
         ]
         assert self.q_onestep_mats.shape == (self.timesteps,
@@ -89,9 +89,9 @@ class SSD(EncoderDecoder):
                                          self.num_classes) 
         
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
-        if self.transition_mat_type == 'matrix_expo':    
+        if self.transition_matrix_type == 'matrix_expo':    
             self.q_mats = [
-                        similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_mat_type, self.confusion, self.k_nn, matrix_expo_cumulative = True) \
+                        similarity_transition_mat(self.bt, t, self.confusion_matrix, self.transition_matrix_type, self.confusion, self.k_nn, matrix_expo_cumulative = True) \
                         for t  in range(0, self.timesteps)
             ]
             self.q_mats = torch.stack(self.q_mats, dim=0)
