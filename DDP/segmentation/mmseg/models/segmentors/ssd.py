@@ -52,6 +52,7 @@ class SSD(EncoderDecoder):
                 beta_schedule_custom = 'expo', 
                 beta_schedule_custom_start = -5.5, 
                 beta_schedule_custom_end = -4.5,
+                accumulation=False,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -66,6 +67,7 @@ class SSD(EncoderDecoder):
             norm_cfg=None,
             act_cfg=None
         ) # used for converting concatenated encoded i/p image and encoded;corrupted gt map to feature maps of dimension being half of the joint dimension of the concatenated inputs
+        self.accumulation = accumulation
         
         self.confusion_matrix = calculate_confusion_matrix_segformerb2()
         self.beta_schedule_custom = beta_schedule_custom 
