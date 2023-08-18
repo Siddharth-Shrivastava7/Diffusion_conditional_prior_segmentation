@@ -151,7 +151,7 @@ class SSD(EncoderDecoder):
             itself.
         '''
         # sample time ## discrete time sample 
-        times = torch.randint(0, self.timesteps, (batch, ), device=self.device).long()  
+        times = torch.randint(0, self.timesteps, (batch, ), device=device).long()  
         ## corrupt the gt in its discrete space 
         noised_gt = self.q_sample(self.q_probs(self.q_mats, times, gt_down)) 
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
@@ -208,10 +208,10 @@ class SSD(EncoderDecoder):
     @torch.no_grad() 
     def similarity_sample(self, img_feat, img_metas):
         b, c, h, w, device = *img_feat.shape, img_feat.device
-        x = torch.randint(0, self.num_classes, [b,h,w], device=self.device).long() # stationary distribution 
+        x = torch.randint(0, self.num_classes, [b,h,w], device=device).long() # stationary distribution 
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
-            times = (torch.ones((b,), device=self.device) * i).long()
+            times = (torch.ones((b,), device=device) * i).long()
             x,  x_start_pred_logits = self.p_sample(img_feat, img_metas, 
                                                     x, times)
             if self.accumulation: ## accumulating all the probas of x0_pred
