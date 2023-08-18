@@ -213,15 +213,8 @@ class SSD(EncoderDecoder):
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=self.device) * i).long()
-            input_times = self.time_mlp(times)
-            ## converting the discrete labels into embedding (or one-hot, later if req) for passing into denoising network 
-            mask_t_emb = self.embedding_table(mask_t).squeeze(1).permute(0, 3, 1, 2)
-            # conditional input 
-            feat = torch.cat([x, mask_t_emb], dim=1)
-            feat = self.transform(feat)
-            # denoising the mast at current time t
-            mask_start_pred_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
-            mask_start_pred = torch.argmax(mask_start_pred_logit, dim=1) ## predicted mask_x0 from time t, now using this have to calc mask @ t-1 time through p(x_t-1 | x_t)
+            ## p_logits would come in here 
+            
             ## p(x_t-1 | x_t) calculation 
             if i!=0:
                 mask_t_minus_1 = self.p_reverse(mask_start_pred, mask_t, times, 
@@ -238,30 +231,39 @@ class SSD(EncoderDecoder):
         return logit    
     
     
-    def q_pred(self, x_start, t, num_classes, q_mats, using_logits = False): 
+    def q_probs(self, x_var_t, t, num_classes, q_mats):
         '''
-            calculating  probabilities of q(x_t | x_0) and then Sampling from q(x_t | x_0) (i.e. add noise to the data).
+            when q_mats is cumulative then, calculating  probabilities of q(x_t | x_0)
+            
+            when q_mats is onestep mats then, calculating  probabilities of q(x_t | x_{t-1}) 
         '''
-        B, H, W = x_start.shape # label map 
+        B, H, W = x_var_t.shape  
         q_mats_t = torch.index_select(q_mats, dim=0, index=t)
-        x_start_onehot = F.one_hot(x_start.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
-        out = torch.matmul(x_start_onehot, q_mats_t)  
+        x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), num_classes).to(torch.float64)
+        out = torch.matmul(x_var_t_onehot, q_mats_t)  
         out = out.view(B, num_classes, H, W)  ## probabilities of q(x_t | x_0)
+        return out 
+    
+    def q_sample(self, q_probs, using_logits = False): 
+        '''
+            Sampling from either q(x_t | x_0) or q(x_t | x_{t-1}) (i.e. add noise to the data).
+        '''
         if using_logits: 
-            logits = torch.log(out + torch.finfo(torch.float32).eps)  # eps approx 1e-7
+            logits = torch.log(q_probs + torch.finfo(torch.float32).eps)  # eps approx 1e-7
             out_sample = logits_to_categorical(logits)
         else:
-            out_sample = out.argmax(dim=1)  
+            out_sample = q_probs.argmax(dim=1)  
         return out_sample 
     
-    def q_posterior(self, x_start, x_t, t, num_classes, q_mats, using_logits = False):
-    
-        """ Compute  q(x_{t-1} | x_t, x_start)."""
+    def q_posterior_logits(self, x_start_pred_logits, x_t, t, using_logits = False):
+        """ Compute logits of q(x_{t-1} | x_t, x_start)."""
+        
+        fact1 = self.q_probs()
+        
     
         return 
-    
-    
-    def p_reverse(self, x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = False): 
+        
+    def p_logits(self, x_t, t, img_feats, img_metas): 
         """
             x0_parameterisation 
             
@@ -271,6 +273,30 @@ class SSD(EncoderDecoder):
             
             can also refer: "https://beckham.nz/2022/07/11/d3pms.html"
         """
+        input_times = self.time_mlp(t)
+        ## converting the discrete labels into embedding (or one-hot, later if req) for passing into denoising network 
+        x_t_emb = self.embedding_table(x_t).squeeze(1).permute(0, 3, 1, 2)
+        # conditional input 
+        feat = torch.cat([img_feats, x_t_emb], dim=1)
+        feat = self.transform(feat)
+        # denoising the mast at current time t
+        x_start_pred_logits = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
+        # x_start_pred = torch.argmax(x_start_pred_logit, dim=1)
+        
+        t_broadcast = torch.broadcast_to(t[0], x_start_pred_logits.shape)
+        model_logits = torch.where(
+            t_broadcast == 0, 
+            x_start_pred_logits, 
+            self.q_posterior_logits(x_start_pred_logits, x_t, t)
+        )
+        
+        assert (model_logits.shape == x_start_pred_logits.shape == \
+            (x_t.shape[0], self.num_classes+1) + tuple(x_t.shape[2:]))
+        
+        return model_logits, x_start_pred_logits
+
+    def p_sample(self, x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = False): 
+        
         x_t_minus_1 = self.q_posterior(x_start_pred_from_t, x_t, t, num_classes, q_mats, using_logits = using_logits)
         
         if using_logits:
