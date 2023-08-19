@@ -182,8 +182,9 @@ def similarity_transition_mat(betas, t, confusion_matrix, transition_mat_type, c
     # print('time', t , 'matrix saved')
     # print('*******************',matrix.dtype) # double = float64 
     
-    ## NOTE taking background !! 
-    matrix = F.pad(input=matrix, pad=(0, 1, 0, 1), mode='constant', value=0) ## 20 x 20 matrix now  ## may be later need to change [20,20]th element to 1..check later
+    ## NOTE below to include background in the transition matrix 
+    matrix = F.pad(input=matrix, pad=(0, 1, 0, 1), mode='constant', value=0) 
+    matrix[-1,-1] = 1 # background remains the background ## we need to check this!
     
     # return torch.from_numpy(matrix).to(betas.device)
     return matrix

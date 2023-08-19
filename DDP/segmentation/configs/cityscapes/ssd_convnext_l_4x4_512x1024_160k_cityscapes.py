@@ -68,7 +68,7 @@ model = dict(
         channels=256,
         in_index=[0],
         dropout_ratio=0.,
-        num_classes=20, ## Discrete diffusion have to consider background 
+        num_classes=19, 
         norm_cfg=norm_cfg,
         align_corners=False,
         num_feature_levels=1,
@@ -137,5 +137,5 @@ lr_config = dict(
     min_lr=0.0,
     by_epoch=False)
 
-find_unused_parameters = False # setting to False, since not to slow training 
+find_unused_parameters = True # can set to False, if want to increase training speed 
 

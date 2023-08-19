@@ -57,9 +57,9 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.timesteps = timesteps 
-        self.embedding_table = nn.Embedding(self.num_classes + 1, self.decode_head.in_channels[0]) # instead of one hot encoding making class embedding module for discrete data space 
+        self.embedding_table = nn.Embedding(self.num_classes+1, self.num_classes+1) # instead of one hot encoding making class embedding module for discrete data space ; may try one hot encoding later on!
         self.transform = ConvModule(
-            self.decode_head.in_channels[0] * 2,
+            self.decode_head.in_channels[0] + (self.num_classes+1),
             self.decode_head.in_channels[0],
             1,
             padding=0,
@@ -86,8 +86,8 @@ class SSD(EncoderDecoder):
         ]
         self.q_onestep_mats = torch.stack(self.q_onestep_mats, dim=0)
         assert self.q_onestep_mats.shape == (self.timesteps,
-                                         self.num_classes,
-                                         self.num_classes) 
+                                         self.num_classes+1,
+                                         self.num_classes+1) 
         
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
         if self.transition_matrix_type == 'matrix_expo':    
@@ -105,8 +105,8 @@ class SSD(EncoderDecoder):
                 self.q_mats.append(q_mat_t)
             self.q_mats = torch.stack(self.q_mats, dim=0)  
         assert self.q_mats.shape == (self.timesteps,
-                                         self.num_classes,
-                                         self.num_classes) 
+                                         self.num_classes+1,
+                                         self.num_classes+1) 
         
         # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
         # Can be computed from self.q_mats and self.q_one_step_mats.
@@ -144,8 +144,8 @@ class SSD(EncoderDecoder):
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
-        gt_down[gt_down == 255] = self.num_classes - 1 ## assigning 19 label to background
-        gt_down = gt_down.squeeze() ## 'bhw' 
+        gt_down[gt_down == 255] = self.num_classes # background 
+        gt_down = gt_down.squeeze() ## 'bhw'
         
         ## corruption of discrete data gt 
         '''
@@ -193,12 +193,7 @@ class SSD(EncoderDecoder):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         img_feat = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
-        if self.diffusion == "uniform":
-            pass 
-        elif self.diffusion == 'similarity':
-            out = self.similarity_sample(img_feat, img_metas)
-        else:
-            raise NotImplementedError
+        out = self.similarity_sample(img_feat, img_metas)
         out = resize(
             input=out,
             size=img.shape[2:],
@@ -210,7 +205,7 @@ class SSD(EncoderDecoder):
     @torch.no_grad() 
     def similarity_sample(self, img_feat, img_metas):
         b, c, h, w, device = *img_feat.shape, img_feat.device
-        x = torch.randint(0, self.num_classes, [b,h,w], device=device).long() # stationary distribution 
+        x = torch.randint(0, self.num_classes+1, [b,h,w], device=device).long() # stationary distribution 
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=device) * i).long()
@@ -224,17 +219,22 @@ class SSD(EncoderDecoder):
         return x, logit     
     
     
-    def q_probs(self, q_mats, t, x_var_t):
+    def q_probs(self, q_mats, t, x_var_t, x_var_t_logits = False):
         '''
             when q_mats is cumulative then, calculating  probabilities of q(x_t | x_0)
             
             when q_mats is onestep mats then, calculating  probabilities of q(x_t | x_{t-1}) 
         '''
-        B, H, W = x_var_t.shape  
+        if x_var_t_logits:
+            B, C, H, W = x_var_t.shape  
+            x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float64)
+        else:
+            B, H, W = x_var_t.shape  
+            x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes+1).to(torch.float64)
+               
         q_mats_t = torch.index_select(q_mats.to(x_var_t.device), dim=0, index=t)
-        x_var_t_onehot = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes).to(torch.float64)
-        out = torch.matmul(x_var_t_onehot, q_mats_t)  
-        out = out.view(B, self.num_classes, H, W)  ## probabilities of q(x_t | x_0)
+        out = torch.matmul(x_var_t_onehot_like, q_mats_t)  
+        out = out.view(B, self.num_classes+1, H, W)  ## probabilities of q(x_t | x_0)
         return out 
     
     def q_sample(self, q_probs): 
@@ -250,7 +250,7 @@ class SSD(EncoderDecoder):
         """ Compute logits of q(x_{t-1} | x_t, x_start)."""
         
         fact1 = self.q_probs(self.transpose_q_onestep_mats, t, x_t) # x_{t} x Q_t^{T}
-        fact2 = self.q_probs(self.q_mats, t - 1, F.Softmax(x_start_pred_logits, dim=1)) # x_{0} x Q_{t-1}^{\hat}
+        fact2 = self.q_probs(self.q_mats, t - 1, F.softmax(x_start_pred_logits, dim=1), x_var_t_logits=True) # x_{0} x Q_{t-1}^{\hat}
         tzero_logits = x_start_pred_logits
         
         # At t=0 we need the logits of q(x_{-1}|x_0, x_start)
@@ -290,8 +290,8 @@ class SSD(EncoderDecoder):
             self.q_posterior_logits(x_start_pred_logits, x_t, t)
         )
         
-        assert (model_logits.shape == x_start_pred_logits.shape == \
-            (x_t.shape[0], self.num_classes) + tuple(x_t.shape[2:]))
+        assert (model_logits.shape == x_start_pred_logits.shape \
+            == ((x_t.shape[0], self.num_classes+1) + tuple(x_t.shape[1:])))
         
         return model_logits, x_start_pred_logits
 
