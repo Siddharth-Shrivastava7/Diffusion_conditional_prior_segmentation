@@ -34,7 +34,7 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
 
 
 ## Q-transition matrix based discerete diffusion
-def similarity_transition_mat(betas, t, similarity_among_classes, transition_mat_type, similarity_soft = True, k_nn = 3, matrix_expo_cumulative = False):
+def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, similarity_soft = True, k_nn = 3, matrix_expo_cumulative = False):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
     Args:
@@ -60,7 +60,6 @@ def similarity_transition_mat(betas, t, similarity_among_classes, transition_mat
         
     elif transition_mat_type == 'matrix_expo': # matrix_expo or sinkhorn method for base transition matrix
         if similarity_soft:
-            similarity_matrix = similarity_among_classes.copy() 
             np.fill_diagonal(similarity_matrix, 0) 
             similarity_matrix = similarity_matrix + similarity_matrix.T ## symmetricity required in transition rate 
             transition_rate = similarity_matrix - np.diagflat(np.sum(similarity_matrix, axis=1)) ## transition rate matrix 
@@ -71,7 +70,7 @@ def similarity_transition_mat(betas, t, similarity_among_classes, transition_mat
             matrix = scipy.linalg.expm(
                         np.array(betas_tt * transition_rate, dtype=np.float64)) 
         else: ## using adjacency matrix as mentioned in the paper 
-            adjacency_matrix_one_hot = calculate_adjacency_matrix(similarity_among_classes=similarity_among_classes, k=k_nn) ## for k nearest neighbours
+            adjacency_matrix_one_hot = calculate_adjacency_matrix(confusion_matrix=similarity_matrix, k=k_nn) ## for k nearest neighbours
             adjacency_matrix_soft = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * k_nn)
             transition_rate = adjacency_matrix_soft - np.diagflat(np.sum(adjacency_matrix_soft, axis=1))
             
@@ -87,7 +86,7 @@ def similarity_transition_mat(betas, t, similarity_among_classes, transition_mat
         # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix
     
     elif transition_mat_type == 'sinkhorn_algorithm':
-        matrix = similarity_among_classes.copy()
+        matrix = similarity_matrix.copy()
         matrix = beta_t * matrix
         # ## sinkhorn algo for base matrix
         for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
