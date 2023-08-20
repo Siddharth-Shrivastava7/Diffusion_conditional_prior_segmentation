@@ -47,7 +47,7 @@ class SSD(EncoderDecoder):
     def __init__(self,
                 timesteps = 20, 
                 transition_matrix_type = 'matrix_expo', 
-                similarity_soft = True,
+                similarity_soft = False,
                 k_nn = 3,
                 beta_schedule_custom = 'expo', 
                 beta_schedule_custom_start = -5.5, 
@@ -86,7 +86,7 @@ class SSD(EncoderDecoder):
         
         ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
         self.q_onestep_mats =  [
-            similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn, matrix_expo_cumulative = False) \
+            similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn) \
             for t  in range(0, self.timesteps)
         ]
         self.q_onestep_mats = torch.stack(self.q_onestep_mats, dim=0)
@@ -97,7 +97,7 @@ class SSD(EncoderDecoder):
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
         if self.transition_matrix_type == 'matrix_expo':    
             self.q_mats = [
-                        similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn, matrix_expo_cumulative = True) \
+                        similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn) \
                         for t  in range(0, self.timesteps)
             ]
             self.q_mats = torch.stack(self.q_mats, dim=0)

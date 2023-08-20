@@ -34,7 +34,7 @@ def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=tor
 
 
 ## Q-transition matrix based discerete diffusion
-def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, similarity_soft = True, k_nn = 3, matrix_expo_cumulative = False):
+def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, similarity_soft = True, k_nn = 3):
     """Computes transition matrix for q(x_t|x_{t-1}).
     Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
     Args:
@@ -61,32 +61,14 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
         
     elif transition_mat_type == 'matrix_expo': # matrix_expo or sinkhorn method for base transition matrix
         if similarity_soft:
-            np.fill_diagonal(similarity_matrix, 0) 
-            similarity_matrix = similarity_matrix + similarity_matrix.T ## symmetricity required in transition rate 
-            transition_rate = similarity_matrix - np.diag(np.sum(similarity_matrix, axis=1)) ## transition rate matrix 
-            if matrix_expo_cumulative:
-                betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
-            else:
-                betas_tt = beta_t ## for single step transitions using matrix expo 
-            matrix = scipy.linalg.expm(
-                        np.array(betas_tt * transition_rate, dtype=np.float64)) 
+            '''
+                have to  fill the way D3PM makes the base matrix using matrix expo method
+            '''
         else: ## using adjacency matrix as mentioned in the paper 
-            # adjacency_matrix_knn = calculate_adjacency_matrix(similarity_matrix, k=k_nn) ## when similarity as confusion matrix 
-            adjacency_matrix_knn = calculate_adjacency_matrix_knn(similarity_matrix, knn=k_nn)             
-            adjacency_matrix_soft = (adjacency_matrix_knn + adjacency_matrix_knn.T) / (2 * k_nn)
-            transition_rate = adjacency_matrix_soft - np.diag(np.sum(adjacency_matrix_soft, axis=1))
-            
-            if matrix_expo_cumulative:
-                betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
-            else:
-                betas_tt = beta_t ## for single step transitions using matrix expo 
-            
-            # ### building base matrix 
-            matrix = scipy.linalg.expm(
-                        np.array(betas_tt * transition_rate, dtype=np.float64))  
-        
-        # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix
-    
+            '''
+                have to  fill the way D3PM makes the base matrix using matrix expo method
+            '''
+                
     elif transition_mat_type == 'sinkhorn_algorithm':
         matrix = similarity_matrix.copy()
         matrix = beta_t * matrix
@@ -137,4 +119,7 @@ def similarity_among_classes(protos):
     return similarity_matrix_tensor
 
 def calculate_adjacency_matrix_knn(similarity_matrix, knn=3): 
+    
+    
+    
     pass 
