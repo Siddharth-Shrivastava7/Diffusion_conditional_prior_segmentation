@@ -95,6 +95,10 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
             adj, similar_classes = calculate_adjacency_matrix_knn(similarity_matrix, k=k_nn)
             adj_s = (adj + adj.T) / (2 * k_nn)
             transition_rate_matrix = adj_s - np.diag(np.sum(adj_s, axis=1))
+            '''
+                have to calculate beta for matrix expo based on mutual information  
+            '''
+            matrix = scipy.linalg.expm(np.array(transition_rate_matrix * beta_t, dtype=np.float64))
                 
     elif transition_mat_type == 'sinkhorn_algorithm':
         matrix = similarity_matrix.copy()
@@ -112,8 +116,8 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
     matrix = torch.from_numpy(matrix).to(betas.device) 
     
     ## NOTE below to include background in the transition matrix 
-    matrix = F.pad(input=matrix, pad=(0, 1, 0, 1), mode='constant', value=0) ## we need to check this!
-    matrix[-1,-1] = 1 # background remains the background ## we need to check this!
+    matrix = F.pad(input=matrix, pad=(0, 1, 0, 1), mode='constant', value= (1 / (similarity_matrix.shape[0] + 1))) ## we need to check this! ## for now uniform proba of transitioning to any other state
+    # matrix[-1,-1] = 1 # background remains the background ## we need to check this! ## it will be in absorbing state, so not using
     
     # return torch.from_numpy(matrix).to(betas.device)
     return matrix
