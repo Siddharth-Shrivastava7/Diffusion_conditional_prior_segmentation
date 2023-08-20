@@ -118,7 +118,7 @@ def similarity_among_classes(protos):
     # return probas_sim_test, similarity_matrix_tensor
     return similarity_matrix_tensor
 
-def calculate_adjacency_matrix_knn(similarity_matrix, knn=3): 
+def calculate_adjacency_matrix_knn(similarity_matrix, k_nn=3): 
     
     
     
