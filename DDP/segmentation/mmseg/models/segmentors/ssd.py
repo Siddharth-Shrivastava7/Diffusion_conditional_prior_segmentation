@@ -81,12 +81,12 @@ class SSD(EncoderDecoder):
         ## using prototypes of 19 cityscapes semantic classes from "Rethinking Semantic Segmentation: A Prototype View" 
         self.protos = torch.load('/home/sidd_s/scratch/saved_models/Protoseg/hrnet_w48_proto_lr1x_hrnet_proto_80k_latest.pth')['state_dict']['module.prototypes']
         assert self.protos.shape == (self.num_classes, 10, 720) ## each semantic class contain 10 (almost similar, verified by calculating its covariance matrix/self similarity matrix) prototypes of 720 dimension each 
-        self.similarity_among_classes = similarity_among_classes(self.protos)
+        self.similarity_matrix = similarity_among_classes(self.protos)
         
         
         ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
         self.q_onestep_mats =  [
-            similarity_transition_mat(self.bt, t, self.similarity_among_classes, self.transition_matrix_type, self.similarity_soft, self.k_nn, matrix_expo_cumulative = False) \
+            similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn, matrix_expo_cumulative = False) \
             for t  in range(0, self.timesteps)
         ]
         self.q_onestep_mats = torch.stack(self.q_onestep_mats, dim=0)
@@ -97,7 +97,7 @@ class SSD(EncoderDecoder):
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
         if self.transition_matrix_type == 'matrix_expo':    
             self.q_mats = [
-                        similarity_transition_mat(self.bt, t, self.similarity_among_classes, self.transition_matrix_type, self.similarity_soft, self.k_nn, matrix_expo_cumulative = True) \
+                        similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn, matrix_expo_cumulative = True) \
                         for t  in range(0, self.timesteps)
             ]
             self.q_mats = torch.stack(self.q_mats, dim=0)

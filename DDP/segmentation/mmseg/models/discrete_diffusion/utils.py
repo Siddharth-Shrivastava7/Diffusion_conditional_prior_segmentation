@@ -44,6 +44,7 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
     """
     beta_t = betas[t]
     beta_t = beta_t.cpu().numpy()
+    similarity_matrix = np.array(similarity_matrix) ## as all the calculations here are done in numpy, later transforming into cuda tensor.
     # beta_t = beta_t * 100 ## increasing beta_t value 
     
     if transition_mat_type == 'band_diagonal':
@@ -62,7 +63,7 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
         if similarity_soft:
             np.fill_diagonal(similarity_matrix, 0) 
             similarity_matrix = similarity_matrix + similarity_matrix.T ## symmetricity required in transition rate 
-            transition_rate = similarity_matrix - np.diagflat(np.sum(similarity_matrix, axis=1)) ## transition rate matrix 
+            transition_rate = similarity_matrix - np.diag(np.sum(similarity_matrix, axis=1)) ## transition rate matrix 
             if matrix_expo_cumulative:
                 betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
             else:
@@ -70,9 +71,10 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
             matrix = scipy.linalg.expm(
                         np.array(betas_tt * transition_rate, dtype=np.float64)) 
         else: ## using adjacency matrix as mentioned in the paper 
-            adjacency_matrix_one_hot = calculate_adjacency_matrix(confusion_matrix=similarity_matrix, k=k_nn) ## for k nearest neighbours
-            adjacency_matrix_soft = (adjacency_matrix_one_hot + adjacency_matrix_one_hot.T) / (2 * k_nn)
-            transition_rate = adjacency_matrix_soft - np.diagflat(np.sum(adjacency_matrix_soft, axis=1))
+            # adjacency_matrix_knn = calculate_adjacency_matrix(similarity_matrix, k=k_nn) ## when similarity as confusion matrix 
+            adjacency_matrix_knn = calculate_adjacency_matrix_knn(similarity_matrix, knn=k_nn)             
+            adjacency_matrix_soft = (adjacency_matrix_knn + adjacency_matrix_knn.T) / (2 * k_nn)
+            transition_rate = adjacency_matrix_soft - np.diag(np.sum(adjacency_matrix_soft, axis=1))
             
             if matrix_expo_cumulative:
                 betas_tt = torch.sum(betas[:t+1]).item() ## since t is starting from 0 ## cummulative steps matrix expo calc
@@ -127,8 +129,12 @@ def similarity_among_classes(protos):
         similarity_matrix.append(per_row_similarity)
     similarity_matrix_tensor = torch.FloatTensor(similarity_matrix)     
 
-    sim_test = similarity_matrix_tensor.clone() 
-    sim_test.fill_diagonal_(-1e17) ## filling extremely low numbers at diagonals for removing them from similarity consideration
-    probas_sim_test = F.softmax(sim_test, dim=1) ## applying softmax to convert into probability distribution 
-    
-    return probas_sim_test, similarity_matrix_tensor
+    # sim_test = similarity_matrix_tensor.clone() 
+    # sim_test.fill_diagonal_(-1e17) ## filling extremely low numbers at diagonals for removing them from similarity consideration
+    # probas_sim_test = F.softmax(sim_test, dim=1) ## applying softmax to convert into probability distribution 
+
+    # return probas_sim_test, similarity_matrix_tensor
+    return similarity_matrix_tensor
+
+def calculate_adjacency_matrix_knn(similarity_matrix, knn=3): 
+    pass 
