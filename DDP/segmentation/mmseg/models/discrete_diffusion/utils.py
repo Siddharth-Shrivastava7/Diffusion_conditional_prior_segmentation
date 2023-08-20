@@ -92,7 +92,7 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
             '''
                 have to  fill the way D3PM makes the base matrix using matrix expo method
             '''
-            adj = calculate_adjacency_matrix_knn(similarity_matrix, k=k_nn)
+            adj, similar_classes = calculate_adjacency_matrix_knn(similarity_matrix, k=k_nn)
             
                 
     elif transition_mat_type == 'sinkhorn_algorithm':
