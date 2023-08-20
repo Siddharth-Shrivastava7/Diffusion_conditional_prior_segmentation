@@ -7,6 +7,30 @@ from torch.nn import functional as F
 
 from .confusion_matrix import calculate_adjacency_matrix
 
+
+ind_2_class_dict = {  
+    0: "Road",
+    1: "Sidewalk", 
+    2: "Building",  
+    3: "wall",
+    4: "fence",  
+    5: "Pole", 
+    6: "Traffic light",
+    7: "Traffic sign",
+    8: "Vegetation", 
+    9: "Terrain",
+    10: "Sky",
+    11: "Person",
+    12: "Rider",
+    13: "Car",
+    14: "Truck",
+    15: "Bus",
+    16: "Train",
+    17: "Motorcycle",
+    18: "Bicycle"
+}
+
+
 def cos_fun_sch(step): 
     return math.cos((step + 0.008) / 1.008 * math.pi / 2) ** 2
     
@@ -68,6 +92,8 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
             '''
                 have to  fill the way D3PM makes the base matrix using matrix expo method
             '''
+            adj = calculate_adjacency_matrix_knn(similarity_matrix, k=k_nn)
+            
                 
     elif transition_mat_type == 'sinkhorn_algorithm':
         matrix = similarity_matrix.copy()
@@ -118,8 +144,16 @@ def similarity_among_classes(protos):
     # return probas_sim_test, similarity_matrix_tensor
     return similarity_matrix_tensor
 
-def calculate_adjacency_matrix_knn(similarity_matrix, k_nn=3): 
+def calculate_adjacency_matrix_knn(similarity_matrix, k): 
+    adj = similarity_matrix.copy()
+    similar_classes = []
+    for row in range(adj.shape[0]):
+        row_sim_decrease_inds = np.argsort(adj[row])[::-1]
+        knn_indexs = row_sim_decrease_inds[:k] 
+        adj[row][knn_indexs] = 1
+        adj[row][adj[row]!=1] = 0
+
+        similar_classes.append([ (('Current Class:' + ind_2_class_dict[row]) ,(knn_indexs[i], ind_2_class_dict[knn_indexs[i]])) for i in range(knn_indexs.shape[0])])
     
-    
-    
-    pass 
+    assert (sum(adj.sum(1)) / adj.shape[1]) == k
+    return adj, similar_classes 
