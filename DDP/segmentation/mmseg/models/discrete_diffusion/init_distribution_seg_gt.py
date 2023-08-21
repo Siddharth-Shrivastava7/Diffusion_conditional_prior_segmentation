@@ -29,6 +29,7 @@ def main():
     
     total_num_pixels = gt.reshape(1, -1).shape[1] * num_gts 
     gt_dataset_labels_init_distribution = {k: v / total_num_pixels for k, v in gt_dataset_num_of_labels.items()}
+    assert sum(gt_dataset_labels_init_distribution.values(), 0.0) == 1  ## for a valid probability distribution 
     # save in numpy format
     np.save('cityscapes_gt_labels_init_distribution.npy', gt_dataset_labels_init_distribution)
     # loading dictionary 
