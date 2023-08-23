@@ -85,10 +85,9 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
         
     elif transition_mat_type == 'matrix_expo': # matrix_expo or sinkhorn method for base transition matrix
         if similarity_soft:
-            '''
-                have to  fill the way D3PM makes the base matrix using matrix expo method
-            '''
-        else: ## using adjacency matrix as mentioned in the paper 
+            pass 
+            
+        else: ## using adjacency matrix as mentioned in the paper  
             '''
                 have to  fill the way D3PM makes the base matrix using matrix expo method
             '''
@@ -98,7 +97,8 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
             '''
                 have to calculate beta for matrix expo based on mutual information  
             '''
-            matrix = scipy.linalg.expm(np.array(transition_rate_matrix * beta_t, dtype=np.float64))
+        
+        matrix = scipy.linalg.expm(np.array(transition_rate_matrix * beta_t, dtype=np.float64))
                 
     elif transition_mat_type == 'sinkhorn_algorithm':
         matrix = similarity_matrix.copy()
