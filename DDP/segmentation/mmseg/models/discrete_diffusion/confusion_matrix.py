@@ -168,91 +168,6 @@ def plot_confusion_matrix(confusion_matrix,
         plt.show()
 
 
-def plot_similarity_confusion_matrix(confusion_matrix,
-                          labels,
-                          save_dir=None,
-                          show=True,
-                          title='Normalized Confusion Matrix',
-                          color_theme='winter'):
-    """Draw confusion matrix with matplotlib.
-
-    Args:
-        confusion_matrix (ndarray): The confusion matrix.
-        labels (list[str]): List of class names.
-        save_dir (str|optional): If set, save the confusion matrix plot to the
-            given path. Default: None.
-        show (bool): Whether to show the plot. Default: True.
-        title (str): Title of the plot. Default: `Normalized Confusion Matrix`.
-        color_theme (str): Theme of the matrix color map. Default: `winter`.
-    """
-    
-    similarity_confusion_matrix = confusion_matrix.T
-    
-    # normalize the confusion matrix
-    per_label_sums = similarity_confusion_matrix.sum(axis=1)[:, np.newaxis]
-    similarity_confusion_matrix = \
-        similarity_confusion_matrix.astype(np.float64) / per_label_sums * 100
-
-    num_classes = len(labels)
-    fig, ax = plt.subplots(
-        figsize=(2 * num_classes, 2 * num_classes * 0.8), dpi=180)
-    cmap = plt.get_cmap(color_theme)
-    im = ax.imshow(similarity_confusion_matrix, cmap=cmap)
-    plt.colorbar(mappable=im, ax=ax)
-
-    title_font = {'weight': 'bold', 'size': 12}
-    ax.set_title(title, fontdict=title_font)
-    label_font = {'size': 10}
-    plt.ylabel('Ground Truth Label', fontdict=label_font)
-    plt.xlabel('Prediction Label', fontdict=label_font)
-
-    # draw locator
-    xmajor_locator = MultipleLocator(1)
-    xminor_locator = MultipleLocator(0.5)
-    ax.xaxis.set_major_locator(xmajor_locator)
-    ax.xaxis.set_minor_locator(xminor_locator)
-    ymajor_locator = MultipleLocator(1)
-    yminor_locator = MultipleLocator(0.5)
-    ax.yaxis.set_major_locator(ymajor_locator)
-    ax.yaxis.set_minor_locator(yminor_locator)
-
-    # draw grid
-    ax.grid(True, which='minor', linestyle='-')
-
-    # draw label
-    ax.set_xticks(np.arange(num_classes))
-    ax.set_yticks(np.arange(num_classes))
-    ax.set_xticklabels(labels)
-    ax.set_yticklabels(labels)
-
-    ax.tick_params(
-        axis='x', bottom=False, top=True, labelbottom=False, labeltop=True)
-    plt.setp(
-        ax.get_xticklabels(), rotation=45, ha='left', rotation_mode='anchor')
-
-    # draw confusion matrix value
-    for i in range(num_classes):
-        for j in range(num_classes):
-            ax.text(
-                j,
-                i,
-                '{}%'.format(
-                    round(similarity_confusion_matrix[i, j], 2
-                          ) if not np.isnan(similarity_confusion_matrix[i, j]) else -1),
-                ha='center',
-                va='center',
-                color='w',
-                size=7)
-
-    ax.set_ylim(len(similarity_confusion_matrix) - 0.5, -0.5)  # matplotlib>3.1.1
-
-    fig.tight_layout()
-    if save_dir is not None:
-        plt.savefig(
-            os.path.join(save_dir, 'similarity_confusion_matrix.png'), format='png')
-    if show:
-        plt.show()
-
 
 
 def calculate_confusion_matrix_segformerb2(): 
@@ -423,22 +338,15 @@ def main():
          
         confusion_matrix = calculate_confusion_matrix(dataset, results)
         ## confusion matrix :: original 
-        # plot_confusion_matrix(
-        #     confusion_matrix,
-        #     dataset.CLASSES,
-        #     save_dir=args.save_dir,
-        #     show=args.show,
-        #     title=args.title,
-        #     color_theme=args.color_theme)
-
-        ## similarity confusion matrix :: transformed / modified 
-        plot_similarity_confusion_matrix(
+        plot_confusion_matrix(
             confusion_matrix,
             dataset.CLASSES,
             save_dir=args.save_dir,
             show=args.show,
             title=args.title,
             color_theme=args.color_theme)
+
+    
         
 if __name__ == '__main__':
     main()
