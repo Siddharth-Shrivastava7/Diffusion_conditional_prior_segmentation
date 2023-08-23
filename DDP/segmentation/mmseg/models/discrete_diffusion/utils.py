@@ -5,8 +5,6 @@ import scipy
 
 from torch.nn import functional as F
 
-from .confusion_matrix import calculate_adjacency_matrix
-
 
 ind_2_class_dict = {  
     0: "Road",
