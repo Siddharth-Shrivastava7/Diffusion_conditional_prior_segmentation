@@ -83,7 +83,21 @@ def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, 
         
     elif transition_mat_type == 'matrix_expo': # matrix_expo or sinkhorn method for base transition matrix
         if similarity_soft:
-            pass 
+            # per_label_sums = similarity_matrix.sum(axis=1)[:, np.newaxis]
+            # similarity_matrix_norm = similarity_matrix.astype(np.float64) / per_label_sums  
+            
+            similarity_matrix_rs = np.sum(similarity_matrix, 1) 
+            similarity_matrix_cs = np.sum(similarity_matrix, 0) 
+            similarity_matrix_diag = np.diag(similarity_matrix) 
+            similarity_matrix_tpfpfn = similarity_matrix_rs + similarity_matrix_cs - similarity_matrix_diag 
+            similarity_matrix_diag_norm = similarity_matrix_diag / similarity_matrix_tpfpfn  # diving diagonal by (tp + fp + fn)
+            similarity_matrix_rswd = similarity_matrix_rs - similarity_matrix_diag # rows sum without diagonal term 
+            similarity_matrix_div_rswd = similarity_matrix / similarity_matrix_rswd[:, np.newaxis] 
+            np.fill_diagonal(similarity_matrix_div_rswd, similarity_matrix_diag_norm) 
+            similarity_matrix_norm = similarity_matrix_div_rswd.copy()
+            
+            transition_rate_matrix = similarity_matrix_norm - np.diag(np.sum(similarity_matrix_norm, axis=1))
+            ## transition_rate from both similarity_matrix_norm is valid !, as for both sum across the rows is zero 
             
         else: ## using adjacency matrix as mentioned in the paper  
             '''

@@ -267,10 +267,11 @@ def plot_similarity_confusion_matrix(confusion_matrix,
 
 def calculate_confusion_matrix_segformerb2(): 
     
-    args = parse_args()
+    # args = parse_args()
     
     cfg = Config.fromfile('/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/_base_/datasets/cityscapes.py')
-    results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/results_images.pickle')
+    # results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/results_images.pickle') # original dataset results 
+    results = mmcv.load('/home/sidd_s/scratch/results/segformer/perturbed_cityscapes/results_images.pickle') # perturbed cityscapes results 
 
     assert isinstance(results, list)
     if isinstance(results[0], np.ndarray):
@@ -285,7 +286,7 @@ def calculate_confusion_matrix_segformerb2():
             ds_cfg.test_mode = True
 
     dataset = build_dataset(cfg.data.test)
-    confusion_matrix = calculate_confusion_matrix(dataset, results, args) 
+    confusion_matrix = calculate_confusion_matrix(dataset, results) 
     return confusion_matrix
         
 def plot_adjacency_matrix(adjacency_matrix,

@@ -47,7 +47,7 @@ class SSD(EncoderDecoder):
     def __init__(self,
                 timesteps = 20, 
                 transition_matrix_type = 'matrix_expo', 
-                similarity_soft = False,
+                similarity_soft = True,
                 k_nn = 3,
                 beta_schedule_custom = 'expo', 
                 beta_schedule_custom_start = -5.5, 
@@ -79,10 +79,11 @@ class SSD(EncoderDecoder):
         self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
         ## using prototypes of 19 cityscapes semantic classes from "Rethinking Semantic Segmentation: A Prototype View" 
-        self.protos = torch.load('/home/sidd_s/scratch/saved_models/Protoseg/hrnet_w48_proto_lr1x_hrnet_proto_80k_latest.pth')['state_dict']['module.prototypes']
-        assert self.protos.shape == (self.num_classes, 10, 720) ## each semantic class contain 10 (almost similar, verified by calculating its covariance matrix/self similarity matrix) prototypes of 720 dimension each 
-        self.similarity_matrix = similarity_among_classes(self.protos)
+        # self.protos = torch.load('/home/sidd_s/scratch/saved_models/Protoseg/hrnet_w48_proto_lr1x_hrnet_proto_80k_latest.pth')['state_dict']['module.prototypes']
+        # assert self.protos.shape == (self.num_classes, 10, 720) ## each semantic class contain 10 (almost similar, verified by calculating its covariance matrix/self similarity matrix) prototypes of 720 dimension each 
+        # self.similarity_matrix = similarity_among_classes(self.protos)
         
+        self.similarity_matrix = self.confusion_matrix ## confusion matrix is unnormalised here 
         
         ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
         self.q_onestep_mats =  [
