@@ -10,7 +10,7 @@ from mmcv import Config, DictAction
 
 from mmseg.datasets import build_dataset
 
-from work.custom_pipeline import CityTransform    
+from work.custom_pipeline import CityTransform        ## perturbing cityscapes
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -46,7 +46,7 @@ def parse_args():
     return args
 
 
-def calculate_confusion_matrix(dataset, results):
+def calculate_confusion_matrix(dataset, results, args = None):
     """Calculate the confusion matrix.
 
     Args:
@@ -68,6 +68,11 @@ def calculate_confusion_matrix(dataset, results):
         mat = np.bincount(inds, minlength=n**2).reshape(n, n)
         confusion_matrix += mat
         prog_bar.update()
+    
+    if args:
+        ## saving confusion matrix as well 
+        print("saving confusion matrix in its numpy format!")
+        np.save((args.save_path).replace('.png', '.npy'), confusion_matrix)
     return confusion_matrix
 
 
@@ -189,11 +194,16 @@ def plot_similarity_confusion_matrix(confusion_matrix,
     """
     
     similarity_confusion_matrix = confusion_matrix.T ## Transposing the original confusion < for comparing FP vs FN > 
+    # ## now normalising the diagonal terms with (FP + FN + TP) and off diagnoal terms with ? 
+    # similarity_confusion_matrix = confusion_matrix.copy()
+    
     
     # normalize the confusion matrix
     per_label_sums = similarity_confusion_matrix.sum(axis=1)[:, np.newaxis]
     similarity_confusion_matrix = \
         similarity_confusion_matrix.astype(np.float64) / per_label_sums * 100
+
+    
 
     num_classes = len(labels)
     fig, ax = plt.subplots(
@@ -257,6 +267,8 @@ def plot_similarity_confusion_matrix(confusion_matrix,
 
 def calculate_confusion_matrix_segformerb2(): 
     
+    args = parse_args()
+    
     cfg = Config.fromfile('/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/_base_/datasets/cityscapes.py')
     results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/results_images.pickle')
 
@@ -273,7 +285,7 @@ def calculate_confusion_matrix_segformerb2():
             ds_cfg.test_mode = True
 
     dataset = build_dataset(cfg.data.test)
-    confusion_matrix = calculate_confusion_matrix(dataset, results) 
+    confusion_matrix = calculate_confusion_matrix(dataset, results, args) 
     return confusion_matrix
         
 def plot_adjacency_matrix(adjacency_matrix,
@@ -384,7 +396,7 @@ def main():
 
     dataset = build_dataset(cfg.data.test)
     ## calculate confusion matrix 
-    confusion_matrix = calculate_confusion_matrix(dataset, results)
+    confusion_matrix = calculate_confusion_matrix(dataset, results, args)
     
     if args.adjacency: 
         adjacency_matrix = calculate_adjacency_matrix(confusion_matrix, k=3) # 3 nearest neighbour adjacency matrix 
