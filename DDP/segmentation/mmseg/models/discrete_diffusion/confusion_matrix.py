@@ -10,6 +10,7 @@ from mmcv import Config, DictAction
 
 from mmseg.datasets import build_dataset
 
+from work.custom_pipeline import CityTransform    
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -18,7 +19,7 @@ def parse_args():
     parser.add_argument(
         'prediction_path', help='prediction path where test .pkl result')
     parser.add_argument(
-        'save_dir', help='directory where confusion matrix will be saved')
+        'save_path', help='path where confusion matrix will be saved')
     parser.add_argument(
         '--show', action='store_true', help='show confusion matrix')
     parser.add_argument(
@@ -40,6 +41,7 @@ def parse_args():
         'Note that the quotation marks are necessary and that no white space '
         'is allowed.') 
     parser.add_argument('--adjacency', action='store_true')
+    parser.add_argument('--similarity_confusion_transpose', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -87,7 +89,7 @@ def calculate_adjacency_matrix(confusion_matrix, k=3):
 
 def plot_confusion_matrix(confusion_matrix,
                           labels,
-                          save_dir=None,
+                          save_path=None,
                           show=True,
                           title='Normalized Confusion Matrix',
                           color_theme='winter'):
@@ -96,7 +98,7 @@ def plot_confusion_matrix(confusion_matrix,
     Args:
         confusion_matrix (ndarray): The confusion matrix.
         labels (list[str]): List of class names.
-        save_dir (str|optional): If set, save the confusion matrix plot to the
+        save_path (str|optional): If set, save the confusion matrix plot to the
             given path. Default: None.
         show (bool): Whether to show the plot. Default: True.
         title (str): Title of the plot. Default: `Normalized Confusion Matrix`.
@@ -109,7 +111,7 @@ def plot_confusion_matrix(confusion_matrix,
 
     num_classes = len(labels)
     fig, ax = plt.subplots(
-        figsize=(2 * num_classes, 2 * num_classes * 0.8), dpi=180)
+        figsize=(num_classes * 0.8, num_classes * 0.8), dpi=180)
     cmap = plt.get_cmap(color_theme)
     im = ax.imshow(confusion_matrix, cmap=cmap)
     plt.colorbar(mappable=im, ax=ax)
@@ -156,19 +158,102 @@ def plot_confusion_matrix(confusion_matrix,
                 ha='center',
                 va='center',
                 color='w',
-                size=7)
+                size=10)
 
     ax.set_ylim(len(confusion_matrix) - 0.5, -0.5)  # matplotlib>3.1.1
 
     fig.tight_layout()
-    if save_dir is not None:
+    if save_path is not None:
         plt.savefig(
-            os.path.join(save_dir, 'confusion_matrix.png'), format='png')
+            os.path.join(save_path), format='png')
     if show:
         plt.show()
 
 
+def plot_similarity_confusion_matrix(confusion_matrix,
+                          labels,
+                          save_path=None,
+                          show=True,
+                          title='Normalized Confusion Matrix',
+                          color_theme='winter'):
+    """Draw confusion matrix with matplotlib.
 
+    Args:
+        confusion_matrix (ndarray): The confusion matrix.
+        labels (list[str]): List of class names.
+        save_path (str|optional): If set, save the confusion matrix plot to the
+            given path. Default: None.
+        show (bool): Whether to show the plot. Default: True.
+        title (str): Title of the plot. Default: `Normalized Confusion Matrix`.
+        color_theme (str): Theme of the matrix color map. Default: `winter`.
+    """
+    
+    similarity_confusion_matrix = confusion_matrix.T ## Transposing the original confusion < for comparing FP vs FN > 
+    
+    # normalize the confusion matrix
+    per_label_sums = similarity_confusion_matrix.sum(axis=1)[:, np.newaxis]
+    similarity_confusion_matrix = \
+        similarity_confusion_matrix.astype(np.float64) / per_label_sums * 100
+
+    num_classes = len(labels)
+    fig, ax = plt.subplots(
+        figsize=(num_classes*0.8, num_classes*0.8), dpi=180)
+    cmap = plt.get_cmap(color_theme)
+    im = ax.imshow(similarity_confusion_matrix, cmap=cmap)
+    plt.colorbar(mappable=im, ax=ax)
+
+    title_font = {'weight': 'bold', 'size': 12}
+    ax.set_title(title, fontdict=title_font)
+    label_font = {'size': 10}
+    plt.ylabel('Prediction Label', fontdict=label_font)
+    plt.xlabel('Ground Truth Label', fontdict=label_font)
+
+    # draw locator
+    xmajor_locator = MultipleLocator(1)
+    xminor_locator = MultipleLocator(0.5)
+    ax.xaxis.set_major_locator(xmajor_locator)
+    ax.xaxis.set_minor_locator(xminor_locator)
+    ymajor_locator = MultipleLocator(1)
+    yminor_locator = MultipleLocator(0.5)
+    ax.yaxis.set_major_locator(ymajor_locator)
+    ax.yaxis.set_minor_locator(yminor_locator)
+
+    # draw grid
+    ax.grid(True, which='minor', linestyle='-')
+
+    # draw label
+    ax.set_xticks(np.arange(num_classes))
+    ax.set_yticks(np.arange(num_classes))
+    ax.set_xticklabels(labels)
+    ax.set_yticklabels(labels)
+
+    ax.tick_params(
+        axis='x', bottom=False, top=True, labelbottom=False, labeltop=True)
+    plt.setp(
+        ax.get_xticklabels(), rotation=45, ha='left', rotation_mode='anchor')
+
+    # draw confusion matrix value
+    for i in range(num_classes):
+        for j in range(num_classes):
+            ax.text(
+                j,
+                i,
+                '{}%'.format(
+                    round(similarity_confusion_matrix[i, j], 2
+                          ) if not np.isnan(similarity_confusion_matrix[i, j]) else -1),
+                ha='center',
+                va='center',
+                color='w',
+                size=10)
+
+    ax.set_ylim(len(similarity_confusion_matrix) - 0.5, -0.5)  # matplotlib>3.1.1
+
+    fig.tight_layout()
+    if save_path is not None:
+        plt.savefig(
+            os.path.join(save_path), format='png')
+    if show:
+        plt.show()
 
 def calculate_confusion_matrix_segformerb2(): 
     
@@ -190,32 +275,10 @@ def calculate_confusion_matrix_segformerb2():
     dataset = build_dataset(cfg.data.test)
     confusion_matrix = calculate_confusion_matrix(dataset, results) 
     return confusion_matrix
-
-# ## derived from above confusion matrix of "oneformer" model on cityscapes val dataset ## 
-# list_of_lists = [[0,        0.38,           0,           0,     0,     0,            0,              0,              0,       0.03,        0,      0,       0,   0.07,      0,       0,      0,        0,            0 ],
-#         [3.82,        0,           0.47,           0,     0,     0,            0,              0,              0,         0.65,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0.12,           0,           0,     0,     0.3,            0,              0,              1.32,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           10.84,           0,     3.71,     0,            0,              0,              1.99,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           9.97,           6.06,     0,     0,            0,              0,              2.18,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        1.38,           7.83,           0,     0,     0,            0,              0,              4.09,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           5.35,           0,     0,     2.23,            0,              0,              4.69,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           4.83,           0,     0,     1.22,            0,              0,              1.9,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           1.79,           0,     0,     0.31,            0,              0,              0,         0.53,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [1.6,       9.17,           0,           0,     0,     0,            0,              0,              9.71,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           11.51,           0,     0,     0.09,            0,              0,              1.01,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           3.65,           0,     0,     0,            0,              0,              0.53,         0,        0,      0,       0.97,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           1.47,           0,     0,     0,            0,              0,              0,         0,        0,      2.32,            0,      0,      0,       0,      0,        0,            5.16 ],
-#         [0.77,        0,           0.41,           0,     0,     0,            0,              0,              0.25,         0,        0,      0,       0,      0,      0,       0,      0,        0,            0 ],
-#         [0,        0,           1.24,           0,     0,     0,            0,              0,              0.46,         0,        0,      0,       0,      3.96,         0,          0,         0,           0,      0 ],
-#         [0.61,        0,           0.83,           0,     0,     0,            0,              0,              0,         0,        0,      0,       0,       0.55,      0,           0,         0,            0,    0 ],
-#         [0,        0,           2.19,           0,     0,     0,            0,              0,              1.37,         0,        0,      0,       0,      0,      0,       0.38,      0,        0,            0 ],
-#         [0,        0,           2.61,           0,     0,     0,            0,              0,              0,         0,        0,      2.06,       0,      0,      0,       0,      0,        0,            2.16 ],
-#         [0,        1.58,           4.19,           0,     1.45,     0,            0,              0,              0,         0,        0,      0,       1.58,      0,      0,       0,      0,        0,            0 ]]
-# list_of_lists_arr = np.array(list_of_lists)        
         
 def plot_adjacency_matrix(adjacency_matrix,
                           labels,
-                          save_dir=None,
+                          save_path=None,
                           show=True,
                           title='Normalized Adjacency Matrix',
                           color_theme='winter'):
@@ -224,7 +287,7 @@ def plot_adjacency_matrix(adjacency_matrix,
     Args:
         adjacency_matrix (ndarray): The adjacency matrix.
         labels (list[str]): List of class names.
-        save_dir (str|optional): If set, save the adjacency matrix plot to the
+        save_path (str|optional): If set, save the adjacency matrix plot to the
             given path. Default: None.
         show (bool): Whether to show the plot. Default: True.
         title (str): Title of the plot. Default: `Normalized adjacency Matrix`.
@@ -239,7 +302,7 @@ def plot_adjacency_matrix(adjacency_matrix,
     
     num_classes = len(labels)
     fig, ax = plt.subplots(
-        figsize=(num_classes, num_classes ), dpi=180)
+        figsize=(num_classes*0.8, num_classes*0.8), dpi=180)
     cmap = plt.get_cmap(color_theme)
     im = ax.imshow(adjacency_matrix, cmap=cmap)
     plt.colorbar(mappable=im, ax=ax)
@@ -286,14 +349,14 @@ def plot_adjacency_matrix(adjacency_matrix,
                 ha='center',
                 va='center',
                 color='w',
-                size=7)
+                size=10)
 
     ax.set_ylim(len(adjacency_matrix) - 0.5, -0.5)  # matplotlib>3.1.1
 
     fig.tight_layout()
-    if save_dir is not None:
+    if save_path is not None:
         plt.savefig(
-            os.path.join(save_dir, 'adjacency_matrix.png'), format='png')
+            os.path.join(save_path), format='png')
     if show:
         plt.show()
 
@@ -320,33 +383,41 @@ def main():
             ds_cfg.test_mode = True
 
     dataset = build_dataset(cfg.data.test)
+    ## calculate confusion matrix 
+    confusion_matrix = calculate_confusion_matrix(dataset, results)
     
     if args.adjacency: 
-        ## calculate confusion matrix 
-        confusion_matrix = calculate_confusion_matrix(dataset, results)   
         adjacency_matrix = calculate_adjacency_matrix(confusion_matrix, k=3) # 3 nearest neighbour adjacency matrix 
-        
         ## adjacency matrix 
         plot_adjacency_matrix(
             adjacency_matrix,
             dataset.CLASSES,
-            save_dir=args.save_dir,
+            save_path=args.save_path,
             show=args.show,
             title=args.title,
             color_theme=args.color_theme)
     else:
-         
-        confusion_matrix = calculate_confusion_matrix(dataset, results)
-        ## confusion matrix :: original 
-        plot_confusion_matrix(
-            confusion_matrix,
-            dataset.CLASSES,
-            save_dir=args.save_dir,
-            show=args.show,
-            title=args.title,
-            color_theme=args.color_theme)
+        if args.similarity_confusion_transpose:
+             ## similarity confusion matrix :: transformed / modified 
+            plot_similarity_confusion_matrix(
+                confusion_matrix,
+                dataset.CLASSES,
+                save_path=args.save_path,
+                show=args.show,
+                title=args.title,
+                color_theme=args.color_theme)
+        else: 
+            # confusion matrix :: original 
+            plot_confusion_matrix(
+                confusion_matrix,
+                dataset.CLASSES,
+                save_path=args.save_path,
+                show=args.show,
+                title=args.title,
+                color_theme=args.color_theme)
 
-    
+       
         
+                
 if __name__ == '__main__':
     main()
