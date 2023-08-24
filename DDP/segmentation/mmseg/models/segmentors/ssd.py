@@ -53,9 +53,9 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.schedule_steps = schedule_steps 
-        self.embedding_table = nn.Embedding(self.num_classes+1, self.num_classes) # instead of one hot encoding making class embedding module for discrete data space ; may try one hot encoding later on! ## since gt have 20 classes including background so this
+        self.embedding_table = nn.Embedding(self.num_classes, self.decode_head.in_channels[0]) # similar to DDP with not including background class  
         self.transform = ConvModule(
-            self.decode_head.in_channels[0] + (self.num_classes),
+            self.decode_head.in_channels[0] * 2,
             self.decode_head.in_channels[0],
             1,
             padding=0,
@@ -148,7 +148,14 @@ class SSD(EncoderDecoder):
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
-        gt_down[gt_down == 255] = self.num_classes # background 
+        
+        #  gt_down[gt_down == 255] = self.num_classes # background 
+        ## we are not including background, instead it being randomly replaced by majorly occuring semantic classes: [road, building & vegetation] greater than background class ratio! 
+        
+        # < have to check this methodology and decide  > 
+             
+        
+        
         gt_down = gt_down.squeeze() ## 'bhw'
         
         ## corruption of discrete data gt 
@@ -159,7 +166,7 @@ class SSD(EncoderDecoder):
         # sample time ## discrete time sample 
         times = torch.randint(0, self.timesteps, (batch, ), device=device).long()  
         ## corrupt the gt in its discrete space 
-        noised_gt = self.q_sample(self.q_probs(self.q_mats, times, gt_down)) 
+        noised_gt = self.q_sample(self.q_probs(self.q_mats.to(device), times, gt_down)) 
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
         
         ## conditional input 
@@ -209,7 +216,11 @@ class SSD(EncoderDecoder):
     @torch.no_grad() 
     def similarity_sample(self, img_feat, img_metas):
         b, c, h, w, device = *img_feat.shape, img_feat.device
-        x = torch.randint(0, self.num_classes, [b,h,w], device=device).long() # stationary distribution 
+        ## not needed to start from stationary, rather we need to start from prediction of the model we need to improve!
+        # x = torch.randint(0, self.num_classes, [b,h,w], device=device).long() # stationary distribution  
+        
+        # < have to write x as the prediction output of the model (here segformerb2) >
+        
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=device) * i).long()
@@ -253,8 +264,8 @@ class SSD(EncoderDecoder):
     def q_posterior_logits(self, x_start_pred_logits, x_t, t):
         """ Compute logits of q(x_{t-1} | x_t, x_start)."""
         
-        fact1 = self.q_probs(self.transpose_q_onestep_mats, t, x_t) # x_{t} x Q_t^{T}
-        fact2 = self.q_probs(self.q_mats, t - 1, F.softmax(x_start_pred_logits, dim=1), x_var_t_logits=True) # x_{0} x Q_{t-1}^{\hat}
+        fact1 = self.q_probs(self.transpose_q_onestep_mats.to(x_t.device), t, x_t) # x_{t} x Q_t^{T}
+        fact2 = self.q_probs(self.q_mats.to(x_start_pred_logits.device), t - 1, F.softmax(x_start_pred_logits, dim=1), x_var_t_logits=True) # x_{0} x Q_{t-1}^{\hat}
         tzero_logits = x_start_pred_logits
         
         # At t=0 we need the logits of q(x_{-1}|x_0, x_start)
