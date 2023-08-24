@@ -6,7 +6,7 @@ from tqdm import tqdm
 # Function to rename multiple files
 def main():
    
-    folder = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/train"  
+    folder = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/train"
     # gt_dataset_num_of_labels = dict.fromkeys(range(20),0) # with background 
     gt_dataset_num_of_labels = dict.fromkeys(range(19),0) 
     num_gts = 0
@@ -38,7 +38,7 @@ def main():
     # total_num_pixels = gt.reshape(1, -1).shape[1] * num_gts  # with background 
     # gt_dataset_labels_init_distribution = {k: v / total_num_pixels for k, v in gt_dataset_num_of_labels.items()} # with background 
     gt_dataset_labels_init_distribution = {k: v / sum(gt_dataset_num_of_labels.values(), 0.0) for k, v in gt_dataset_num_of_labels.items()}
-    assert sum(gt_dataset_labels_init_distribution.values(), 0.0) == 1  ## for a valid probability distribution 
+    assert np.rint(sum(gt_dataset_labels_init_distribution.values(), 0.0)) == 1  ## for a valid probability distribution 
     # save in numpy format
     # np.save('cityscapes_gt_labels_init_distribution.npy', gt_dataset_labels_init_distribution) # with background
     np.save('cityscapes_gt_labels_init_distribution_without_background.npy', gt_dataset_labels_init_distribution)
