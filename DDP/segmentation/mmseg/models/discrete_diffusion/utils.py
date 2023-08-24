@@ -29,110 +29,11 @@ ind_2_class_dict = {
 }
 
 
-def cos_fun_sch(step): 
-    return math.cos((step + 0.008) / 1.008 * math.pi / 2) ** 2
-    
-
-## custom beta_schedule  (linear) / (expo)
-def custom_schedule(beta_start = 0.0001, beta_end = 0.02, timesteps=20,dtype=torch.float64, type = 'expo'):
-    # betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)
-    # betas = -torch.log(torch.linspace(beta_start, beta_end, timesteps, dtype=dtype))
-    # betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype)**2 ## quadratic 
-    if type == 'expo':
-        betas = torch.logspace(beta_start, beta_end,steps=timesteps ,base = 10, dtype=dtype) ## expo space growth...increases slowly in the start and raipdy grows in the end! ## hyperparam tuned in such a way that classes in the dia confuses with the off dia classes 
-    elif type == 'linear':
-        betas = torch.linspace(beta_start, beta_end, timesteps, dtype=dtype) 
-    elif type == 'cosine': ## adapted from google research/d3pm
-        betas = []
-        for t in range(timesteps):
-            t_start = t / timesteps
-            t_end = (t + 1) / timesteps
-            betas.append(np.minimum( 1 - cos_fun_sch(t_end) / cos_fun_sch(t_start) , 0.999)) ## max_beta is 0.999 
-        betas = torch.from_numpy(np.array(betas), dtype = dtype)
-    else:
-        raise ValueError(
-            f"Diffusion noise schedule of kind {type} is not supported.")
-    return betas 
-
-
-## Q-transition matrix based discerete diffusion
-def similarity_transition_mat(betas, t, similarity_matrix, transition_mat_type, similarity_soft = True, k_nn = 3):
-    """Computes transition matrix for q(x_t|x_{t-1}).
-    Nearest neighbor transition matrix inspired from the text word embedding distance to introduce locality.
-    Args:
-        t: timestep. integer scalar.
-    Returns:
-        Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
-    """
-    beta_t = betas[t]
-    beta_t = beta_t.cpu().numpy()
-    similarity_matrix = np.array(similarity_matrix) ## as all the calculations here are done in numpy, later transforming into cuda tensor.
-    # beta_t = beta_t * 100 ## increasing beta_t value 
-    
-    if transition_mat_type == 'band_diagonal':
-        ## width paramater to be decided 
-        dim = 20 ## number of different classes 
-        width = 7 ## a hyper parameter 
-        band = np.tri(
-            dim, dim, width // 2, dtype=np.float64) - np.tri(
-                dim, dim, -width // 2, dtype=np.float64)
-        arr = band / band.sum(0, keepdims=True)
-        matrix = beta_t * arr + (1 - beta_t) * np.eye(dim)
-        matrix = torch.from_numpy(matrix).to(betas.device)  
-        return matrix
-        
-    elif transition_mat_type == 'matrix_expo': # matrix_expo or sinkhorn method for base transition matrix
-        if similarity_soft:
-            # per_label_sums = similarity_matrix.sum(axis=1)[:, np.newaxis]
-            # similarity_matrix_norm = similarity_matrix.astype(np.float64) / per_label_sums  
-            
-            similarity_matrix_rs = np.sum(similarity_matrix, 1) 
-            similarity_matrix_cs = np.sum(similarity_matrix, 0) 
-            similarity_matrix_diag = np.diag(similarity_matrix) 
-            similarity_matrix_tpfpfn = similarity_matrix_rs + similarity_matrix_cs - similarity_matrix_diag 
-            similarity_matrix_diag_norm = similarity_matrix_diag / similarity_matrix_tpfpfn  # diving diagonal by (tp + fp + fn)
-            similarity_matrix_rswd = similarity_matrix_rs - similarity_matrix_diag # rows sum without diagonal term 
-            similarity_matrix_div_rswd = similarity_matrix / similarity_matrix_rswd[:, np.newaxis] 
-            np.fill_diagonal(similarity_matrix_div_rswd, similarity_matrix_diag_norm) 
-            similarity_matrix_norm = similarity_matrix_div_rswd.copy()
-            
-            transition_rate_matrix = similarity_matrix_norm - np.diag(np.sum(similarity_matrix_norm, axis=1))
-            ## transition_rate from both similarity_matrix_norm is valid !, as for both sum across the rows is zero 
-            
-        else: ## using adjacency matrix as mentioned in the paper  
-            '''
-                have to  fill the way D3PM makes the base matrix using matrix expo method
-            '''
-            adj, similar_classes = calculate_adjacency_matrix_knn(similarity_matrix, k=k_nn)
-            adj_s = (adj + adj.T) / (2 * k_nn)
-            transition_rate_matrix = adj_s - np.diag(np.sum(adj_s, axis=1))
-            '''
-                have to calculate beta for matrix expo based on mutual information  
-            '''
-        
-        matrix = scipy.linalg.expm(np.array(transition_rate_matrix * beta_t, dtype=np.float64))
-                
-    elif transition_mat_type == 'sinkhorn_algorithm':
-        matrix = similarity_matrix.copy()
-        matrix = beta_t * matrix
-        # ## sinkhorn algo for base matrix
-        for _ in range(5): # number of iterations is a hyperparameter of sinkhorn's algo ## till in covergence 
-            matrix = matrix / matrix.sum(1, keepdims=True)
-            matrix = matrix / matrix.sum(0, keepdims=True)
-        
-        # matrix = (1 - beta_t)*np.eye(20) + beta_t * matrix  ## additional just for trying as given in d3pm original code
-        
-    else: 
-        raise Exception("transition matrix type not implemented!")
-       
-    matrix = torch.from_numpy(matrix).to(betas.device) 
-    
-    ## NOTE below to include background in the transition matrix 
-    matrix = F.pad(input=matrix, pad=(0, 1, 0, 1), mode='constant', value= (1 / (similarity_matrix.shape[0] + 1))) ## we need to check this! ## for now uniform proba of transitioning to any other state
-    # matrix[-1,-1] = 1 # background remains the background ## we need to check this! ## it will be in absorbing state, so not using
-    
-    # return torch.from_numpy(matrix).to(betas.device)
-    return matrix
+def get_transition_rate(similarity_matrix): 
+    per_label_sums = similarity_matrix.sum(axis=1)[:, np.newaxis]
+    similarity_matrix_norm = similarity_matrix.astype(np.float64) / per_label_sums  
+    transition_rate_matrix = similarity_matrix_norm - np.diag(np.sum(similarity_matrix_norm, axis=1)) ## transition_rate sum to zero (rowwise), for making a valid base transition matrix
+    return transition_rate_matrix
 
 
 def logits_to_categorical(logits):
@@ -143,34 +44,296 @@ def logits_to_categorical(logits):
     sample = (gumbel_noise + logits).argmax(dim=1)
     return sample
 
-## using prototypes of 19 cityscapes semantic classes from "Rethinking Semantic Segmentation: A Prototype View" 
-def similarity_among_classes(protos):
-    cos = torch.nn.CosineSimilarity(dim=0)
-    similarity_matrix = []
-    for i in range(19):
-        per_row_similarity = [] 
-        for j in range(19):
-            per_row_similarity.append(cos(protos[i][0], protos[j][0]))
-        similarity_matrix.append(per_row_similarity)
-    similarity_matrix_tensor = torch.FloatTensor(similarity_matrix)     
 
-    # sim_test = similarity_matrix_tensor.clone() 
-    # sim_test.fill_diagonal_(-1e17) ## filling extremely low numbers at diagonals for removing them from similarity consideration
-    # probas_sim_test = F.softmax(sim_test, dim=1) ## applying softmax to convert into probability distribution 
+def builder_fn(trans_rate, exponent):
+    """
+    Function that computes a matrix exponential. 
 
-    # return probas_sim_test, similarity_matrix_tensor
-    return similarity_matrix_tensor
+    Function that, given a float exponent parameter, returns a
+    transition matrix T[i, j] = p(x_t = j | x_0 = i) representing a matrix
+    exponetial with the given exponent.
+    """
+    trans_matrix = scipy.linalg.expm(np.array(trans_rate * exponent, dtype=np.float64))
+    return trans_matrix
 
-def calculate_adjacency_matrix_knn(similarity_matrix, k): 
-    adj = similarity_matrix.copy()
-    similar_classes = []
-    for row in range(adj.shape[0]):
-        row_sim_decrease_inds = np.argsort(adj[row])[::-1]
-        knn_indexs = row_sim_decrease_inds[:k] 
-        adj[row][knn_indexs] = 1
-        adj[row][adj[row]!=1] = 0
+def compute_information_removal_samples_closed_form(trans_rate, init_distribution, min_exponent=1e-4,
+                                                    max_exponent=1e5,
+                                                    interpolation_steps=256):  
+    """Compute mutual information by evaluating a closed form estimate.
 
-        similar_classes.append([ (('Current Class:' + ind_2_class_dict[row]) ,(knn_indexs[i], ind_2_class_dict[knn_indexs[i]])) for i in range(knn_indexs.shape[0])])
+    Chooses interpolation steps, then evaluates mutual information for each one.
+
+    Args:
+      builder_fn: Function that, given a float exponent parameter, returns a
+        transition matrix T[i, j] = p(x_t = j | x_0 = i) representing a matrix
+        exponetial with the given exponent.
+      init_distribution: Initial distribution of semantic class labels.
+      min_exponent: Smallest non-zero exponent to try.
+      max_exponent: Largest exponent to try.
+      interpolation_steps: How many interpolation steps to try.
+
+    Returns:
+      exponents: Array of exponents for which we computed relative mutual
+        information removal.
+      information_removals: Array of the information removal for each exponent.
+    """
     
-    assert (sum(adj.sum(1)) / adj.shape[1]) == k
-    return adj, similar_classes 
+    query_exponents = np.geomspace(min_exponent, max_exponent,
+                                  interpolation_steps)
+
+    information_removals = [] 
+    for exponent in query_exponents:  
+        trans_matrix = builder_fn(trans_rate, exponent) 
+        info_remove = compute_relative_information_removal(trans_matrix, init_distribution) 
+        information_removals.append(info_remove) 
+    information_removals = np.stack(information_removals)
+    
+    return query_exponents, information_removals
+
+def compute_relative_information_removal(transition_matrix, init_distribution, use_perplexity=False):
+
+    """Computes removal of (mutual) information after applying a transition matrix.
+
+    I(x_t; x_0) = [ log p(x_0, x_t) - log p(x_0) - log p(x_t)]
+                = H(x_0) + H(x_t) - H(x_0, x_t)
+          result = 1 - I(x_t; x_0) / H(x_0)
+                = 1 - (H(x_0) + H(x_t) - H(x_0, x_t)) / H(x_0)
+                = (H(x_0, x_t) - H(x_t)) / H(x_0)
+
+    Args:
+      transition_matrix: float32 matrix such that transition_matrix[i, j] = p(x_t
+        = j | x_0 = i)
+      init_distribution: float32 matrix reprezenting p(x_0)
+      use_perplexity: Use conditional perplexity(ish) instead of MI. Assumes
+        convergence to uniform. < Uniform thing we don't have :) > 
+
+    Returns:
+      Normalized information removal, which should be zero for the identity
+      matrix,
+      and 1 for a transition matrix which does not depend on the initial state.
+    """
+    # Normalizations for stability ## with logarithms to work with 
+    log_transition = np.log(transition_matrix)  ## log 
+    log_transition = (log_transition - scipy.special.logsumexp(log_transition, axis=1, keepdims=True)) ## norm axis 1 differnt from the code (differ)
+    log_initial = np.log(init_distribution)
+    log_initial = (log_initial - scipy.special.logsumexp(log_initial, keepdims=True)) ## check as change  has been done here ## differ
+    log_joint = log_initial[:, None] + log_transition ## differ
+    log_marginal_after = scipy.special.logsumexp(log_joint, axis=0) ## differ 
+
+    joint_entropy = -np.sum(np.where(log_joint == -np.inf, 0.0, np.exp(log_joint) * log_joint))
+    initial_entropy = -np.sum(np.where(log_initial == -np.inf, 0.0, np.exp(log_initial) * log_initial)) 
+    marginal_after_entropy = -np.sum(np.where(log_marginal_after == -np.inf, 0.0, np.exp(log_marginal_after) * log_marginal_after)) 
+
+    if use_perplexity:
+        dim = init_distribution.shape[0]
+        conditional_perplexity = np.exp(joint_entropy - initial_entropy) 
+        return (conditional_perplexity - 1) / (dim - 1) 
+    else: 
+        information_removal = (joint_entropy - marginal_after_entropy) / initial_entropy
+    return information_removal 
+
+def transition_rate_expm(matrix, target_diagonal=1e-3, renormalize_rows=True):  
+    """Slightly improved expm for transition rate matrices.
+
+    A transition rate matrix will always have columns that sum to zero, and will
+    have nonnegative entries everywhere except the diagonal. We can ensure some
+    stability by controlling the magnitude of the diagonal elements and
+    renormalizing during each squaring to reduce error.
+    
+    Args:
+    matrix: The matrix to compute a matrix exponential for.
+    target_diagonal: Maximum magnitude of the diagonal elements for which it is
+      "safe" to approximate e(tA) as I + tA. Will automatically perform more
+      iterations until this is small enough to be a good approximation.
+    renormalize_cols: Whether to renormalize the columns of the result, with the
+      assumption that the rate matrix summed to zero across the columns. This
+      property should always hold, so renormalizing can prevent errors from
+      exploding.
+    
+    Returns:
+    Approximation of expm(matrix).
+    """ 
+    max_diag = np.max(-np.diag(matrix)) 
+    target_diagonal= ( 1 / 19) ## don't know, cause not going for uniform .. at stationary>>>
+    iterations_for_diagonal = np.ceil(np.log2(max_diag) - np.log2(target_diagonal))
+    iterations_for_mixing = np.ceil(np.log2(matrix.shape[0]))
+    iterations = np.maximum(iterations_for_diagonal, iterations_for_mixing).astype(np.int32)
+    tiny_approx = np.eye(matrix.shape[0]) + matrix / (2.0**iterations)    
+    mat = tiny_approx.copy()
+    for i in range(iterations): 
+        mat = np.dot(mat, mat) 
+        if renormalize_rows:
+          mat = mat / np.sum(mat, axis=1, keepdims=True)
+    return mat
+
+def compute_information_removal_samples_by_squaring(rate_matrix,
+                                                    init_distribution,
+                                                    min_exponent=1e-4,
+                                                    max_exponent=1e5,
+                                                    interpolation_steps=256,
+                                                    use_perplexity=False): 
+
+    """Compute mutual information using repeated squaring.
+    
+      Reduces a bunch of repeated work by evaluating power-of-two exponents using
+      repeated squaring, starting from a few different test offsets to fill the
+      gaps between powers of two.
+    
+      Args:
+        rate_matrix: Transition rate matrix of shape [vocab_size, vocab_size]
+        init_distribution: Initial distribution of tokens.
+        min_exponent: Smallest non-zero exponent to try.
+        max_exponent: Largest exponent to try.
+        interpolation_steps: Minimum number of interpolation steps to try.
+        use_perplexity: Use conditional perplexity(ish) instead of MI
+    
+      Returns:
+        exponents: Array of exponents for which we computed relative mutual
+          information removal.
+        information_removals: Array of the information removal for each exponent.
+    """ 
+    # How many powers of two do we need to fill the range?
+    powers_of_two = 1 + np.ceil(np.log2(max_exponent) - np.log2(min_exponent)).astype(np.int32)  
+    # How many shifts should we evaluate between each power of two? For instance,
+    # in addition to evaluating at 1, 2, 4, 8, 16, 32 we might also evaluate at
+    # 3/2, 3, 6, 12, 24, 48. Increasing interpolation steps will increase this.
+    shifts = np.ceil(interpolation_steps / powers_of_two).astype(np.int32) 
+    # Figure out the base exponents (1 and 3/2 in the above example, but there
+    # may be more)
+    base_exponents = np.exp2(np.log2(min_exponent) + np.linspace(0, 1, shifts, endpoint=False)) 
+    
+    for base_exponent in base_exponents:  
+        base_matrix = transition_rate_expm(base_exponent * rate_matrix)   
+        # base_matrix = scipy.linalg.expm(np.array(base_exponent * rate_matrix, dtype=np.float64)) ## using scipy instead of above base matrix calc
+        mat = base_matrix
+        ys = [] 
+        for i in np.arange(powers_of_two): 
+            exponent = base_exponent * (2.0**i) 
+            info_removal = compute_relative_information_removal(mat, init_distribution, use_perplexity=use_perplexity) 
+            mat = np.dot(mat, mat)
+            mat = mat / np.sum(mat, axis=1, keepdims=True)
+            ys.append((exponent, info_removal)) 
+        ys = np.stack(ys)  
+        exponents = ys[:,0]
+        info_removals = ys[:, 1]
+    return exponents.reshape([-1]), info_removals.reshape([-1]) 
+
+def build_mutual_information_schedule(schedule_steps,
+                                      exponents,
+                                      information_removals,
+                                      allow_out_of_bounds=False,
+                                      kind="linear"): # "warn" ## logging
+    """Compute a mutual-information-based schedule by interpolation.
+
+      Args:
+        schedule_steps: Desired number of steps in the schedule.
+        exponents: Array of exponents for which we computed relative mutual
+          information removal.
+        information_removals: Array of the information removal for each exponent.
+        allow_out_of_bounds: Whether to allow interpolation for mutual information
+          values that are not encountered before `max_exponent`. If True, clips the
+          schedule so that it ends at the mutual info for `max_exponent` instead of
+          at the desired (near-one) amount of mutual information removal. If False,
+          throws an error.
+        kind: one of ['linear', 'cosine']. Used to determine the schedule used.
+    
+      Returns:
+        schedule_info_removals: float32[schedule_steps] array giving the amount of
+          relative information removal at each point in the schedule. Will linearly
+          interpolate between 0 and 1, not including either endpoint, unless this
+          goes out of bounds and `allow_out_of_bounds=True`, in which case it may
+          linearly interpolate to some value smaller than 1. Note that this may
+          not be exactly correct due to the interpolation, but it should be close.
+        schedule_exponents: float32[schedule_steps] array with the exponents
+          needed to obtain each level of information removal. Note that this array
+          does NOT include zero or infinity at the beginning/end, which are needed
+          to obtain zero or one information removal. The caller should take care of
+          padding so that the schedule takes the appropriate number of steps, for
+          instance by adding zero to the front and ensuring that the sequence is
+          replaced by a mask at the last step.
+    """
+    exponents = np.array(exponents)
+    information_removals = np.array(information_removals)
+    # Sort by exponent.
+    permutation = np.argsort(exponents) 
+    exponents = exponents[permutation]
+    information_removals = information_removals[permutation] 
+    # Fix out-of-order information removals due to numerical error.
+    cmax_info_removal = np.maximum.accumulate(information_removals)
+    bad = information_removals <= np.concatenate([[0], cmax_info_removal[:-1]])
+    exponents = exponents[~bad]
+    information_removals = information_removals[~bad]  
+    # Add zero at the start.
+    exponents = np.concatenate([[0], exponents])
+    information_removals = np.concatenate([[0], information_removals])    
+
+    # Interpolate monotonically so that our exponents are non-decreasing
+    interpolator = scipy.interpolate.PchipInterpolator(information_removals, exponents, extrapolate=False)  # monotonic cubic interpolation 
+
+    if kind == "linear":
+        schedule_info_removals = np.linspace(0, 1, schedule_steps + 2)[1:-1]   # skipping the first and the last step 
+    
+    elif kind == "cosine": 
+        s = 0.008 
+        def cosine_fn(step):
+          return np.cos((step / schedule_steps + s) / (1 + s) * np.pi / 2) 
+        
+        schedule_info_removals = 1 - cosine_fn(np.arange(schedule_steps)) 
+    else:
+        raise ValueError(f"kind {kind} is not supported.") 
+
+    if schedule_info_removals[-1] > information_removals[-1]: 
+        if allow_out_of_bounds: 
+            if allow_out_of_bounds == "warn": 
+                ## logging 
+                # "build_mutual_information_schedule: Requested mutual "
+                # "information removal value schedule_info_removals[-1] for "
+                # "schedule was larger than largest observed value "
+                # information_removals[-1]. Clipping schedule to this largest "
+                # "observed value; consider increasing extrapolation range.",
+                pass 
+            schedule_info_removals = (np.linspace(0, information_removals[-1], schedule_steps + 1)[1:]) 
+        else:
+            raise ValueError(
+            "Requested mutual information removal value "
+            f"{schedule_info_removals[-1]} for schedule was larger than largest "
+            f"observed value {information_removals[-1]}") 
+            
+    schedule_exponents = interpolator(schedule_info_removals) 
+    return schedule_info_removals, schedule_exponents 
+
+
+def get_powers(schedule_steps, 
+                transition_rate, 
+                init_distribution,
+                min_exponent=1e-4,
+                max_exponent=1e5,
+                interpolation_steps=256, 
+                kind = 'linear', 
+                allow_out_of_bounds=False): 
+  
+    # ## using this way < both the below methods provide similiar results > 
+    query_exponents, query_info_removals = compute_information_removal_samples_closed_form(
+                                                        transition_rate, 
+                                                        init_distribution,
+                                                        min_exponent,
+                                                        max_exponent,
+                                                        interpolation_steps) 
+    # query_exponents, query_info_removals = compute_information_removal_samples_by_squaring(
+    #                                                     transition_rate, 
+    #                                                     init_distribution,
+    #                                                     min_exponent,
+    #                                                     max_exponent,
+    #                                                     interpolation_steps) 
+    
+    _, middle_exponents = build_mutual_information_schedule(
+          schedule_steps, 
+          query_exponents, 
+          query_info_removals, 
+          kind, allow_out_of_bounds) 
+    
+    exponents = np.concatenate([np.zeros([1]), middle_exponents]) # shape -> (self.schedule_steps +1, )
+    ## rounding it off 
+    min_exponent = middle_exponents[0] 
+    powers = np.round(exponents / min_exponent).astype(np.int32)  # shape -> (self.schedule_steps +1, )
+    return powers

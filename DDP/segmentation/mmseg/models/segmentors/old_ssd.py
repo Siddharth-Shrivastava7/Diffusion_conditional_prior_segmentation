@@ -7,15 +7,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from mmseg.core import add_prefix
 from mmseg.ops import resize
+from torch.special import expm1
+from einops import rearrange, reduce, repeat
 from mmcv.cnn import ConvModule
 import math
+from PIL import Image
 import numpy as np
 import os
 
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
-from ..discrete_diffusion.utils import get_transition_rate, logits_to_categorical, get_powers, builder_fn
+from ..discrete_diffusion.utils import custom_schedule, similarity_transition_mat, logits_to_categorical, similarity_among_classes
 from ..discrete_diffusion.confusion_matrix import calculate_confusion_matrix_segformerb2
 
 class SinusoidalPosEmb(nn.Module):
@@ -42,17 +45,18 @@ class SSD(EncoderDecoder):
     which could be dumped during inference.
     """
     def __init__(self,
-                schedule_steps = 20,  
-                mutual_info_min_exponent = 1e-4, 
-                mutual_info_max_exponent = 1e+5, 
-                mutual_info_interpolation_steps = 256,  
-                mutual_info_kind = 'linear', 
-                allow_out_of_bounds=False,
+                timesteps = 20, 
+                transition_matrix_type = 'matrix_expo', 
+                similarity_soft = True,
+                k_nn = 3,
+                beta_schedule_custom = 'expo', 
+                beta_schedule_custom_start = -5.5, 
+                beta_schedule_custom_end = -4.5,
                 accumulation=False,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
-        self.schedule_steps = schedule_steps 
+        self.timesteps = timesteps 
         self.embedding_table = nn.Embedding(self.num_classes+1, self.num_classes) # instead of one hot encoding making class embedding module for discrete data space ; may try one hot encoding later on! ## since gt have 20 classes including background so this
         self.transform = ConvModule(
             self.decode_head.in_channels[0] + (self.num_classes),
@@ -64,50 +68,49 @@ class SSD(EncoderDecoder):
             act_cfg=None
         ) # used for converting concatenated encoded i/p image and encoded;corrupted gt map to feature maps of dimension being half of the joint dimension of the concatenated inputs
         self.accumulation = accumulation
-        self.mutual_info_min_exponent = mutual_info_min_exponent 
-        self.mutual_info_max_exponent = mutual_info_max_exponent  
-        self.mutual_info_interpolation_steps = mutual_info_interpolation_steps 
-        self.mutual_info_kind = mutual_info_kind 
-        self.allow_out_of_bounds = allow_out_of_bounds
         
-        ## forming transition rate matrix 
-        self.confusion_matrix = calculate_confusion_matrix_segformerb2() ## confusion matrix is unnormalised here 
-        ## get powers from Mutual information based noise schedule 
-        self.transition_rate = get_transition_rate(self.confusion_matrix)  
+        self.confusion_matrix = calculate_confusion_matrix_segformerb2()
+        self.beta_schedule_custom = beta_schedule_custom 
+        self.beta_schedule_custom_start = beta_schedule_custom_start  
+        self.beta_schedule_custom_end = beta_schedule_custom_end
+        self.similarity_soft = similarity_soft
+        self.k_nn = k_nn
+        self.transition_matrix_type = transition_matrix_type
+        self.bt = custom_schedule(self.beta_schedule_custom_start, self.beta_schedule_custom_end, self.timesteps, type=self.beta_schedule_custom)
         
-        ## init cityscapes train data distribution 
-        self.init_distribution_dict = np.load('/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/mmseg/models/discrete_diffusion/confusion_similarity_results/cityscapes_gt_labels_init_distribution_without_background.npy',allow_pickle='TRUE').item()
-        self.init_distribution = np.array(list(self.init_distribution_dict.values()))
+        ## using prototypes of 19 cityscapes semantic classes from "Rethinking Semantic Segmentation: A Prototype View" 
+        # self.protos = torch.load('/home/sidd_s/scratch/saved_models/Protoseg/hrnet_w48_proto_lr1x_hrnet_proto_80k_latest.pth')['state_dict']['module.prototypes']
+        # assert self.protos.shape == (self.num_classes, 10, 720) ## each semantic class contain 10 (almost similar, verified by calculating its covariance matrix/self similarity matrix) prototypes of 720 dimension each 
+        # self.similarity_matrix = similarity_among_classes(self.protos)
         
-        ## Finding exponent powers using mutual information based noise scheduling 
-        self.powers = get_powers(
-            self.schedule_steps, 
-            self.transition_rate, 
-            self.init_distribution,
-            self.mutual_info_min_exponent, 
-            self.mutual_info_max_exponent, 
-            self.mutual_info_interpolation_steps, 
-            self.mutual_info_kind, 
-            self.allow_out_of_bounds
-        )
-            
+        self.similarity_matrix = self.confusion_matrix ## confusion matrix is unnormalised here 
+        
         ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
         self.q_onestep_mats =  [
-            torch.from_numpy(builder_fn(self.transition_rate, (self.powers[t+1] - self.powers[t]))) \
-            for t  in range(0, self.schedule_steps)
+            similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn) \
+            for t  in range(0, self.timesteps)
         ]
         self.q_onestep_mats = torch.stack(self.q_onestep_mats, dim=0)
-        assert self.q_onestep_mats.shape == (self.schedule_steps,
+        assert self.q_onestep_mats.shape == (self.timesteps,
                                          self.num_classes,
                                          self.num_classes) 
         
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
-        self.q_mats = [
-                    torch.from_numpy(builder_fn(self.transition_rate, self.powers[t+1])) \
-                    for t  in range(0, self.schedule_steps)
-        ]
-        self.q_mats = torch.stack(self.q_mats, dim=0)
-        assert self.q_mats.shape == (self.schedule_steps,
+        if self.transition_matrix_type == 'matrix_expo':    
+            self.q_mats = [
+                        similarity_transition_mat(self.bt, t, self.similarity_matrix, self.transition_matrix_type, self.similarity_soft, self.k_nn) \
+                        for t  in range(0, self.timesteps)
+            ]
+            self.q_mats = torch.stack(self.q_mats, dim=0)
+        else: 
+            q_mat_t = self.q_onestep_mats[0]
+            self.q_mats = [q_mat_t]
+            for t in range(1, self.timesteps):
+                q_mat_t = torch.tensordot(q_mat_t, self.q_onestep_mats[t],
+                                        dims=[[1], [0]])
+                self.q_mats.append(q_mat_t)
+            self.q_mats = torch.stack(self.q_mats, dim=0)  
+        assert self.q_mats.shape == (self.timesteps,
                                          self.num_classes,
                                          self.num_classes) 
         
