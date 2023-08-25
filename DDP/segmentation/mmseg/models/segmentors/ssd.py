@@ -172,7 +172,7 @@ class SSD(EncoderDecoder):
             itself.
         '''
         # sample time ## discrete time sample 
-        times = torch.randint(0, self.timesteps, (batch, ), device=device).long()  
+        times = torch.randint(0, self.schedule_steps, (batch, ), device=device).long()  
         ## corrupt the gt in its discrete space 
         noised_gt = self.q_sample(self.q_probs(self.q_mats.to(device), times, gt_down)) 
         noised_gt_emb = self.embedding_table(noised_gt).squeeze(1).permute(0, 3, 1, 2) # encoding of gt when passing down the denoising net ## later may also need to try with one-hot encoding 
@@ -237,7 +237,7 @@ class SSD(EncoderDecoder):
             x = x.view(1, h, w) # BHW 
             
         outs = list()
-        for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
+        for i in reversed(range(0, self.schedule_steps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=device) * i).long()
             x,  x_start_pred_logits = self.p_sample(img_feat, img_metas, 
                                                     x, times)
