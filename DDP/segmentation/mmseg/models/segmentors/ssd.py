@@ -53,7 +53,7 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.schedule_steps = schedule_steps 
-        self.embedding_table = nn.Embedding(self.num_classes, self.decode_head.in_channels[0]) # similar to DDP with not including background class  
+        self.embedding_table = nn.Embedding(self.num_classes+1, self.decode_head.in_channels[0]) 
         self.transform = ConvModule(
             self.decode_head.in_channels[0] * 2,
             self.decode_head.in_channels[0],
@@ -92,24 +92,40 @@ class SSD(EncoderDecoder):
         )
             
         ## base one step transition matrices #  Construct transition matrices for q(x_t|x_{t-1}) 
-        self.q_onestep_mats =  [
+        q_onestep_mats =  [
             torch.from_numpy(builder_fn(self.transition_rate, (self.powers[t+1] - self.powers[t]))) \
             for t  in range(0, self.schedule_steps)
         ]
-        self.q_onestep_mats = torch.stack(self.q_onestep_mats, dim=0)
+        q_onestep_mats = torch.stack(q_onestep_mats, dim=0)
+        ## background is added as an absorbing state in the forward diffusion (markov chain) process
+        extended_q_onestep_mats = torch.zeros(q_onestep_mats.shape[0], 
+                                              q_onestep_mats.shape[1] + 1,
+                                              q_onestep_mats.shape[2] + 1) 
+        extended_q_onestep_mats[:, :q_onestep_mats.shape[1], :q_onestep_mats.shape[2]] = q_onestep_mats
+        extended_q_onestep_mats[:, -1, -1] = 1 ## background as the absorbing state 
+        self.q_onestep_mats = extended_q_onestep_mats
         assert self.q_onestep_mats.shape == (self.schedule_steps,
-                                         self.num_classes,
-                                         self.num_classes) 
+                                         self.num_classes+1,
+                                         self.num_classes+1)  
+         
+        
         
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
-        self.q_mats = [
+        q_mats = [
                     torch.from_numpy(builder_fn(self.transition_rate, self.powers[t+1])) \
                     for t  in range(0, self.schedule_steps)
         ]
-        self.q_mats = torch.stack(self.q_mats, dim=0)
+        q_mats = torch.stack(q_mats, dim=0)
+        ## background is added as an absorbing state in the forward diffusion (markov chain) process 
+        extended_q_mats = torch.zeros(q_mats.shape[0], 
+                                        q_mats.shape[1] + 1,
+                                        q_mats.shape[2] + 1) 
+        extended_q_mats[:, :q_mats.shape[1], :q_mats.shape[2]] = q_mats
+        extended_q_mats[:, -1, -1] = 1 ## background as the absorbing state 
+        self.q_mats = extended_q_mats
         assert self.q_mats.shape == (self.schedule_steps,
-                                         self.num_classes,
-                                         self.num_classes) 
+                                         self.num_classes+1,
+                                         self.num_classes+1) 
         
         # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
         # Can be computed from self.q_mats and self.q_one_step_mats.
@@ -147,15 +163,9 @@ class SSD(EncoderDecoder):
         img_feat = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
-        gt_down = gt_down.to(gt_semantic_seg.dtype)
-        
-        #  gt_down[gt_down == 255] = self.num_classes # background 
-        ## we are not including background, instead it being randomly replaced by majorly occuring semantic classes: [road, building & vegetation] greater than background class ratio! 
-        
-        # < have to check this methodology and decide  > 
-             
-        
-        
+        gt_down = gt_down.to(gt_semantic_seg.dtype)    
+        gt_down[gt_down == 255] = self.num_classes # background 
+
         gt_down = gt_down.squeeze() ## 'bhw'
         
         ## corruption of discrete data gt 
