@@ -255,9 +255,12 @@ class SSD(EncoderDecoder):
             
             when q_mats is onestep mats then, calculating  probabilities of q(x_t | x_{t-1}) 
         '''
-        if x_var_t_logits:
-            B, C, H, W = x_var_t.shape  
-            x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float32)
+        if x_var_t_logits: ## softmax of logits of denoising diffusion net
+            B, C, H, W = x_var_t.shape  # C = self.num_classes ; which means it doesn't include background 
+            extended_logits = torch.zeros((B, C+1, H, W))  
+            extended_logits[:, :C, :, :] = x_var_t ## logits including background as zero logits 
+            # x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float32)
+            x_var_t_onehot_like = extended_logits.view(B, -1, C+1).to(torch.float32)
         else:
             B, H, W = x_var_t.shape  
             x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes+1).to(torch.float32)
