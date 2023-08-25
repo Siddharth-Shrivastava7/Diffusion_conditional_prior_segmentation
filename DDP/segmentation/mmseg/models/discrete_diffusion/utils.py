@@ -221,8 +221,8 @@ def compute_information_removal_samples_by_squaring(rate_matrix,
 def build_mutual_information_schedule(schedule_steps,
                                       exponents,
                                       information_removals,
-                                      allow_out_of_bounds=False,
-                                      kind="linear"): # "warn" ## logging
+                                      kind="linear", 
+                                      allow_out_of_bounds=False): # "warn" ## logging
     """Compute a mutual-information-based schedule by interpolation.
 
       Args:

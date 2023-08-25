@@ -271,7 +271,7 @@ def calculate_confusion_matrix_segformerb2():
     
     cfg = Config.fromfile('/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/_base_/datasets/cityscapes.py')
     # results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/results_images.pickle') # original dataset results 
-    results = mmcv.load('/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/mmseg/models/discrete_diffusion/confusion_similarity_results/cityscapes_confusion_segformerb2.npy') # orginal cityscapes val results from segformerb2 
+    results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/val/results_images.pickle') # orginal cityscapes val results from segformerb2 
 
     assert isinstance(results, list)
     if isinstance(results[0], np.ndarray):
