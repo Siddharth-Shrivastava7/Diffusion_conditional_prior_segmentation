@@ -212,7 +212,7 @@ class SSD(EncoderDecoder):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         img_feat = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
-        out = self.similarity_sample(img_feat, img_metas)
+        out_mask, out = self.similarity_sample(img_feat, img_metas)
         out = resize(
             input=out,
             size=img.shape[2:],
