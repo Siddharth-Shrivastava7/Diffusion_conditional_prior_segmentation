@@ -53,9 +53,9 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.schedule_steps = schedule_steps 
-        self.embedding_table = nn.Embedding(self.num_classes+1, self.decode_head.in_channels[0]) 
+        self.embedding_table = nn.Embedding(self.num_classes+1, self.num_classes) ## instead of one-hot, playing with the embedding for discrete labels, and ignoring background feat in output of embedding
         self.transform = ConvModule(
-            self.decode_head.in_channels[0] * 2,
+            self.decode_head.in_channels[0] + self.num_classes,
             self.decode_head.in_channels[0],
             1,
             padding=0,
