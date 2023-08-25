@@ -159,6 +159,7 @@ class SSD(EncoderDecoder):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
+        # backbone & neck
         img_feat = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest").long()
