@@ -108,8 +108,6 @@ class SSD(EncoderDecoder):
                                          self.num_classes+1,
                                          self.num_classes+1)  
          
-        
-        
         ## base cumulative transition matrices  # Construct transition matrices for q(x_t|x_start) 
         q_mats = [
                     torch.from_numpy(builder_fn(self.transition_rate, self.powers[t+1])) \
@@ -164,8 +162,7 @@ class SSD(EncoderDecoder):
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)    
-        gt_down[gt_down == 255] = self.num_classes # background 
-
+        gt_down[gt_down == 255] = self.num_classes # background, which will be an absorbing state in the markov chain
         gt_down = gt_down.squeeze() ## 'bhw'
         
         ## corruption of discrete data gt 
@@ -227,9 +224,9 @@ class SSD(EncoderDecoder):
     def similarity_sample(self, img_feat, img_metas):
         b, c, h, w, device = *img_feat.shape, img_feat.device
         ## not needed to start from stationary, rather we need to start from prediction of the model we need to improve!
-        # x = torch.randint(0, self.num_classes, [b,h,w], device=device).long() # stationary distribution  
-        
+        # x = torch.randint(0, self.num_classes+1, [b,h,w], device=device).long() # stationary distribution  
         # < have to write x as the prediction output of the model (here segformerb2) >
+        
         
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
@@ -255,11 +252,11 @@ class SSD(EncoderDecoder):
             x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float64)
         else:
             B, H, W = x_var_t.shape  
-            x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes).to(torch.float64)
+            x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes+1).to(torch.float64)
                
         q_mats_t = torch.index_select(q_mats.to(x_var_t.device), dim=0, index=t)
         out = torch.matmul(x_var_t_onehot_like, q_mats_t)  
-        out = out.view(B, self.num_classes, H, W)  ## probabilities of q(x_t | x_0)
+        out = out.view(B, self.num_classes+1, H, W)  ## probabilities of q(x_t | x_0)
         return out 
     
     def q_sample(self, q_probs): 
@@ -316,7 +313,7 @@ class SSD(EncoderDecoder):
         )
         
         assert (model_logits.shape == x_start_pred_logits.shape \
-            == ((x_t.shape[0], self.num_classes) + tuple(x_t.shape[1:])))
+            == ((x_t.shape[0], self.num_classes+1) + tuple(x_t.shape[1:])))
         
         return model_logits, x_start_pred_logits
 
