@@ -11,6 +11,7 @@ from mmcv.cnn import ConvModule
 import math
 import numpy as np
 import os
+from PIL import Image 
 
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
@@ -160,10 +161,9 @@ class SSD(EncoderDecoder):
         """
         img_feat = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *img_feat.shape, img_feat.device
-        gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
-        gt_down = gt_down.to(gt_semantic_seg.dtype)    
+        gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest").long()
         gt_down[gt_down == 255] = self.num_classes # background, which will be an absorbing state in the markov chain
-        gt_down = gt_down.squeeze() ## 'bhw'
+        gt_down = gt_down.view(batch, h, w) ## 'bhw'
         
         ## corruption of discrete data gt 
         '''
@@ -224,10 +224,17 @@ class SSD(EncoderDecoder):
     def similarity_sample(self, img_feat, img_metas):
         b, c, h, w, device = *img_feat.shape, img_feat.device
         ## not needed to start from stationary, rather we need to start from prediction of the model we need to improve!
-        # x = torch.randint(0, self.num_classes+1, [b,h,w], device=device).long() # stationary distribution  
-        # < have to write x as the prediction output of the model (here segformerb2) >
-        
-        
+        # x = torch.randint(0, self.num_classes, [b,h,w], device=device).long() # stationary distribution  
+        # < have to write x as the prediction output of the model (here segformerb2) :: have to make it for every other dataset; currently used for batch size of 1 >
+        if img_metas[0]['filename'].find('cityscapes')!=-1: ## for cityscapes specifically 
+            city_name = img_metas[0]['filename'].split('/')[-2]  
+            pred_path = img_metas[0]['filename'].replace('leftImg8bit/val/' + city_name, 'pred/segformerb2/')
+            x = torch.tensor(np.array(Image.open(pred_path))).to(device)
+            x = x[None, None, :, :] ## expanding the dimension for batches and channels 
+            x = resize(x.float(), size=(h, w), mode="nearest").long() 
+            x[x==255] = self.num_classes ## if ever, background was present, then this! 
+            x = x.view(1, h, w) # BHW 
+            
         outs = list()
         for i in reversed(range(0, self.timesteps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=device) * i).long()
