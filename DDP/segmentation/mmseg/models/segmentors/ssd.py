@@ -257,10 +257,10 @@ class SSD(EncoderDecoder):
         '''
         if x_var_t_logits:
             B, C, H, W = x_var_t.shape  
-            x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float64)
+            x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float32)
         else:
             B, H, W = x_var_t.shape  
-            x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes+1).to(torch.float64)
+            x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes+1).to(torch.float32)
                
         q_mats_t = torch.index_select(q_mats.to(x_var_t.device), dim=0, index=t)
         out = torch.matmul(x_var_t_onehot_like, q_mats_t)  
