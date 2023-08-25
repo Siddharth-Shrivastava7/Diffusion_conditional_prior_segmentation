@@ -53,7 +53,7 @@ class SSD(EncoderDecoder):
         super(SSD, self).__init__(**kwargs)
         
         self.schedule_steps = schedule_steps 
-        self.embedding_table = nn.Embedding(self.num_classes+1, self.num_classes) ## instead of one-hot, playing with the embedding for discrete labels, and ignoring background feat in output of embedding
+        self.embedding_table = nn.Embedding(self.num_classes+1, self.num_classes) ## instead of one-hot, playing with the embedding for discrete labels, and ignoring background feat in output of embedding            ### <<< can change later to one-hot, if req >>> ### 
         self.transform = ConvModule(
             self.decode_head.in_channels[0] + self.num_classes,
             self.decode_head.in_channels[0],
@@ -134,8 +134,8 @@ class SSD(EncoderDecoder):
         
         # time embeddings   
         time_dim = self.decode_head.in_channels[0] * 4  # 1024  ## like DDP 
-        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0]) ## here dim could be 16 (as well, if going similar to DDP) ## but D3PM, multinomial diffusion and CCDM, also DDPS are taking input dim as #channels and out dim as  4*#ch...so this way of input channels being 256 procedding
-        fourier_dim = self.decode_head.in_channels[0] ## same dimension in discrete space 
+        sinu_pos_emb = SinusoidalPosEmb(dim=self.decode_head.in_channels[0]) ## here dim could be 16 (as well, if going similar to DDP) ## but D3PM, multinomial diffusion and CCDM, also DDPS are taking input dim as #channels and out dim as  4*#ch...so this way of input channels being 256 procedding  ### <<< can change later to 16, if req >>> ### 
+        fourier_dim = self.decode_head.in_channels[0] ## same dimension in discrete space ### <<< can change later to 16, if req >>> ### 
         ## similar to DDP 
         self.time_mlp = nn.Sequential(  # [2,] # is the input shape 
             sinu_pos_emb,  # [2, 256] # output shape
