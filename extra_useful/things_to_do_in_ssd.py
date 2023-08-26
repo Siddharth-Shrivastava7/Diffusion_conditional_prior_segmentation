@@ -16,5 +16,6 @@
     # Can check at each step improvement in terms of miou
 >> mutual information based noise scheduling type
     1. change it to cosine 
+>> instead of gumbel max trick, can see to use argmax based sampling, if possible!  
 >> 
 '''
