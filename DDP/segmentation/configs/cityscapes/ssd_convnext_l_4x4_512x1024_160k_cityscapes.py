@@ -132,5 +132,4 @@ lr_config = dict(
     min_lr=0.0,
     by_epoch=False)
 
-find_unused_parameters = False # can set to False, if want to increase training speed 
-
+find_unused_parameters = False # can set to False, if want to increase training speed
