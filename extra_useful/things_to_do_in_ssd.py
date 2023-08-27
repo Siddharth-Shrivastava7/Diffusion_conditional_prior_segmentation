@@ -19,3 +19,6 @@
 >> instead of gumbel max trick, can see to use argmax based sampling, if possible!  
 >> 
 '''
+
+## can covert "checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1)" this into 
+## "checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1, save_best='mIoU', rule='greater')"
