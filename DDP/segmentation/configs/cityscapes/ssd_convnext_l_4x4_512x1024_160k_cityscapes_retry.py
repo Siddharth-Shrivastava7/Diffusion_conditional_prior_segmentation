@@ -132,7 +132,7 @@ lr_config = dict(
     min_lr=0.0,
     by_epoch=False)
 
-find_unused_parameters = True # can set to False, if want to increase training speed 
+find_unused_parameters = False # can set to False, if want to increase training speed 
 
 ## extras for retrying 
 resume_from = '/home/sidd_s/scratch/DDP_workdirs/ssd_convnext_l_4x4_512x1024_160k_cityscapes_old/best_mIoU_iter_88000.pth'
