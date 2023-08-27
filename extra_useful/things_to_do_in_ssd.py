@@ -17,7 +17,7 @@
 >> mutual information based noise scheduling type
     1. change it to cosine 
 >> instead of gumbel max trick, can see to use argmax based sampling, if possible!  
->> 
+>> change learning rate, if req from 6e-5 to 1e-4, or different!
 '''
 
 ## can covert "checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1)" this into 
