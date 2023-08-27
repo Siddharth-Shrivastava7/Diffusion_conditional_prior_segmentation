@@ -136,6 +136,5 @@ find_unused_parameters = False # can set to False, if want to increase training 
 
 ## extras for retrying 
 resume_from = '/home/sidd_s/scratch/DDP_workdirs/ssd_convnext_l_4x4_512x1024_160k_cityscapes_old/best_mIoU_iter_88000.pth'
-checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1, save_best='mIoU', rule='greater')  
 
 
