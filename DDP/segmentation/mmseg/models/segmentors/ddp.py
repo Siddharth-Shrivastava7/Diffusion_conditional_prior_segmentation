@@ -337,41 +337,42 @@ class DDP(EncoderDecoder):
         x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
         ## below holds the modification code for inferecing ddp with the starting point as the prediction of either DA or DG model 
         # if img_metas[0]['filename'].find('dark_zurich')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
-        # # if img_metas[0]['filename'].find('cityscapes')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
-        # # if img_metas[0]['filename'].find('bdd100k')!=-1:
-        #     # ## loading the predicted image
-        #     # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-        #     pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/segformer_pred/')
-        #     # pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
-        #     # pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
-        #     # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
-        #     # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
-        #     # pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
-        #     # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', img_metas[0]['filename']) # image path of the dataset 
-        #     # pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
-        #     # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/robustnet_pred/') # Robustnet prediction on DZ-val images
-        #     pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
-        #     pred[pred==255] = self.num_classes ## for gt case 
-        #     pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
-        #     ## have to resize pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
-        #     pred_down = resize(pred.float(), size=(h, w), mode="nearest")
-        #     # encoding the predicted image
-        #     mask_enc = self.embedding_table(pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
-        #     mask_enc = (torch.sigmoid(mask_enc) * 2 - 1) * self.bit_scale 
-        #     # print(mask_enc.shape) # torch.Size([1, 256, 256, 512])
-        #     ## corrupting the predicted image 
-        #     # sample time
-        #     # times = torch.zeros((b,), device=device).float().uniform_(self.sample_range[0],
-        #     #                                                             self.sample_range[1])  # [bs]
-        #     # # print(times)
-        #     # # random noise
-        #     # noise = torch.randn_like(mask_enc)
-        #     # noise_level = self.log_snr(times)
-        #     # padded_noise_level = self.right_pad_dims_to(x, noise_level)
-        #     # alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
-        #     # mask_t = alpha * mask_enc + sigma * noise           
-        #     mask_t = mask_enc
-        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
+        if img_metas[0]['filename'].find('cityscapes')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
+        # if img_metas[0]['filename'].find('bdd100k')!=-1:
+            # ## loading the predicted image
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/segformer_pred/')
+            # pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
+            # pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
+            # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
+            # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
+            # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', img_metas[0]['filename']) # image path of the dataset 
+            # pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/robustnet_pred/') # Robustnet prediction on DZ-val images
+            city_name = img_metas[0]['filename'].split('/')[-2]  
+            pred_path = img_metas[0]['filename'].replace('leftImg8bit/val/' + city_name, 'pred/segformerb2/')
+            pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
+            pred[pred==255] = self.num_classes ## for gt case 
+            pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+            ## have to resize pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
+            pred_down = resize(pred.float(), size=(h, w), mode="nearest")
+            # encoding the predicted image
+            mask_enc = self.embedding_table(pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
+            mask_enc = (torch.sigmoid(mask_enc) * 2 - 1) * self.bit_scale 
+            # print(mask_enc.shape) # torch.Size([1, 256, 256, 512])
+            ## corrupting the predicted image 
+            # sample time
+            # times = torch.zeros((b,), device=device).float().uniform_(self.sample_range[0],
+            #                                                             self.sample_range[1])  # [bs]
+            # # print(times)
+            # # random noise
+            # noise = torch.randn_like(mask_enc)
+            # noise_level = self.log_snr(times)
+            # padded_noise_level = self.right_pad_dims_to(x, noise_level)
+            # alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
+            # mask_t = alpha * mask_enc + sigma * noise           
+            mask_t = mask_enc
+        # mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
         outs = list()
         for idx, (times_now, times_next) in enumerate(time_pairs):
             # x_mod = torch.zeros_like(x)
