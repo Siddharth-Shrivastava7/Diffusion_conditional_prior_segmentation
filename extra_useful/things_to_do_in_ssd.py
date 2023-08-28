@@ -18,6 +18,8 @@
     1. change it to cosine 
 >> instead of gumbel max trick, can see to use argmax based sampling, if possible!  
 >> change learning rate, if req from 6e-5 to 1e-4, or different!
+>> how about using accumulation, i.e. accumulating all the time steps x0 parameterisation, then taking the mean of the accumulated value as the final output value. 
+>> see in each diffusion step, how improvement is happening; this might help us to find what could be the more suituable # timesteps. 
 '''
 
 ## can covert "checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1)" this into 
