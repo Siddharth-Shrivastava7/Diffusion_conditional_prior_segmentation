@@ -26,7 +26,7 @@
 
 
 
->> AFTER THE 1ST COMPLETE TRAINING OF SSD, PLEASE COPY "mmseg" MODULE FROM TOOLS TO THE PARENT DIRECTORY
+>> AFTER THE 1ST COMPLETE TRAINING OF SSD, PLEASE COPY "mmseg" MODULE FROM TOOLS TO THE PARENT DIRECTORY  -> @DONE
 '''
 
 ## can covert "checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1)" this into 
