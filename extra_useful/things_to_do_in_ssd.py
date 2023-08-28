@@ -23,7 +23,10 @@
 >> with batch size of 8, our intial experiment was carried out, it can also be done with batch size of 16 (similar to DDP and DDPS code) ## can be done quickly
 >> how to include background (sir, said it doesn't matter what you do, as along as you are predicting and optimising over 19 classes(classes except background) similar to DDP type, since we are not predicting at the inference stage, as our sole purpose is to improve segementation model predictions--corrector for segmentor)
     1. can use FN for background class and make a new confusion matrix, consequently q_mats and q_onestep mats. > a way of including background class 
-    
+
+
+
+>> AFTER THE 1ST COMPLETE TRAINING OF SSD, PLEASE COPY "mmseg" MODULE FROM TOOLS TO THE PARENT DIRECTORY
 '''
 
 ## can covert "checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1)" this into 
