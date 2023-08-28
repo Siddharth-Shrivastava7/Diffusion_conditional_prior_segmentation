@@ -13,6 +13,7 @@ model = dict(
     type='SSD',
     schedule_steps=20, # time steps for reverse discrete diffusion  
     mutual_info_kind = 'linear', 
+    accumulation=False, ## will do True later
     pretrained=None,
     backbone=dict(
         type='mmcls.ConvNeXt',
@@ -135,6 +136,6 @@ lr_config = dict(
 find_unused_parameters = False # can set to False, if want to increase training speed 
 
 ## extras for retrying 
-resume_from = '/home/sidd_s/scratch/DDP_workdirs/ssd_convnext_l_4x4_512x1024_160k_cityscapes_old/iter_80000.pth' ## rather than best miou eval saved, resuming with latest checkpoint"
+# resume_from = '/home/sidd_s/scratch/DDP_workdirs/ssd_convnext_l_4x4_512x1024_160k_cityscapes_old/iter_80000.pth' ## rather than best miou eval saved, resuming with latest checkpoint"
 # checkpoint_config = dict(by_epoch=False, interval=16000, max_keep_ckpts=1, save_best='mIoU') ## when we need to save the best miou as the checkpoint using checkpoint_config...i.e. ignoring the latest .pth saved file.
 
