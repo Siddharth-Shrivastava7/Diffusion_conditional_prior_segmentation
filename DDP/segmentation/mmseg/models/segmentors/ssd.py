@@ -256,11 +256,8 @@ class SSD(EncoderDecoder):
             when q_mats is onestep mats then, calculating  probabilities of q(x_t | x_{t-1}) 
         '''
         if x_var_t_logits: ## softmax of logits of denoising diffusion net
-            B, C, H, W = x_var_t.shape  # C = self.num_classes ; which means it doesn't include background 
-            extended_logits = torch.zeros((B, C+1, H, W))  
-            extended_logits[:, :C, :, :] = x_var_t ## logits including background as zero logits 
-            # x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float32)
-            x_var_t_onehot_like = extended_logits.view(B, -1, C+1).to(torch.float32)
+            B, C, H, W = x_var_t.shape  # C = self.num_classes + 1 ;  including background 
+            x_var_t_onehot_like = x_var_t.view(B, -1, C).to(torch.float32)
         else:
             B, H, W = x_var_t.shape  
             x_var_t_onehot_like = F.one_hot(x_var_t.view(B, -1).to(torch.int64), self.num_classes+1).to(torch.float32)
@@ -284,17 +281,12 @@ class SSD(EncoderDecoder):
         
         fact1 = self.q_probs(self.transpose_q_onestep_mats.to(x_t.device), t, x_t) # x_{t} x Q_t^{T}
         fact2 = self.q_probs(self.q_mats.to(x_start_pred_logits.device), t - 1, F.softmax(x_start_pred_logits, dim=1), x_var_t_logits=True) # x_{0} x Q_{t-1}^{\hat}
-        tzero_logits = x_start_pred_logits
         
         # At t=0 we need the logits of q(x_{-1}|x_0, x_start)
         # where x_{-1} == x_start. This should be equal the log of x_0.
         out = torch.log(fact1 + torch.finfo(torch.float32).eps) + torch.log(fact2 + torch.finfo(torch.float32).eps) # log(fact1*fact2) = log(fact1) + log(fact2) 
-        t_broadcast = torch.broadcast_to(t[0], x_start_pred_logits.shape)
-        return torch.where(
-            t_broadcast == 0, 
-            tzero_logits, 
-            out
-        )
+        return out 
+        
         
     def p_logits(self, img_feat, img_metas, x_t, t): 
         """
@@ -314,14 +306,19 @@ class SSD(EncoderDecoder):
         feat = self.transform(feat)
         # denoising the mast at current time t
         x_start_pred_logits = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  
-        # x_start_pred = torch.argmax(x_start_pred_logit, dim=1)
+        # x_start_pred = torch.argmax(x_start_pred_logit, dim=1) 
         
-        t_broadcast = torch.broadcast_to(t[0], x_start_pred_logits.shape)
-        model_logits = torch.where(
-            t_broadcast == 0, 
-            x_start_pred_logits, 
-            self.q_posterior_logits(x_start_pred_logits, x_t, t)
-        )
+        
+        ## have to include background here in the logits 
+        B, C, H, W = x_start_pred_logits.shape 
+        extended_logits = (torch.ones((B, C+1, H, W))*(-1e17)).to(x_start_pred_logits.device)  ## very low logits value to background for neglecting it in the prediction!
+        extended_logits[:, :C, :, :] = x_start_pred_logits ## logits including background as zero logits 
+        x_start_pred_logits = extended_logits
+        
+        if t[0].item() == 0:
+            model_logits = x_start_pred_logits
+        else: 
+            model_logits = self.q_posterior_logits(x_start_pred_logits, x_t, t) 
         
         assert (model_logits.shape == x_start_pred_logits.shape \
             == ((x_t.shape[0], self.num_classes+1) + tuple(x_t.shape[1:])))
