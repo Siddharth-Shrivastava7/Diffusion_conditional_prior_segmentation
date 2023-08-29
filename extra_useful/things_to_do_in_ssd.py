@@ -23,7 +23,7 @@
 >> with batch size of 8, our intial experiment was carried out, it can also be done with batch size of 16 (similar to DDP and DDPS code) ## can be done quickly
 >> how to include background (sir, said it doesn't matter what you do, as along as you are predicting and optimising over 19 classes(classes except background) similar to DDP type, since we are not predicting at the inference stage, as our sole purpose is to improve segementation model predictions--corrector for segmentor)
     1. can use FN for background class and make a new confusion matrix, consequently q_mats and q_onestep mats. > a way of including background class 
-
+>> Training for more iteations on top of 160k saved iterations, with the similar training config as that of DDP.
 
 
 >> AFTER THE 1ST COMPLETE TRAINING OF SSD, PLEASE COPY "mmseg" MODULE FROM TOOLS TO THE PARENT DIRECTORY  -> @DONE
@@ -39,4 +39,7 @@
     below mentioning some modifications in the current ssd code
 '''
 
-# 1.  
+# current work: resume from 160k iterations saved model, for checking if the performance improves on top of it? @Done : In training 
+
+# current work: it is to see how multi step miou was been calculated by DDPS and have to inculcate in SSD.
+# >> below inculcation code: 
