@@ -73,7 +73,7 @@
                 "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/tools/test_diffusion.py",
                 "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/configs/darkzurich/segformer_mit_b2_segformer_head_unet_fc_small_multi_step_ade_pretrained_freeze_embed_160k_darkzurich20_finetune_ema.py",
                 "/home/sidd_s/scratch/saved_models/DDPS/segformer_b2_multistep_cityscapes/best_mIoU_iter_128000.pth",
-                "--launcher", "pytorch"
+                "--launcher", "pytorch", "--eval", "mIoU"
             ]
         }
     ]

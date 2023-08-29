@@ -170,7 +170,7 @@ def plot_confusion_matrix(confusion_matrix,
 def calculate_confusion_matrix_segformerb2(): 
     
     cfg = Config.fromfile('/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/_base_/datasets/cityscapes.py')
-    results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/results_images.pickle')
+    results = mmcv.load('/home/sidd_s/scratch/results/segformer/cityscapes/val/results_images.pickle')
 
     assert isinstance(results, list)
     if isinstance(results[0], np.ndarray):
