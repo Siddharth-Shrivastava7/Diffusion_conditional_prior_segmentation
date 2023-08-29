@@ -1,0 +1,28 @@
+{
+    "config": "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDPS/configs/darkzurich/segformer_mit_b2_segformer_head_unet_fc_small_multi_step_ade_pretrained_freeze_embed_160k_darkzurich20_finetune_ema.py",
+    "metric": {
+        "mIoU": [
+            0.2302,
+            0.2304,
+            0.23,
+            0.2301,
+            0.23,
+            0.2297,
+            0.2297,
+            0.2299,
+            0.2289,
+            0.2291,
+            0.2291,
+            0.2292,
+            0.2291,
+            0.2284,
+            0.229,
+            0.2285,
+            0.2284,
+            0.2282,
+            0.2283,
+            0.2281
+        ],
+        "copy_paste_iou": "23.02,23.04,23.0,23.01,23.0,22.97,22.97,22.99,22.89,22.91,22.91,22.92,22.91,22.84,22.9,22.85,22.84,22.82,22.83,22.81"
+    }
+}
