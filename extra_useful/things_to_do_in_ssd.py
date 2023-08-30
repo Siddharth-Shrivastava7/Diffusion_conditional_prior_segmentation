@@ -43,5 +43,16 @@
 
 # current work: it is to see how multi step miou was been calculated by DDPS and have to inculcate in SSD.
 # >> below inculcation code: 
+
+'''
 # Debugging with vs code the DDPS testing code so, as to understand how multi-step testing is taking place.
-# now testing SSD code, for pointing out the first change which needs to be done for the including the DDPS type testing in our code.
+# now testing SSD code, for pointing out the first change which needs to be done for the including the DDPS type testing in our code. 
+In SSD,
+1. changes needs to be done in "simple_test" and "aug_test" functions in encoder_decoder module. >> then change in self.inference (both slide inference and whole inference)  
+2. changes in self.whole_inference() and self.slide_inference() 
+3. then, chnage the self.encode_decode() in whole inference and slide inference. 
+
+
+For now, changing only in simple_test and self.whole_inference...later to bring the consequent changes in the aug_test and self.slide_inference. 
+
+'''
