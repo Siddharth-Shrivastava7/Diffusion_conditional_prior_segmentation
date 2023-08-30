@@ -188,7 +188,7 @@ def multi_gpu_test(model,
         'exclusive, only one of them could be true .'
 
     model.eval()
-    results = []
+    results = [[] for _ in list(range(0, model.module.schedule_steps))] # list of lists, with upper list length being equal to #timesteps
     dataset = data_loader.dataset
     # The pipeline about how the data_loader retrieval samples from dataset:
     # sampler -> batch_sampler -> indices
