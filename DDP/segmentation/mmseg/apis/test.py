@@ -228,7 +228,7 @@ def multi_gpu_test(model,
             results[timestep].extend(result_timestep)
 
         if rank == 0:
-            batch_size = len(result) * world_size
+            batch_size = len(result[0]) * world_size
             for _ in range(batch_size):
                 prog_bar.update()
 
