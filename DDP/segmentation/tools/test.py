@@ -315,8 +315,9 @@ def main():
             mmcv.dump(results, args.out)
         if args.eval:
             eval_kwargs.update(metric=args.eval) 
-            collect_timesteps = list(range(0, cfg.schedule_steps))
-            metric = dataset.dataset.evaluate_diffusion(results,
+            # metric = dataset.evaluate(results, **eval_kwargs) ## for only single timestep 
+            collect_timesteps = list(range(0, model.module.schedule_steps))
+            metric = dataset.evaluate_diffusion(results,
                                                 collect_timesteps=collect_timesteps, 
                                                 **eval_kwargs)
             metric_dict = dict(config=args.config, metric=metric)
