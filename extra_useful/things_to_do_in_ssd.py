@@ -55,4 +55,7 @@ In SSD,
 
 For now, changing only in simple_test and self.whole_inference...later to bring the consequent changes in the aug_test and self.slide_inference. 
 
+A> Changes in encode_decode in ssd module:  
+
+
 '''
