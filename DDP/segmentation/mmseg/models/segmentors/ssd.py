@@ -49,7 +49,6 @@ class SSD(EncoderDecoder):
                 mutual_info_interpolation_steps = 256,  
                 mutual_info_kind = 'linear', 
                 allow_out_of_bounds=False,
-                accumulation=False,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
@@ -64,7 +63,6 @@ class SSD(EncoderDecoder):
             norm_cfg=None,
             act_cfg=None
         ) # used for converting concatenated encoded i/p image and encoded;corrupted gt map to feature maps of dimension being half of the joint dimension of the concatenated inputs
-        self.accumulation = accumulation
         self.mutual_info_min_exponent = mutual_info_min_exponent 
         self.mutual_info_max_exponent = mutual_info_max_exponent  
         self.mutual_info_interpolation_steps = mutual_info_interpolation_steps 
@@ -212,13 +210,8 @@ class SSD(EncoderDecoder):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         img_feat = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
-        out_mask, out = self.similarity_sample(img_feat, img_metas)
-        out = resize(
-            input=out,
-            size=img.shape[2:],
-            mode='bilinear',
-            align_corners=self.align_corners)
-        return out
+        outs = self.similarity_sample(img_feat, img_metas)    
+        return outs
     
     
     @torch.no_grad() 
@@ -236,17 +229,13 @@ class SSD(EncoderDecoder):
             x[x==255] = self.num_classes ## if ever, background was present, then this! 
             x = x.view(1, h, w) # BHW 
             
-        outs = list()
+        outs = list() ## collecting each timestep (in reverse diffusion) output 
         for i in reversed(range(0, self.schedule_steps)): ## reverse traversing the diffusion pipeline 
             times = (torch.ones((b,), device=device) * i).long()
             x,  x_start_pred_logits = self.p_sample(img_feat, img_metas, 
                                                     x, times)
-            if self.accumulation: ## accumulating all the probas of x0_pred
-                outs.append(x_start_pred_logits.softmax(1))
-        if self.accumulation: ## accumulating all the probas of x0_pred
-            x_start_pred_logits = torch.cat(outs, dim=0)
-        logit = x_start_pred_logits.mean(dim=0, keepdim=True)     
-        return x, logit     
+            outs.append(x_start_pred_logits)  
+        return outs 
     
     
     def q_probs(self, q_mats, t, x_var_t, x_var_t_logits = False):

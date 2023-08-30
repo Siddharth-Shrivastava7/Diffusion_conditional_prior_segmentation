@@ -239,26 +239,24 @@ class EncoderDecoder(BaseSegmentor):
 
     def whole_inference(self, img, img_meta, rescale):
         """Inference with full image."""
-        seg_logits = self.encode_decode(img, img_meta) ## encode_decode of ddp module is being used as it has ddim/ddpm sampler
+        seg_logit = self.encode_decode(img, img_meta) ## encode_decode of ddp module is being used as it has ddim/ddpm sampler
         if rescale:
             # support dynamic shape for onnx
             if torch.onnx.is_in_onnx_export():
                 size = img.shape[2:]
             else:
                 # remove padding area
-                for i, seg_logit in enumerate(seg_logits):
-                    resize_shape = img_meta[0]['img_shape'][:2]
-                    seg_logits[i] = seg_logit[:, :, :resize_shape[0], :resize_shape[1]]
+                resize_shape = img_meta[0]['img_shape'][:2]
+                seg_logit = seg_logit[:, :, :resize_shape[0], :resize_shape[1]]
                 size = img_meta[0]['ori_shape'][:2]
-            for i, seg_logit in enumerate(seg_logits):
-                seg_logits[i] = resize(
-                    seg_logit,
-                    size=size,
-                    mode='bilinear',
-                    align_corners=self.align_corners,
-                    warning=False)
+            seg_logit = resize(
+                seg_logit,
+                size=size,
+                mode='bilinear',
+                align_corners=self.align_corners,
+                warning=False)
 
-        return seg_logits
+        return seg_logit
 
     def inference(self, img, img_meta, rescale):
         """Inference with slide/whole style.
@@ -280,50 +278,63 @@ class EncoderDecoder(BaseSegmentor):
         ori_shape = img_meta[0]['ori_shape']
         assert all(_['ori_shape'] == ori_shape for _ in img_meta)
         if self.test_cfg.mode == 'slide':
-            # seg_logit = self.slide_inference(img, img_meta, rescale) 
-            # # have to modify it later to "seg_logits"
-            pass 
+            seg_logit = self.slide_inference(img, img_meta, rescale)
         else:
-            seg_logits = self.whole_inference(img, img_meta, rescale)
-        outputs = [] 
-        for i, seg_logit in enumerate(seg_logits):
-            if self.num_classes == 1:
-                output = F.sigmoid(seg_logit)
-            else:
-                output = F.softmax(seg_logit, dim=1)
-            flip = img_meta[0]['flip']
-            if flip:
-                flip_direction = img_meta[0]['flip_direction']
-                assert flip_direction in ['horizontal', 'vertical']
-                if flip_direction == 'horizontal':
-                    output = output.flip(dims=(3, ))
-                elif flip_direction == 'vertical':
-                    output = output.flip(dims=(2, ))
-                '''
-                    here, the output is the probability distribution!;)!
-                '''
-            outputs.append(output)
-        return outputs
+            seg_logit = self.whole_inference(img, img_meta, rescale)
+        if self.out_channels == 1:
+            output = F.sigmoid(seg_logit)
+        else:
+            output = F.softmax(seg_logit, dim=1)
+        flip = img_meta[0]['flip']
+        if flip:
+            flip_direction = img_meta[0]['flip_direction']
+            assert flip_direction in ['horizontal', 'vertical']
+            if flip_direction == 'horizontal':
+                output = output.flip(dims=(3,))
+            elif flip_direction == 'vertical':
+                output = output.flip(dims=(2,))
+        '''
+            here, the output is the probability distribution!;)!
+        '''
+        return output
 
     def simple_test(self, img, img_meta, rescale=True):  ## it is being called at the test time! 
         """Simple test with single image."""
-        seg_logits = self.inference(img, img_meta, rescale)
-        seg_preds = [] 
-        for seg_logit in seg_logits:
-            if self.out_channels == 1:
-                seg_pred = (seg_logit >
-                            self.decode_head.threshold).to(seg_logit).squeeze(1) 
-            else:
-                seg_pred = seg_logit.argmax(dim=1)
-            if torch.onnx.is_in_onnx_export():
-                # our inference backend only support 4D output
-                seg_pred = seg_pred.unsqueeze(0)
-                return seg_pred # not supporting this for now
-            seg_pred = seg_pred.cpu().numpy()
-            # unravel batch dim
-            seg_pred = list(seg_pred)
-            seg_preds.append(seg_pred)    
-        return seg_preds
+        seg_logit = self.inference(img, img_meta, rescale)
+        if self.out_channels == 1:
+            seg_pred = (seg_logit >
+                        self.decode_head.threshold).to(seg_logit).squeeze(1) 
+        else:
+            seg_pred = seg_logit.argmax(dim=1)
+        if torch.onnx.is_in_onnx_export():
+            # our inference backend only support 4D output
+            seg_pred = seg_pred.unsqueeze(0)
+            return seg_pred
+        
+        ## here need to change for bringing uncertainty into consideration 
+        # if img_meta[0]['filename'].find('dark_zurich')!=-1:    
+        #     ## seg logit is probability distribution here 
+        #     mic_pred_path = img_meta[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/mic_pred/')
+        #     mic_pred = torch.tensor(np.array(Image.open(mic_pred_path))).to(img.device) # loading MIC prediction {as a starting point to correct it further}  
+        #     mic_pred = mic_pred.view(1, mic_pred.shape[0], mic_pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+        #     mic_pred = mic_pred.long()
+            
+        #     ## uncertainty map from probability distribution 
+        #     entropy_map = torch.log(prob_2_entropy(seg_logit)) 
+        #     entropy_map = entropy_map.mean(dim=1) 
+        #     binary_map = (entropy_map.squeeze() < entropy_map.mean()).unsqueeze(dim=0)
+        #     # entropy_map = F.sigmoid(entropy_map)
+        #     seg_pred[binary_map] = mic_pred[binary_map]
+            
+        #     # label_entropy = entropy_map.argmax(dim=1)
+        #     # updating seg_pred with pixel with high entropy class with the original segmentation label
+        #     # seg_pred[seg_pred==label_entropy] = mic_pred[seg_pred==label_entropy]   
+        # seg_pred = resize(seg_pred.unsqueeze(dim=0).float(), size=(1080, 1920), mode="nearest").squeeze(dim=0) 
+            
+        seg_pred = seg_pred.cpu().numpy()
+        # unravel batch dim
+        seg_pred = list(seg_pred)
+        return seg_pred
 
     def simple_test_logits(self, img, img_metas, rescale=True):
         """Test without augmentations.
