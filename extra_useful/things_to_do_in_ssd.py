@@ -19,7 +19,7 @@
 >> instead of gumbel max trick, can see to use argmax based sampling, if possible! ## can happen quickly   
 >> change learning rate, if req from 6e-5 to 1e-4, or different! ## can happen quickly  
 >> how about using accumulation, i.e. accumulating all the time steps x0 parameterisation, then taking the mean of the accumulated value as the final output value. ## can happen quickly (as it is already been done, before and it was the concept of DDP(mentioned in their code))
->> see in each diffusion step, how improvement is happening; this might help us to find what could be the more suituable # timesteps. ## now this thing might require some time, cause it is their in DDPS code, but ain't in DDP...have to see to include in our code.
+>> see in each diffusion step, how improvement is happening; this might help us to find what could be the more suituable # timesteps. ## now this thing might require some time, cause it is their in DDPS code, but ain't in DDP...have to see to include in our code. >> Done the inclusion of multi-step miou!
 >> with batch size of 8, our intial experiment was carried out, it can also be done with batch size of 16 (similar to DDP and DDPS code) ## can be done quickly
 >> how to include background (sir, said it doesn't matter what you do, as along as you are predicting and optimising over 19 classes(classes except background) similar to DDP type, since we are not predicting at the inference stage, as our sole purpose is to improve segementation model predictions--corrector for segmentor)
     1. can use FN for background class and make a new confusion matrix, consequently q_mats and q_onestep mats. > a way of including background class 
@@ -62,3 +62,5 @@ D> Changes in main function of tools/test.py module: @DONE
 E> Creating new functions in cityscapes.py dataset module for miou calculation: @DONE 
 
 '''
+
+## Changing the timesteps equal to 3 <<experiment1>>
