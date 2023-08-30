@@ -210,8 +210,16 @@ class SSD(EncoderDecoder):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
         img_feat = self.extract_feat(img)[0] # encoding the image {both backbone and neck{fpn + multistagemerging}}
-        outs = self.similarity_sample(img_feat, img_metas)    
-        return outs
+        outs = self.similarity_sample(img_feat, img_metas)
+        outs_resize = []    
+        for out in outs: 
+            out = resize(
+                input=out,
+                size=img.shape[2:],
+                mode='bilinear',
+                align_corners=self.align_corners)
+            outs_resize.append(out)
+        return outs_resize
     
     
     @torch.no_grad() 
