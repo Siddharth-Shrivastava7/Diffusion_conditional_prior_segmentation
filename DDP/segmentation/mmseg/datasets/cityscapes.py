@@ -285,6 +285,14 @@ class CityscapesDataset(CustomDataset):
                     ret_metrics_summary[ret_metric] = [np.round(np.nanmean(ret_metric_value) * 100, 2)]
                     ret_metrics_class[ret_metric] = [np.round(ret_metric_value * 100, 2)]
         ret_metrics_class.pop('aAcc', None)
+        '''
+            Not including accuracy for logging/analysing {as it is biased toward large portion area classes in segmentation task}
+        '''
+        ret_metrics_class.pop('Acc', None)
+        ret_metrics_summary.pop('aAcc', None) 
+        ret_metrics_summary.pop('Acc', None) 
+        
+        
         for ret_metric, ret_metric_value in ret_metrics_class.items():
             ret_metric_value = np.stack(ret_metric_value, axis=0).T  # [num_classes, num_steps]        
             ret_metrics_class[ret_metric] = ret_metric_value
