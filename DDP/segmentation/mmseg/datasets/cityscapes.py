@@ -212,3 +212,28 @@ class CityscapesDataset(CustomDataset):
             CSEval.evaluateImgLists(pred_list, seg_map_list, CSEval.args))
 
         return eval_results
+
+    def evaluate_diffusion(self,
+                           results_timesteps,
+                           collect_timesteps,
+                           metric='mIoU',
+                           logger=None,
+                           gt_seg_maps=None,
+                           **kwargs):
+        """Evaluate the dataset.
+
+        Args:
+            results (list[tuple[torch.Tensor]] | list[str]): per image pre_eval
+                 results or predict segmentation map for computing evaluation
+                 metric.
+            metric (str | list[str]): Metrics to be evaluated. 'mIoU',
+                'mDice' and 'mFscore' are supported.
+            logger (logging.Logger | None | str): Logger used for printing
+                related information during evaluation. Default: None.
+            gt_seg_maps (generator[ndarray]): Custom gt seg maps as input,
+                used in ConcatDataset
+
+        Returns:
+            dict[str, float]: Default metrics.
+        """
+        pass 

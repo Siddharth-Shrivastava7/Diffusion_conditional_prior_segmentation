@@ -314,8 +314,11 @@ def main():
             print(f'\nwriting results to {args.out}')
             mmcv.dump(results, args.out)
         if args.eval:
-            eval_kwargs.update(metric=args.eval)
-            metric = dataset.evaluate(results, **eval_kwargs)
+            eval_kwargs.update(metric=args.eval) 
+            collect_timesteps = list(range(0, cfg.schedule_steps))
+            metric = dataset.dataset.evaluate_diffusion(results,
+                                                collect_timesteps=collect_timesteps, 
+                                                **eval_kwargs)
             metric_dict = dict(config=args.config, metric=metric)
             mmcv.dump(metric_dict, json_file, indent=4)
             if tmpdir is not None and eval_on_format_results:
