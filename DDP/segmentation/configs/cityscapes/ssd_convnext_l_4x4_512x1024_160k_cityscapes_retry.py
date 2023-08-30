@@ -13,7 +13,6 @@ model = dict(
     type='SSD',
     schedule_steps=20, # time steps for reverse discrete diffusion  
     mutual_info_kind = 'linear', 
-    accumulation=False, ## will do True later
     pretrained=None,
     backbone=dict(
         type='mmcls.ConvNeXt',
