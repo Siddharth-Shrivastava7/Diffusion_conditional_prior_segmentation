@@ -10,6 +10,7 @@ from mmcv.engine import collect_results_cpu, collect_results_gpu
 from mmcv.image import tensor2imgs
 from mmcv.runner import get_dist_info
 
+import torch.distributed as dist
 
 def np2tmp(array, temp_file_name=None, tmpdir=None):
     """Save ndarray to local numpy file.
@@ -202,23 +203,29 @@ def multi_gpu_test(model,
     rank, world_size = get_dist_info()
     if rank == 0:
         prog_bar = mmcv.ProgressBar(len(dataset))
+        
+    if format_only:  
+        imgfile_prefix_base = format_args['imgfile_prefix']
+        format_args.pop('imgfile_prefix')
 
     for batch_indices, data in zip(loader_indices, data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=True, **data)
+            
+        for timestep, result_timestep in enumerate(result):
+            if efficient_test:
+                result_timestep = [np2tmp(_, tmpdir='.efficient_test') for _ in result_timestep]
 
-        if efficient_test:
-            result = [np2tmp(_, tmpdir='.efficient_test') for _ in result]
+            if format_only:
+                imgfile_prefix = osp.join(imgfile_prefix_base, str(timestep))
+                result_timestep = dataset.format_results(
+                    result_timestep, indices=batch_indices,imgfile_prefix=imgfile_prefix, **format_args)
+            if pre_eval:
+                # TODO: adapt samples_per_gpu > 1.
+                # only samples_per_gpu=1 valid now
+                result_timestep = dataset.pre_eval(result_timestep, indices=batch_indices)
 
-        if format_only:
-            result = dataset.format_results(
-                result, indices=batch_indices, **format_args)
-        if pre_eval:
-            # TODO: adapt samples_per_gpu > 1.
-            # only samples_per_gpu=1 valid now
-            result = dataset.pre_eval(result, indices=batch_indices)
-
-        results.extend(result)
+            results[timestep].extend(result_timestep)
 
         if rank == 0:
             batch_size = len(result) * world_size
@@ -226,8 +233,10 @@ def multi_gpu_test(model,
                 prog_bar.update()
 
     # collect results from all ranks
-    if gpu_collect:
-        results = collect_results_gpu(results, len(dataset))
-    else:
-        results = collect_results_cpu(results, len(dataset), tmpdir)
+    for timestep, results_timestep in enumerate(results):
+        if gpu_collect:
+            results[timestep] = collect_results_gpu(results_timestep, len(dataset))
+        else:
+            results[timestep] = collect_results_cpu(results_timestep, len(dataset), tmpdir)
+        dist.barrier()  # wait for other ranks
     return results

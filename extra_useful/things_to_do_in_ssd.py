@@ -57,7 +57,7 @@ For now, changing only in simple_test and self.whole_inference...later to bring 
 
 A> Changes in encode_decode & similarity_sample in ssd module:  @DONE 
 B> Changes in whole_inference & inference & simple_test in encoder_decoder module: @DONE
-C> Changes in multi_gpu_test function in api/test.py module
+C> Changes in multi_gpu_test function in api/test.py module: @DONE
 
 
 '''
