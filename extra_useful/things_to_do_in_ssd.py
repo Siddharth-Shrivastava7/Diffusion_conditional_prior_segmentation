@@ -59,5 +59,6 @@ A> Changes in encode_decode & similarity_sample in ssd module:  @DONE
 B> Changes in whole_inference & inference & simple_test in encoder_decoder module: @DONE
 C> Changes in multi_gpu_test function in api/test.py module: @DONE
 D> Changes in main function of tools/test.py module: @DONE
+E> Creating new functions in cityscapes.py dataset module for miou calculation: @DONE 
 
 '''

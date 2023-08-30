@@ -9,6 +9,9 @@ from PIL import Image
 from .builder import DATASETS
 from .custom import CustomDataset
 
+from mmseg.core import eval_metrics, pre_eval_to_metrics
+from collections import OrderedDict 
+from prettytable import PrettyTable 
 
 @DATASETS.register_module()
 class CityscapesDataset(CustomDataset):
@@ -236,4 +239,96 @@ class CityscapesDataset(CustomDataset):
         Returns:
             dict[str, float]: Default metrics.
         """
-        pass 
+        if isinstance(metric, str):
+            metric = [metric]
+        allowed_metrics = ['mIoU', 'mDice', 'mFscore']
+        if not set(metric).issubset(set(allowed_metrics)):
+            raise KeyError('metric {} is not supported'.format(metric))
+
+        eval_results = {}
+        ret_metrics_timesteps = [] 
+        for results in results_timesteps:
+            # test a list of files
+            if mmcv.is_list_of(results, np.ndarray) or mmcv.is_list_of(
+                    results, str):
+                if gt_seg_maps is None:
+                    gt_seg_maps = self.get_gt_seg_maps()
+                num_classes = len(self.CLASSES)
+                ret_metrics = eval_metrics(
+                    results,
+                    gt_seg_maps,
+                    num_classes,
+                    self.ignore_index,
+                    metric,
+                    label_map=dict(),
+                    reduce_zero_label=self.reduce_zero_label)
+            # test a list of pre_eval_results
+            else:
+                ret_metrics = pre_eval_to_metrics(results, metric)
+            ret_metrics_timesteps.append(ret_metrics)
+        
+        # Because dataset.CLASSES is required for per-eval.
+        if self.CLASSES is None:
+            class_names = tuple(range(num_classes))
+        else:
+            class_names = self.CLASSES
+        ret_metrics_summary = OrderedDict()
+        ret_metrics_class = OrderedDict()
+        for timestep_idx, ret_metrics in enumerate(ret_metrics_timesteps):
+            # summary table
+            # each class table  
+            for ret_metric, ret_metric_value in ret_metrics.items():
+                if ret_metrics_summary.get(ret_metric, False):
+                        ret_metrics_summary[ret_metric].append(np.round(np.nanmean(ret_metric_value) * 100, 2))
+                        ret_metrics_class[ret_metric].append(np.round(ret_metric_value * 100, 2))
+                else:
+                    ret_metrics_summary[ret_metric] = [np.round(np.nanmean(ret_metric_value) * 100, 2)]
+                    ret_metrics_class[ret_metric] = [np.round(ret_metric_value * 100, 2)]
+        ret_metrics_class.pop('aAcc', None)
+        for ret_metric, ret_metric_value in ret_metrics_class.items():
+            ret_metric_value = np.stack(ret_metric_value, axis=0).T  # [num_classes, num_steps]        
+            ret_metrics_class[ret_metric] = ret_metric_value
+        
+        ret_metrics_class.update({'Class': class_names})
+        ret_metrics_class.move_to_end('Class', last=False)    
+        
+        # for logger
+        collect_timesteps_str = ' ' + ','.join(map(str, collect_timesteps))
+        class_table_data = PrettyTable()
+        for key, val in ret_metrics_class.items():
+            if key != 'Class':
+                val_new = []
+                for val_data in val:
+                    val_new.append(','.join(map(str, val_data)))
+                class_table_data.add_column(key + collect_timesteps_str, val_new)
+            else:
+                class_table_data.add_column(key, val)
+        
+        summary_table_data = PrettyTable()
+        for key, val in ret_metrics_summary.items():
+            val = ','.join(map(str, val))
+            if key == 'aAcc':
+                summary_table_data.add_column(key + collect_timesteps_str, [val])
+            else:
+                summary_table_data.add_column('m' + key + collect_timesteps_str, [val])
+        
+        print_log('per class results:', logger)
+        print_log('\n' + class_table_data.get_string(), logger=logger)
+        print_log('Summary:', logger)
+        print_log('\n' + summary_table_data.get_string(), logger=logger)
+        
+        # each metric dict
+        for key, value in ret_metrics_summary.items():
+            if key == 'aAcc':
+                eval_results[key] = [round(step_value / 100.0, 4) for step_value in value]
+            else:
+                eval_results['m' + key] = [round(step_value / 100.0, 4) for step_value in value]
+        if ret_metrics_summary.get('IoU', False):
+            eval_results['copy_paste_iou'] = ','.join(map(str, ret_metrics_summary['IoU']))      
+        # ret_metrics_class.pop('Class', None)
+        # for key, value in ret_metrics_class.items():
+        #     eval_results.update({
+        #         key + '.' + str(name): value[idx] / 100.0
+        #         for idx, name in enumerate(class_names)
+        #     })
+        return eval_results
