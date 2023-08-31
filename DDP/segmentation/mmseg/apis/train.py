@@ -12,7 +12,7 @@ from mmcv.runner import (HOOKS, DistSamplerSeedHook, EpochBasedRunner,
 from mmcv.utils import build_from_cfg
 
 from mmseg import digit_version
-from mmseg.core import DistEvalHook, EvalHook, build_optimizer
+from mmseg.core import DistEvalHook, EvalHook, build_optimizer, DistEvalHookMultiSteps
 from mmseg.datasets import build_dataloader, build_dataset
 from mmseg.utils import (build_ddp, build_dp, find_latest_checkpoint,
                          get_root_logger)
@@ -163,7 +163,8 @@ def train_segmentor(model,
         val_dataloader = build_dataloader(val_dataset, **val_loader_cfg)
         eval_cfg = cfg.get('evaluation', {})
         eval_cfg['by_epoch'] = cfg.runner['type'] != 'IterBasedRunner'
-        eval_hook = DistEvalHook if distributed else EvalHook
+        # eval_hook = DistEvalHook if distributed else EvalHook # ## for only single timestep 
+        eval_hook = DistEvalHookMultiSteps ## multistep miou gain, for now supporting only ditributed training
         # In this PR (https://github.com/open-mmlab/mmcv/pull/1193), the
         # priority of IterTimerHook has been modified from 'NORMAL' to 'LOW'.
         runner.register_hook(

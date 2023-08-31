@@ -1,0 +1,13 @@
+{
+    "config": "/home/sidd_s/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/cityscapes/ssd_convnext_l_4x4_512x1024_160k_cityscapes.py",
+    "metric": {
+        "mIoU": [
+            0.8343,
+            0.8341,
+            0.8341,
+            0.834,
+            0.8341
+        ],
+        "copy_paste_iou": "83.43,83.41,83.41,83.4,83.41"
+    }
+}
