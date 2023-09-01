@@ -63,4 +63,17 @@ E> Creating new functions in cityscapes.py dataset module for miou calculation: 
 
 '''
 
-## Changing the timesteps equal to 3 <<experiment1>>
+## Changing the timesteps equal to 3 <<experiment1>> @DONE: but the performance was comparable to one with 20 scheduling steps, still letting it run for more iterations. 
+
+""""
+
+Now Doubts to ask/discuss with Sirs:
+
+>> Currently confusion matrix of cityscapes val is being used, but it should be rather confusion matrix of train data (can be perturbed train), as can't have access to the validation GT!
+
+>> Why not much change in miou is there over multi timestep of SSD. even this evident on DDP as well, where over 3 time step it improves upto 0.24 miou ..>DDPS claimed that the structure prior is already being corrected so not much gain over multiple timesteps of diffusion. But the fact of pre-existing confusion in the confusion matrix, is it being rectified?? 
+
+
+>> 
+
+"""
