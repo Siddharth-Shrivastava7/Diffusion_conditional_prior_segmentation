@@ -86,9 +86,9 @@ Currently using normalised confusion matrix as the similarity matrix, from which
 Now, SSD will have: 
 
 ################################################
-label embed dim = 256 
-time embed dim = 16 
-cosine noise schedule, 
+label embed dim = 256  ## this is changed from previous '19' 
+time sinpos embed dim = 1024  
+cosine noise schedule, ## this is changed from previous 'linear'
 time step will remain 3 only
 ################################################
 
