@@ -11,7 +11,7 @@ norm_cfg = dict(type='SyncBN', requires_grad=True)
 backbone_norm_cfg = dict(type='LN', requires_grad=True)
 model = dict(
     type='SSD',
-    schedule_steps=3, # time steps for reverse discrete diffusion  
+    schedule_steps=20, # time steps for reverse discrete diffusion  
     mutual_info_kind = 'linear', 
     pretrained=None,
     backbone=dict(

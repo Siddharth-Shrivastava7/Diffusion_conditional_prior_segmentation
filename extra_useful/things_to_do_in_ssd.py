@@ -73,7 +73,6 @@ Now Doubts to ask/discuss with Sirs:
 
 >> Why not much change in miou is there over multi timestep of SSD. even this evident on DDP as well, where over 3 time step it improves upto 0.24 miou ..>DDPS claimed that the structure prior is already being corrected so not much gain over multiple timesteps of diffusion. But the fact of pre-existing confusion in the confusion matrix, is it being rectified?? 
 
-
 >> 
 
 """
