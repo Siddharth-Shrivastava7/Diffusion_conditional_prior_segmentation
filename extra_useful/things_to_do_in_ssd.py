@@ -73,6 +73,24 @@ Now Doubts to ask/discuss with Sirs:
 
 >> Why not much change in miou is there over multi timestep of SSD. even this evident on DDP as well, where over 3 time step it improves upto 0.24 miou ..>DDPS claimed that the structure prior is already being corrected so not much gain over multiple timesteps of diffusion. But the fact of pre-existing confusion in the confusion matrix, is it being rectified?? 
 
->> 
-
 """
+
+'''
+Extras: 
+
+Currently using normalised confusion matrix as the similarity matrix, from which transition rate matrix is made and then consequently 
+
+>> how the transition matrix is made, should it be made one-hot encoding (similar to D3PM)?
+>> Ok , I am going with similar to DDP, where everything would be similar to DDP: 
+
+Now, SSD will have: 
+
+################################################
+label embed dim = 256 
+time embed dim = 16 
+cosine noise schedule, 
+time step will remain 3 only
+################################################
+
+
+'''
