@@ -88,7 +88,7 @@ Now, SSD will have:
 ################################################
 label embed dim = 256  ## this is changed from previous '19' 
 time sinpos embed dim = 1024  
-cosine noise schedule, ## this is changed from previous 'linear' ## not working much, as over the timesteps miou is decreasing...even d3pm told that linear mutual information schedule was working better than its cosine counterpart!
+mutual info based schedule of cosine kind, ## this is changed from previous 'linear' ## not working much, as over the timesteps miou is decreasing...even d3pm told that linear mutual information schedule was working better than its cosine counterpart!
 time step will remain 3 only
 ################################################
 
