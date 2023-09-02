@@ -12,7 +12,7 @@ backbone_norm_cfg = dict(type='LN', requires_grad=True)
 model = dict(
     type='SSD',
     schedule_steps=3, # time steps for reverse discrete diffusion  
-    mutual_info_kind = 'cosine', 
+    mutual_info_kind = 'linear', 
     label_emb_dim = 256, # same as DDP
     pretrained=None,
     backbone=dict(
