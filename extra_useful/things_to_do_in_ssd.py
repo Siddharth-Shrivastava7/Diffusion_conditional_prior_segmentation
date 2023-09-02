@@ -92,5 +92,8 @@ mutual info based schedule of cosine kind, ## this is changed from previous 'lin
 time step will remain 3 only
 ################################################
 
+# Differences in still there with the d3pm as well: 
+# since our similarity matrix is not doubly stochastic so, the stationary distribution we don't know, and is ambiguious, whereas d3pm says to construct doubly stochastic rate matrix for uniform stationary distribution>> similarity matrix is symmetric for d3pm! 
+# they construct similarity matrix using soft adjacency matrix derived from one hot nearest neighbour, whereas we directly use confusion matrix(of validation, for now, later we need to change to train(perturbed))
 
 '''
