@@ -50,10 +50,12 @@ class SSD(EncoderDecoder):
                 mutual_info_interpolation_steps = 256,  
                 mutual_info_kind = 'linear', 
                 allow_out_of_bounds=False,
+                one_hot = False,
                 **kwargs):
         super(SSD, self).__init__(**kwargs)
         
-        self.schedule_steps = schedule_steps 
+        self.schedule_steps = schedule_steps  
+        self.one_hot = one_hot
         self.embedding_table = nn.Embedding(self.num_classes+1, label_emb_dim) ## instead of one-hot, playing with the embedding for discrete labels, and ignoring background feat in output of embedding            ### <<< can change later to one-hot, if req >>> ### 
         self.transform = ConvModule(
             self.decode_head.in_channels[0] + label_emb_dim,
