@@ -100,3 +100,4 @@ time step will remain 3 only
 
 ## probabilty distribution of segformerb2 predictions 
 ## to visualise the distribution of ==//== 
+## find the distribution of current stationary state distribution from our proposed diffusion forward process(assume for now it exists) 
