@@ -97,3 +97,5 @@ time step will remain 3 only
 # they construct similarity matrix using soft adjacency matrix derived from one hot nearest neighbour, whereas we directly use confusion matrix(of validation, for now, later we need to change to train(perturbed))
 
 '''
+
+## probabilty distribution of segformerb2 predictions
