@@ -100,4 +100,11 @@ time step will remain 3 only
 
 ## probabilty distribution of segformerb2 predictions 
 ## to visualise the distribution of ==//== 
-## find the distribution of current stationary state distribution from our proposed diffusion forward process(assume for now it exists) 
+## find the distribution of current stationary state distribution from our proposed diffusion forward process(assume for now it exists)  
+
+'''
+to make grid of latent state space of diffusion models of different noise schedules: 
+    1. MI based linear schedule 
+    2. MI based cosine schedule 
+    3. constant beta schedule : (1-beta_t)*I + beta_t*(normalised_confusion_matrix)    
+'''
