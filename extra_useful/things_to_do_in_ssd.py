@@ -106,5 +106,7 @@ time step will remain 3 only
 to make grid of latent state space of diffusion models of different noise schedules: 
     1. MI based linear schedule  ## not performing so well
     2. MI based cosine schedule  ## not performing so well 
-    3. constant beta schedule : (1-beta_t)*I + beta_t*(normalised_confusion_matrix)    
+    3. constant beta schedule : (1-beta_t)*I + beta_t*(normalised_confusion_matrix)   ## done, this also showing results similar to above two points
+    
+Next could be linear/cosine scheduling with beta schedule; where transition matrix is of form similar to constant beta schedule transition matrix. 
 '''
