@@ -110,6 +110,6 @@ to make grid of latent state space of diffusion models of different noise schedu
     
 Next could be linear/cosine scheduling with beta schedule; where transition matrix is of form similar to constant beta schedule transition matrix.  
 
-Instead of gumbel argmax sampling, directly...trying with directly sampling, not introducing more noise...lets see and experiment...
+Instead of gumbel argmax sampling, directly...trying with directly argmax sampling, not introducing more noise...lets see and experiment...
 
 '''
