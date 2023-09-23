@@ -114,4 +114,4 @@ to make grid of latent state space of diffusion models of different noise schedu
 '''
 
 ## reproduced CCDM forward process diffusion 
-## now visualise D3PM uniform forward process diffusion using cosine schdeule and timesteps same as CCDM 
+## now visualise D3PM uniform forward process diffusion using cosine schdeule and timesteps same as CCDM
