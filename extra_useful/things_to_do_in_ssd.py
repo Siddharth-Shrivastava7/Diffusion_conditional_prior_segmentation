@@ -112,3 +112,6 @@ to make grid of latent state space of diffusion models of different noise schedu
 >> performing this as well: Instead of gumbel argmax sampling, directly...trying with directly argmax sampling, not introducing more noise...lets see and experiment... 
 
 '''
+
+## reproduced CCDM forward process diffusion 
+## now visualise D3PM uniform forward process diffusion using cosine schdeule and timesteps same as CCDM 
