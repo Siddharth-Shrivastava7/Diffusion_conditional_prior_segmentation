@@ -117,6 +117,11 @@ to make grid of latent state space of diffusion models of different noise schedu
 ## now visualise D3PM uniform forward process diffusion using cosine schdeule and timesteps same as CCDM >> Done 
 
 ''' 
-    one issue is that we are not reaching uniform stationary distribution when, using cumulative transition matrices (as the consecutive products of individual single step transition matrices) 
+    one issue is that we are not reaching uniform stationary distribution when, using cumulative transition matrices (as the consecutive products of individual single step transition matrices)  >>  would say that it is the default problem of discrete diffusion when compared with cumalphas to use! 
 '''
-## now inferring our proposed D3PM forward diffusion process using the mi linear  
+## now inferring our proposed D3PM forward diffusion process using the mi linear  >> DONE  
+
+## in order to arrive at a stationary distribution of segformer prediction we need to change default mutual information based schedule to schdeule where the original information linearly interpolates of mutual information of segformer prediction and cityscapes gt (I(x_T, x_0)) rather than to dropping to zero (as in the default case) >> I(x_T, x_0) = -\sum_{x_0 ~ p(x0), x_T ~ q(x_T|x_0)}p(x_0)q(x_T|x_0)log(p(x_0)q(x_T|x_0))
+
+
+ 
