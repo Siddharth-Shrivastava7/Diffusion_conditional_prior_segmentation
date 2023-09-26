@@ -113,5 +113,10 @@ to make grid of latent state space of diffusion models of different noise schedu
 
 '''
 
-## reproduced CCDM forward process diffusion 
-## now visualise D3PM uniform forward process diffusion using cosine schdeule and timesteps same as CCDM
+## reproduced CCDM forward process diffusion >> Done 
+## now visualise D3PM uniform forward process diffusion using cosine schdeule and timesteps same as CCDM >> Done 
+
+''' 
+    one issue is that we are not reaching uniform stationary distribution when, using cumulative transition matrices (as the consecutive products of individual single step transition matrices) 
+'''
+## now inferring our proposed D3PM forward diffusion process using the mi linear  
