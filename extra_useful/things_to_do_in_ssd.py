@@ -121,7 +121,10 @@ to make grid of latent state space of diffusion models of different noise schedu
 '''
 ## now inferring our proposed D3PM forward diffusion process using the mi linear  >> DONE  
 
-## in order to arrive at a stationary distribution of segformer prediction we need to change default mutual information based schedule to schdeule where the original information linearly interpolates of mutual information of segformer prediction and cityscapes gt (I(x_T, x_0)) rather than to dropping to zero (as in the default case) >> I(x_T, x_0) = -\sum_{x_0 ~ p(x0), x_T ~ q(x_T|x_0)}p(x_0)q(x_T|x_0)log(p(x_0)q(x_T|x_0))
+## in order to arrive at a stationary distribution of segformer prediction we need to change default mutual information based schedule to schdeule where the original information linearly interpolates of mutual information of segformer prediction and cityscapes gt (I(x_T, x_0)) rather than to dropping to zero (as in the default case) >> I(x_T, x_0) = -\sum_{x_0 ~ p(x0), x_T ~ q(x_T|x_0)}p(x_0)q(x_T|x_0)log(p(x_0)q(x_T|x_0)) 
+
+### >>>  so D3PM plays a trick where, it starts defining diffusion as the time non-homogeneous CTMC, but later approximates/tricks it as time homogeneous CTMC, and consequently discretizes it. 
+### now, we will visualise it, D3PM structured transition to check, that even if the stationary distribution is uniform, bu can we take help from initial confusion of similar classes (at the starting stage) to denoise 
 
 
  
