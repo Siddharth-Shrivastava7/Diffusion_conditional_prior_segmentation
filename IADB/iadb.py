@@ -2,7 +2,8 @@ import torch
 import torchvision
 from torchvision import transforms
 from diffusers import UNet2DModel
-from torch.optim import Adam
+from torch.optim import Adam 
+from tqdm import tqdm
 
 def get_model():
     block_out_channels=(128, 128, 256, 256, 512, 512)
@@ -51,7 +52,7 @@ model = model.to(device)
 optimizer = Adam(model.parameters(), lr=1e-4)
 nb_iter = 0
 print('Start training')
-for current_epoch in range(100):
+for current_epoch in tqdm(range(100)):
     for i, data in enumerate(dataloader):
         x1 = (data[0].to(device)*2)-1
         x0 = torch.randn_like(x1)
@@ -73,4 +74,4 @@ for current_epoch in range(100):
                 print(f'Save export {nb_iter}')
                 sample = (sample_iadb(model, x0, nb_step=128) * 0.5) + 0.5
                 torchvision.utils.save_image(sample, f'export_{str(nb_iter).zfill(8)}.png')
-                torch.save(model.state_dict(), f'celeba.ckpt')
+                torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb/celeba.ckpt')
