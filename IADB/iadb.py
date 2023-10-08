@@ -38,7 +38,7 @@ def sample_iadb(model, x0, nb_step):
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-CELEBA_FOLDER = './datasets/celeba/'
+CELEBA_FOLDER = '/home/sidd_s/scratch/dataset/celeba/img_align_celeba/'
 transform = transforms.Compose([transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])
 train_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
                                         download=True, transform=transform)
