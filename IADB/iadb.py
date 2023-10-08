@@ -46,8 +46,9 @@ train_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
 
 dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0, drop_last=True)
 
-model = get_model()
+model = get_model() 
 model = model.to(device)
+print('Model loaded into cuda')
 
 optimizer = Adam(model.parameters(), lr=1e-4)
 nb_iter = 0
@@ -69,7 +70,8 @@ for current_epoch in tqdm(range(100)):
         optimizer.step()
         nb_iter += 1
 
-        if nb_iter % 200 == 0:
+        if nb_iter % 200 == 0: 
+            print('In Sampling')
             with torch.no_grad():
                 print(f'Save export {nb_iter}')
                 sample = (sample_iadb(model, x0, nb_step=128) * 0.5) + 0.5
