@@ -38,7 +38,7 @@ def sample_iadb(model, x0, nb_step):
     return x_alpha
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 CELEBA_FOLDER = '/home/sidd_s/scratch/dataset/celeba/img_align_celeba/'
 transform = transforms.Compose([transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])
 train_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
@@ -75,5 +75,5 @@ for current_epoch in tqdm(range(100)):
             with torch.no_grad():
                 print(f'Save export {nb_iter}')
                 sample = (sample_iadb(model, x0, nb_step=128) * 0.5) + 0.5
-                torchvision.utils.save_image(sample, f'export_{str(nb_iter).zfill(8)}.png')
+                torchvision.utils.save_image(sample, f'/home/sidd_s/scratch/saved_models/iadb/export_{str(nb_iter).zfill(8)}.png')
                 torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb/celeba.ckpt')
