@@ -44,6 +44,7 @@ def main():
     transform = transforms.Compose([transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])
     train_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
                                             download=True, transform=transform)
+    stationary_distribution_dataset = torch
 
     dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0, drop_last=True) 
     print('dataset loaded successfully!')
@@ -58,7 +59,8 @@ def main():
     for current_epoch in tqdm(range(100)):
         for i, data in enumerate(dataloader):
             x1 = (data[0].to(device)*2)-1
-            x0 = torch.randn_like(x1)
+            x0 = torch.randn_like(x1) ## need to change here .. the distribution of different dataset testing...say 
+            
             bs = x0.shape[0]
 
             alpha = torch.rand(bs, device=device)
