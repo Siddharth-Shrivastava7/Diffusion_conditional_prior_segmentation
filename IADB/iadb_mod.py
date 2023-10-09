@@ -47,9 +47,12 @@ def main():
                                             download=True, transform=target_transform)
     stationary_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
                                             download=True, transform=stationary_transform)
-    target_dataloader = torch.utils.data.DataLoader(target_dataset, batch_size=64, shuffle=False, num_workers=0, drop_last=True)  
-    stationary_dataloader = torch.utils.data.DataLoader(stationary_dataset, batch_size=64, shuffle=False, num_workers=0, drop_last=True)   
-    assert len(stationary_dataset) == len(target_dataset)
+    
+    dataset = torch.utils.data.TensorDataset(target_dataset, stationary_dataset)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True, num_workers=0, drop_last=True)
+    # target_dataloader = torch.utils.data.DataLoader(target_dataset, batch_size=64, shuffle=False, num_workers=0, drop_last=True)  
+    # stationary_dataloader = torch.utils.data.DataLoader(stationary_dataset, batch_size=64, shuffle=False, num_workers=0, drop_last=True)   
+    # assert len(stationary_dataset) == len(target_dataset)
     print('dataset loaded successfully!')
 
     model = get_model() 
@@ -60,12 +63,12 @@ def main():
     nb_iter = 0
     print('Start training')
     for current_epoch in tqdm(range(100)):
-        for ind in range(len(target_dataloader)):
-        # for i, data in enumerate(target_dataloader):
-            # x1 = (data[0].to(device)*2)-1
-            x1 = (next(iter(target_dataloader))[0].to(device)*2)-1
-            # x0 = torch.randn_like(x1) ## need to change here .. the distribution of different dataset testing...say 
-            x0 = (next(iter(stationary_dataloader))[0].to(device)*2)-1
+        # for ind in range(len(target_dataloader)):
+        for i, (target_data, stationary_data) in enumerate(dataloader):
+            # x1 = (next(iter(target_dataloader))[0].to(device)*2)-1
+            # x0 = (next(iter(stationary_dataloader))[0].to(device)*2)-1
+            x1 = (target_data[0].to(device)*2)-1
+            x0 = (stationary_data[0].to(device)*2)-1
             
             bs = x0.shape[0]
 
