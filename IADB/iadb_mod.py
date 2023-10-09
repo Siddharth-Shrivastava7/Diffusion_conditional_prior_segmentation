@@ -39,14 +39,17 @@ def sample_iadb(model, x0, nb_step):
 
 def main(): 
     print('in the main function')
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     CELEBA_FOLDER = '/home/sidd_s/scratch/dataset/celeba/'
-    transform = transforms.Compose([transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])
-    train_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
-                                            download=True, transform=transform)
-    stationary_distribution_dataset = torch
-
-    dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0, drop_last=True) 
+    target_transform = transforms.Compose([transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])  
+    stationary_transform = transforms.Compose([transforms.Grayscale(num_output_channels=3), transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])
+    target_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
+                                            download=True, transform=target_transform)
+    stationary_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
+                                            download=True, transform=stationary_transform)
+    target_dataloader = torch.utils.data.DataLoader(target_dataset, batch_size=64, shuffle=False, num_workers=0, drop_last=True)  
+    stationary_dataloader = torch.utils.data.DataLoader(stationary_dataset, batch_size=64, shuffle=False, num_workers=0, drop_last=True)   
+    assert len(stationary_dataset) == len(target_dataset)
     print('dataset loaded successfully!')
 
     model = get_model() 
@@ -57,9 +60,12 @@ def main():
     nb_iter = 0
     print('Start training')
     for current_epoch in tqdm(range(100)):
-        for i, data in enumerate(dataloader):
-            x1 = (data[0].to(device)*2)-1
-            x0 = torch.randn_like(x1) ## need to change here .. the distribution of different dataset testing...say 
+        for ind in range(len(target_dataloader)):
+        # for i, data in enumerate(target_dataloader):
+            # x1 = (data[0].to(device)*2)-1
+            x1 = (next(iter(target_dataloader))[0].to(device)*2)-1
+            # x0 = torch.randn_like(x1) ## need to change here .. the distribution of different dataset testing...say 
+            x0 = (next(iter(stationary_dataloader))[0].to(device)*2)-1
             
             bs = x0.shape[0]
 
@@ -79,8 +85,8 @@ def main():
                 with torch.no_grad():
                     print(f'Save export {nb_iter}')
                     sample = (sample_iadb(model, x0, nb_step=128) * 0.5) + 0.5
-                    torchvision.utils.save_image(sample, f'/home/sidd_s/scratch/saved_models/iadb/sample_imgs/export_{str(nb_iter).zfill(8)}.png')
-                    torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb/celeba.ckpt')
+                    torchvision.utils.save_image(sample, f'/home/sidd_s/scratch/saved_models/iadb_mod/sample_imgs/export_{str(nb_iter).zfill(8)}.png')
+                    torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb_mod/celeba.ckpt')
 
 
 if __name__ == '__main__':
