@@ -137,7 +137,7 @@ to make grid of latent state space of diffusion models of different noise schedu
 python -m tools.test --config /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/csHR2dzurHR_mic_hrda_aef07.py --checkpoint /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/iter_40000_relevant.pth --test-set --format-only --eval-options imgfile_prefix=/home/sidd_s/scratch/results/MIC/  to_label_id=False  
 
 
-
+now onforth, I will do documentation in latex: overleaf! 
 '''
 
 
