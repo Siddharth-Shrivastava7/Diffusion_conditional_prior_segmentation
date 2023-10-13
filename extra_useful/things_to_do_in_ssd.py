@@ -143,7 +143,14 @@ now onforth, I will do documentation in latex: overleaf!
 
 python -m tools.test --config /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/csHR2dzurHR_mic_hrda_aef07.py --checkpoint /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/iter_40000_relevant.pth --test-set --format-only --eval-options imgfile_prefix=/home/sidd_s/scratch/results/MIC/  to_label_id=False  
 
-
+## for setting up github push, if faced an issue: 
+git remote set-url origin https://<personal_access_token>@github.com/<your_username or organization_name>/<repo_name>.git
+1. 
+git remote set-url origin https://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@github.com/Siddharth-Shrivastava7/MIC_mod.git
+2. 
+git remote set-url origin https://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@github.com/Siddharth-Shrivastava7/mmseg_mod.git
+3.  
+git remote set-url origin https://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@github.com/Siddharth-Shrivastava7/Diffusion_conditional_prior_segmentation.git
 '''
 
 
