@@ -126,5 +126,20 @@ to make grid of latent state space of diffusion models of different noise schedu
 ### >>>  so D3PM plays a trick where, it starts defining diffusion as the time non-homogeneous CTMC, but later approximates/tricks it as time homogeneous CTMC, and consequently discretizes it. 
 ### now, we will visualise it, D3PM structured transition to check, that even if the stationary distribution is uniform, bu can we take help from initial confusion of similar classes (at the starting stage) to denoise 
 
+'''
+    image softmax prediction have to copy/see from mic to replicate back in mmseg codebase ; 
+    can i do one thing that: to work with mic only instead of segformer>>no cause we need to improve upon segformer rather than mic for now::ok then, just running mic to see the differences 
+
+    doing one thing in MIC code base, first running as it is then, changing the config and checkpoint files to segformerb2, since, mic is also based on mmmsegmenation codebase >> below working it 
+
+    ## mic running script: 
+
+python -m tools.test --config /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/csHR2dzurHR_mic_hrda_aef07.py --checkpoint /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/iter_40000_relevant.pth --test-set --format-only --eval-options imgfile_prefix=/home/sidd_s/scratch/results/MIC/  to_label_id=False  
+
+
+
+'''
+
 
  
+
