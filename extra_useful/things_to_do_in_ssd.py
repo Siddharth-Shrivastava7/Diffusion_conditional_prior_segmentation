@@ -151,6 +151,8 @@ git remote set-url origin https://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@githu
 git remote set-url origin https://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@github.com/Siddharth-Shrivastava7/mmseg_mod.git
 3.  
 git remote set-url origin https://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@github.com/Siddharth-Shrivastava7/Diffusion_conditional_prior_segmentation.git
+
+## just for testing, adding this>
 '''
 
 
