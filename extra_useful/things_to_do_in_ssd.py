@@ -132,12 +132,18 @@ to make grid of latent state space of diffusion models of different noise schedu
 
     doing one thing in MIC code base, first running as it is then, changing the config and checkpoint files to segformerb2, since, mic is also based on mmmsegmenation codebase >> below working it 
 
-    ## mic running script: 
+
+now onforth, I will do documentation in latex: overleaf!  
+'''
+
+
+'''
+>> rough python scipts
+## mic running script: 
 
 python -m tools.test --config /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/csHR2dzurHR_mic_hrda_aef07.py --checkpoint /home/sidd_s/scratch/mic_checkpoints/csHR2dzurHR_mic_hrda_aef07/iter_40000_relevant.pth --test-set --format-only --eval-options imgfile_prefix=/home/sidd_s/scratch/results/MIC/  to_label_id=False  
 
 
-now onforth, I will do documentation in latex: overleaf! 
 '''
 
 
