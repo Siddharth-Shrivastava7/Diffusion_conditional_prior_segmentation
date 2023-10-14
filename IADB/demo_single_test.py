@@ -54,7 +54,7 @@ def sample_iadb(model, x0, nb_step):
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20, one_hot = False):
+    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20):
         self.mode = mode 
         self.img_dir = img_dir
         self.img_transform = img_transform
@@ -64,7 +64,6 @@ class custom_cityscapes_labels(Dataset):
         self.lb_transform = lb_transform 
         self.data_list = []
         self.num_classes = num_classes # 19 + background class 
-        self.one_hot = one_hot
         
         
         for root, dirs, files in os.walk(self.gt_dir_mode, topdown=False):
@@ -111,13 +110,16 @@ class custom_cityscapes_labels(Dataset):
 segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
 
 
+
+
 def main(): 
     print('in the main function')
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
+    img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/'
+    suffix = "_gtFine_labelTrainIds.png"
     mode  = 'val'
     num_classes = 20  
-    one_hot = True 
     lb_transform = transforms.Compose([ 
         transforms.Resize((256,512), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) 
     ])
@@ -126,7 +128,7 @@ def main():
         transforms.ToTensor(), 
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # imagenet mean and std using
     ])
-    dataset = custom_cityscapes_labels(gt_dir, transform, mode, num_classes)
+    dataset = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform, mode, num_classes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, drop_last=True) 
     print('dataset loaded successfully!')
 
