@@ -54,24 +54,35 @@ def sample_iadb(model, x0, nb_step):
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', transform = None, mode = 'train', num_classes = 20):
-        self.gt_dir = gt_dir 
-        self.transform = transform 
-        self.data_list = []
+    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20, one_hot = False):
         self.mode = mode 
+        self.img_dir = img_dir
+        self.img_transform = img_transform
+        self.img_data_list = []
+        self.gt_dir = gt_dir 
         self.gt_dir_mode = self.gt_dir + self.mode  
+        self.lb_transform = lb_transform 
+        self.data_list = []
         self.num_classes = num_classes # 19 + background class 
+        self.one_hot = one_hot
+        
         
         for root, dirs, files in os.walk(self.gt_dir_mode, topdown=False):
-            for name in tqdm(files):
+            for name in tqdm(sorted(files)):
                 path = os.path.join(root, name)
                 if path.find(suffix)!=-1:
                     self.data_list.append(path)
 
+        for root, dirs, files in os.walk(self.img_dir, topdown=False):
+            for name in tqdm(sorted(files)):
+                img_path = os.path.join(root, name)
+                self.img_data_list.append(img_path)
+
+
         if mode == 'train':
-            assert len(self.data_list) == 2975
+            assert len(self.data_list) == 2975 == len(self.img_data_list)
         elif mode == 'val':
-            assert len(self.data_list) == 500
+            assert len(self.data_list) == 500 == len(self.img_data_list)
         else:
             raise Exception('mode has to be either train or val')
 
@@ -80,13 +91,19 @@ class custom_cityscapes_labels(Dataset):
     
     def __getitem__(self, index):
 
+        img_path = self.img_data_list[index] 
+        img = torch.tensor(np.array(Image.open(img_path)))
+        if self.img_transform:
+            img = self.img_transform(img)
+
         label_path = self.data_list[index]  
         label = torch.tensor(np.array(Image.open(label_path)))
-        if self.transform: 
-            label = self.transform(label) # resizing the tensor, for working in low dimension
+        if self.lb_transform: 
+            label = self.lb_transform(label) # resizing the tensor, for working in low dimension
+        
         label_one_hot = F.one_hot(label, self.num_classes)
 
-        return label_one_hot
+        return img, label, label_one_hot
 
 ## condition => the softmax prediction of cityscapes dataset from segformer model 
 
@@ -97,9 +114,14 @@ def main():
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
     mode  = 'val'
-    num_classes = 20 
-    transform = transforms.Compose([ 
+    num_classes = 20  
+    one_hot = True 
+    lb_transform = transforms.Compose([ 
         transforms.Resize((256,512), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) 
+    ])
+    img_transform = transforms.Compose([ 
+        transforms.Resize((256,512)), # (H/4, W/4) 
+        
     ])
     dataset = custom_cityscapes_labels(gt_dir, transform, mode, num_classes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, drop_last=True) 
