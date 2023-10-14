@@ -13,6 +13,8 @@ import os
 from tqdm import tqdm
 from PIL import Image 
 import numpy as np
+from  torchvision.transforms.functional import InterpolationMode
+import torch.nn.functional as F
 
 ## for now, not iterating over the whole dataset but rather demo testing on one single image! 
 test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
@@ -50,13 +52,15 @@ def sample_iadb(model, x0, nb_step):
 
     return x_alpha
 
+## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', transform = None, mode = 'train'):
+    def __init__(self, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', transform = None, mode = 'train', num_classes = 20):
         self.gt_dir = gt_dir 
         self.transform = transform 
         self.data_list = []
         self.mode = mode 
-        self.gt_dir_mode = self.gt_dir + self.mode 
+        self.gt_dir_mode = self.gt_dir + self.mode  
+        self.num_classes = num_classes # 19 + background class 
         
         for root, dirs, files in os.walk(self.gt_dir_mode, topdown=False):
             for name in tqdm(files):
@@ -79,8 +83,13 @@ class custom_cityscapes_labels(Dataset):
         label_path = self.data_list[index]  
         label = torch.tensor(np.array(Image.open(label_path)))
         if self.transform: 
-            label = self.transform(label)
-        return label 
+            label = self.transform(label) # resizing the tensor, for working in low dimension
+        label_one_hot = F.one_hot(label, self.num_classes)
+
+        return label_one_hot
+
+## condition => the softmax prediction of cityscapes dataset from segformer model 
+
 
 
 def main(): 
@@ -88,15 +97,13 @@ def main():
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
     mode  = 'val'
-    # transform = transforms.Compose([transforms.Resize(64),transforms.CenterCrop(64), transforms.RandomHorizontalFlip(0.5),transforms.ToTensor()])
-    # train_dataset = torchvision.datasets.CelebA(root=CELEBA_FOLDER, split='train',
-    #                                         download=True, transform=transform)
+    num_classes = 20 
     transform = transforms.Compose([ 
-        transforms.
+        transforms.Resize((256,512), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) 
     ])
-
-    dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=0, drop_last=True) 
-    # print('dataset loaded successfully!')
+    dataset = custom_cityscapes_labels(gt_dir, transform, mode, num_classes)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, drop_last=True) 
+    print('dataset loaded successfully!')
 
     model = get_model() 
     model = model.to(device)
@@ -105,7 +112,7 @@ def main():
     optimizer = Adam(model.parameters(), lr=1e-4)
     nb_iter = 0
     print('Start training')
-    for current_epoch in tqdm(range(100)):
+    for _ in tqdm(range(100)):
         for i, data in enumerate(dataloader):
             x1 = (data[0].to(device)*2)-1
             x0 = torch.randn_like(x1)
