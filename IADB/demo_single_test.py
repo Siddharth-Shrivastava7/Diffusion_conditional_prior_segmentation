@@ -92,7 +92,7 @@ class custom_cityscapes_labels(Dataset):
     def __getitem__(self, index):
 
         img_path = self.img_data_list[index] 
-        img = torch.tensor(np.array(Image.open(img_path)))
+        img = Image.open(img_path)
         if self.img_transform:
             img = self.img_transform(img)
 
@@ -106,7 +106,9 @@ class custom_cityscapes_labels(Dataset):
         return img, label, label_one_hot
 
 ## condition => the softmax prediction of cityscapes dataset from segformer model 
+## we will be loading trained model, so the configuration will be that of validation of mmseg model 
 
+segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
 
 
 def main(): 
@@ -121,7 +123,8 @@ def main():
     ])
     img_transform = transforms.Compose([ 
         transforms.Resize((256,512)), # (H/4, W/4) 
-        
+        transforms.ToTensor(), 
+        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # imagenet mean and std using
     ])
     dataset = custom_cityscapes_labels(gt_dir, transform, mode, num_classes)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, drop_last=True) 
