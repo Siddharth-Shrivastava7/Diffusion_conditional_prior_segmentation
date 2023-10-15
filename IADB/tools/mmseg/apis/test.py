@@ -123,55 +123,11 @@ def single_gpu_test(model,
             # result = model(return_loss=False, **data) ## original
             ## making changes below for softmax as the prediction rather than labels 
             result = model(return_loss=False, logits_output= softmaxop, **data)   
-        if show or out_dir:
-            img_tensor = data['img'][0]
-            img_metas = data['img_metas'][0].data[0]
-            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
-            assert len(imgs) == len(img_metas)
+            img_filename = data['img_metas'][0].data[0][0]['filename']
+            softmax_pred = result[0]
+            results.append((img_filename, softmax_pred)) # will be used for result is softmax-logit prediction
 
-            for img, img_meta in zip(imgs, img_metas):
-                h, w, _ = img_meta['img_shape']
-                img_show = img[:h, :w, :]
-
-                ori_h, ori_w = img_meta['ori_shape'][:-1]
-                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
-
-                if out_dir:
-                    out_file = osp.join(out_dir, img_meta['ori_filename'])
-                else:
-                    out_file = None
-
-                model.module.show_result(
-                    img_show,
-                    result,
-                    palette=dataset.PALETTE,
-                    show=show,
-                    out_file=out_file,
-                    opacity=opacity)
-
-        if efficient_test:
-            result = [np2tmp(_, tmpdir='.efficient_test') for _ in result]
-
-        if format_only:
-            result = dataset.format_results(
-                result, indices=batch_indices, **format_args)
-        if pre_eval:
-            # TODO: adapt samples_per_gpu > 1.
-            # only samples_per_gpu=1 valid now
-            if imp_rat: 
-                ## adding the input intersections with ground truth for finding improvement ratio  
-                ip_path = osp.join('/home/sidd_s/scratch/dataset','acdc_trainval/rgb_anon/night/synthetic/val', '1000n_20p_dannet_pred', img_meta['ori_filename']).replace('_rgb_anon.png','_gt_labelColor.png') 
-                img = np.array(Image.open(ip_path)) 
-                # converting colored image to its labels
-                ip_label = color_to_label(img) 
-                result = dataset.pre_eval(result, indices=batch_indices, ip_labels = ip_label) 
-            else:
-                result = dataset.pre_eval(result, indices=batch_indices) 
-            results.extend(result)
-        else:
-            results.extend(result) # will be used for result is softmax-logit prediction
-
-        batch_size = len(result)
+        batch_size = len(result) # batch size is 1
         for _ in range(batch_size):
             prog_bar.update()
 

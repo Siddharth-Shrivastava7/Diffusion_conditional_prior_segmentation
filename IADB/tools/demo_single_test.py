@@ -63,19 +63,17 @@ def sample_iadb(model, x0, nb_step):
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
     def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20, one_hot = False):
-        self.mode = mode 
-        self.img_dir = img_dir
         self.img_transform = img_transform
         self.img_data_list = []
-        self.gt_dir = gt_dir 
-        self.gt_dir_mode = self.gt_dir + self.mode  
+        self.gt_dir = gt_dir + mode  
+        self.img_dir = img_dir + mode
         self.lb_transform = lb_transform 
         self.data_list = []
         self.num_classes = num_classes # 19 + background class 
         self.one_hot = one_hot
         
         
-        for root, dirs, files in os.walk(self.gt_dir_mode, topdown=False):
+        for root, dirs, files in os.walk(self.gt_dir, topdown=False):
             for name in tqdm(sorted(files)):
                 path = os.path.join(root, name)
                 if path.find(suffix)!=-1:
