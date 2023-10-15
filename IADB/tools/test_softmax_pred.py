@@ -19,9 +19,6 @@ from mmseg.datasets import build_dataloader, build_dataset
 from mmseg.models import build_segmentor
 from mmseg.utils import build_ddp, build_dp, get_device, setup_multi_processes
 
-# from work.custom_pipeline import MyTransform 
-from work.custom_pipeline import CityTransform        ## perturbing cityscapes
-
 
 def main(config_path, checkpoint_path, gpu_id = 0):
 
@@ -101,8 +98,4 @@ def main(config_path, checkpoint_path, gpu_id = 0):
 
     return results  # results of softmax predictions of whole cityscapes dataset    
         
-   
 
-
-if __name__ == '__main__':
-    main()

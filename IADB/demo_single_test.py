@@ -14,7 +14,8 @@ from tqdm import tqdm
 from PIL import Image 
 import numpy as np
 from  torchvision.transforms.functional import InterpolationMode
-import torch.nn.functional as F
+import torch.nn.functional as F 
+from tools.test_softmax_pred import main 
 
 ## for now, not iterating over the whole dataset but rather demo testing on one single image! 
 # test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
