@@ -261,7 +261,7 @@ class EncoderDecoder(BaseSegmentor):
 
         return output
 
-    def simple_test(self, img, img_meta, logits_output = False ,rescale=True): # changing from original, using adding a new argument of logits_output <softmax prediction>
+    def simple_test(self, img, img_meta, logits_output = False ,rescale=False): # changing from original, using adding a new argument of logits_output <softmax prediction>
         """Simple test with single image."""
         seg_logit = self.inference(img, img_meta, rescale) 
         '''
