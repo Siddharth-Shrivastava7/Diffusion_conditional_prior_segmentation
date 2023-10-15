@@ -70,7 +70,6 @@ class custom_cityscapes_labels(Dataset):
         self.lb_transform = lb_transform 
         self.data_list = []
         self.num_classes = num_classes # 19 + background class 
-        self.one_hot = one_hot
         
         
         for root, dirs, files in os.walk(self.gt_dir, topdown=False):
@@ -108,11 +107,8 @@ class custom_cityscapes_labels(Dataset):
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
         
-        if self.one_hot:
-            label_one_hot = F.one_hot(label.squeeze().long(), self.num_classes)
-            return img, label, label_one_hot 
+        return img, label, img_path
         
-        return img, label 
 
 def main(): 
     print('in the main function')
@@ -143,8 +139,12 @@ def main():
     print('Start training')
     for _ in tqdm(range(100)):
         for i, data in enumerate(dataloader):
-            x1 = (data[0].to(device)*2)-1
-            x0 = torch.randn_like(x1)
+            labels_one_hot = F.one_hot(data[1].squeeze().long(), num_classes)
+            labels_one_hot = labels_one_hot.permute(0,3,1,2) # B, C, H, W
+            x1 = (labels_one_hot.to(device)*2)-1  # acc to original IADB
+            x0 = torch.randn_like(x1.float()) # standard normal distribution  # acc to original IADB
+            c  = [torch.tensor(results_softmax_predictions[path]) for path in data[2]] # conditioning 
+            c_stack = torch.stack(c) # B,C,H,W
             bs = x0.shape[0]
 
             alpha = torch.rand(bs, device=device)

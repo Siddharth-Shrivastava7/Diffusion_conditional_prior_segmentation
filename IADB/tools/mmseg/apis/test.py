@@ -108,7 +108,7 @@ def single_gpu_test(model,
         'exclusive, only one of them could be true .'
 
     model.eval()
-    results = []  
+    results = {} # mod for easyment
     dataset = data_loader.dataset
     prog_bar = mmcv.ProgressBar(len(dataset))
     # The pipeline about how the data_loader retrieval samples from dataset:
@@ -125,7 +125,8 @@ def single_gpu_test(model,
             result = model(return_loss=False, logits_output= softmaxop, **data)   
             img_filename = data['img_metas'][0].data[0][0]['filename']
             softmax_pred = result[0]
-            results.append((img_filename, softmax_pred)) # will be used for result is softmax-logit prediction
+            # results.append((img_filename, softmax_pred)) # will be used for result is softmax-logit prediction
+            results[img_filename] = softmax_pred # change for easy indexing while conditioning on a particular file image 
 
         batch_size = len(result) # batch size is 1
         for _ in range(batch_size):
