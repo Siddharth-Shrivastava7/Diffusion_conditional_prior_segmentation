@@ -104,11 +104,12 @@ class custom_cityscapes_labels(Dataset):
 
         label_path = self.data_list[index]  
         label = torch.tensor(np.array(Image.open(label_path)))
+        label[label==255] = 19
         if self.lb_transform: 
-            label = self.lb_transform(label) # resizing the tensor, for working in low dimension
+            label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
         
         if self.one_hot:
-            label_one_hot = F.one_hot(label, self.num_classes)
+            label_one_hot = F.one_hot(label.squeeze().long(), self.num_classes)
             return img, label, label_one_hot 
         
         return img, label 
