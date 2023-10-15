@@ -21,6 +21,13 @@ from test_softmax_pred import main
 # test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
 
 
+## condition => the softmax prediction of cityscapes dataset from segformer model 
+## we will be loading trained model, so the configuration will be that of validation of mmseg model 
+segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
+results_softmax_predictions = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check! 
+print('results consisting of softmax predictions loaded successfully!')
+
 def get_model():
     block_out_channels=(128, 128, 256, 256, 512, 512)
     down_block_types=( 
@@ -108,12 +115,6 @@ class custom_cityscapes_labels(Dataset):
         
         return img, label 
 
-## condition => the softmax prediction of cityscapes dataset from segformer model 
-## we will be loading trained model, so the configuration will be that of validation of mmseg model 
-segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
-config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
-results_softmax_predictions = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check! 
-print('results consisting of softmax predictions loaded successfully!')
 
 
 
