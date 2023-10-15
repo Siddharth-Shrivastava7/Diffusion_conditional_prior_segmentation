@@ -113,9 +113,6 @@ class custom_cityscapes_labels(Dataset):
         
         return img, label 
 
-
-
-
 def main(): 
     print('in the main function')
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
