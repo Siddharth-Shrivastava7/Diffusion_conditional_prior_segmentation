@@ -17,7 +17,7 @@ from  torchvision.transforms.functional import InterpolationMode
 import torch.nn.functional as F
 
 ## for now, not iterating over the whole dataset but rather demo testing on one single image! 
-test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
+# test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
 
 
 def get_model():
@@ -54,7 +54,7 @@ def sample_iadb(model, x0, nb_step):
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20):
+    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20, one_hot = False):
         self.mode = mode 
         self.img_dir = img_dir
         self.img_transform = img_transform
@@ -64,6 +64,7 @@ class custom_cityscapes_labels(Dataset):
         self.lb_transform = lb_transform 
         self.data_list = []
         self.num_classes = num_classes # 19 + background class 
+        self.one_hot = one_hot
         
         
         for root, dirs, files in os.walk(self.gt_dir_mode, topdown=False):
@@ -100,14 +101,17 @@ class custom_cityscapes_labels(Dataset):
         if self.lb_transform: 
             label = self.lb_transform(label) # resizing the tensor, for working in low dimension
         
-        label_one_hot = F.one_hot(label, self.num_classes)
-
-        return img, label, label_one_hot
+        if self.one_hot:
+            label_one_hot = F.one_hot(label, self.num_classes)
+            return img, label, label_one_hot 
+        
+        return img, label 
 
 ## condition => the softmax prediction of cityscapes dataset from segformer model 
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
 segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
 config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
+
 
 
 def main(): 
