@@ -112,6 +112,8 @@ class custom_cityscapes_labels(Dataset):
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
 segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
 config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
+results_softmax_predictions = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check! 
+print('results consisting of softmax predictions loaded successfully!')
 
 
 
