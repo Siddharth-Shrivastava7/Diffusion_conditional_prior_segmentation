@@ -19,6 +19,7 @@ from test_softmax_pred import main
 from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
+from torch.nn import DataParallel
 
 ## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
@@ -182,7 +183,7 @@ def main():
         ).to(device)
     ## train dataloader 
     dataset_train = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'train')
-    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=8, shuffle=True, num_workers=0, drop_last=True)  
+    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=4, shuffle=True, num_workers=0, drop_last=True)  
     ## val dataloader
     dataset_val = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'val')
     dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0, drop_last=True)  
@@ -229,7 +230,7 @@ def main():
             optimizer.step()
             nb_iter += 1
 
-            if nb_iter % 1 == 0:  ## testing remainder factor by making it to 0 instead of 200
+            if nb_iter % 700 == 0:  ## testing remainder factor by making it to 0 instead of 200
                 print('In Sampling')
                 dataset = dataloader_val.dataset
                 prog_bar = mmcv.ProgressBar(len(dataset))
