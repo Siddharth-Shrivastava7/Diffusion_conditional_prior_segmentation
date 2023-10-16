@@ -17,6 +17,7 @@ from  torchvision.transforms.functional import InterpolationMode
 import torch.nn.functional as F 
 from test_softmax_pred import main 
 from mmcv.cnn import ConvModule
+import mmcv 
 
 ## for now, not iterating over the whole dataset but rather demo testing on one single image! 
 # test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
@@ -61,9 +62,19 @@ def sample_iadb(model, x0, nb_step):
 
     return x_alpha
 
+@torch.no_grad() 
+def sample_conditional_seg_iadb(model, nb_step): # arguments as: de-blending model, and neighbouring steps for deblending operation
+    model = model.eval() 
+    dataset = data_loader.dataset
+    
+    
+    pass 
+
+
+
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train', num_classes = 20, one_hot = False):
+    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, num_classes = 20, mode = 'train'):
         self.img_transform = img_transform
         self.img_data_list = []
         self.gt_dir = gt_dir + mode  
@@ -117,7 +128,6 @@ def main():
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
     img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/'
     suffix = "_gtFine_labelTrainIds.png"
-    mode  = 'val'
     num_classes = 20  
     lb_transform = transforms.Compose([ 
         transforms.Resize((256,512), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) 
@@ -136,8 +146,12 @@ def main():
             norm_cfg=None,
             act_cfg=None
         ).to(device)
-    dataset = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform, mode, num_classes)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True, num_workers=0, drop_last=True) 
+    ## train dataloader 
+    dataset_train = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'train')
+    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=2, shuffle=True, num_workers=0, drop_last=True)  
+    ## val dataloader
+    dataset_val = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'val')
+    dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0, drop_last=True)  
     print('dataset loaded successfully!')
 
     model = get_model() 
@@ -146,9 +160,10 @@ def main():
 
     optimizer = Adam(model.parameters(), lr=1e-4)
     nb_iter = 0
+    best_loss = torch.finfo(torch.float32).max # init the best loss 
     print('Start training')
     for _ in tqdm(range(100)):
-        for i, data in enumerate(dataloader):
+        for i, data in enumerate(dataloader_train):
             ## >>x1 being the target distribution<<
             labels_one_hot = F.one_hot(data[1].squeeze().long(), num_classes)
             labels_one_hot = labels_one_hot.permute(0,3,1,2) # B, C, H, W ## in order to present any correct gt label, I have to proceed with one-hot (rather than logits type)
@@ -163,7 +178,7 @@ def main():
             extended_c[:, :c.shape[1], :, :] = c # B,C,H,W ## C = 20 (including background) 
             extended_c = (extended_c * 2) - 1 ## similar to x1 => [-1,1]
 
-            ## conditional input ## conditioning is done similar to DDP model!
+            ## conditional input ## conditioning is done similar to DDP & DDPS model!
             conditional_feats = torch.cat([extended_c, x0], dim=1)
             conditional_feats = conditional_transform(conditional_feats) ## not doing anything cause, it will learn from itself to what value it should adjust to, while the learning of the whole objective is being carried out.
              
@@ -180,14 +195,24 @@ def main():
             optimizer.step()
             nb_iter += 1
 
-            if nb_iter % 200 == 0: 
+            if nb_iter % 0 == 0:  ## testing remainder factor by making it to 0 instead of 200
                 print('In Sampling')
-                with torch.no_grad():
-                    print(f'Save export {nb_iter}')
-                    sample = (sample_iadb(model, x0, nb_step=128) * 0.5) + 0.5
-                    torchvision.utils.save_image(sample, f'/home/sidd_s/scratch/saved_models/iadb/sample_imgs/export_{str(nb_iter).zfill(8)}.png')
-                    torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb/celeba.ckpt')
-
+                dataset = dataloader_val.dataset
+                prog_bar = mmcv.ProgressBar(len(dataset))
+                results = [] 
+                for __, datav in enumerate(dataloader_val):
+                    with torch.no_grad(): 
+                        ## rather than the below commented code, I believe I think I should take softmax
+                        # sample = (sample_conditional_seg_iadb(model, datav, nb_step=128) * 0.5) + 0.5 ## converting back to 0 to 1 | from [-1,1] 
+                        sample = sample_conditional_seg_iadb(model, datav, nb_step=128)
+                        sample = F.softmax(sample, dim=1)
+                        argmax_sample = torch.argmax(sample, dim=1) 
+                        
+                        
+                        if loss.item() < best_loss:
+                            best_loss = loss
+                            torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb_cond_seg/best_model_parameters.pt')
+                            print('Model updated! : current best model saved')
 
 if __name__ == '__main__':
     main()
