@@ -244,7 +244,7 @@ def main():
                         x1_sample = F.softmax(x1_sample, dim=1)
                         argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
                         results.append(argmax_x1_sample) 
-                        save_path = os.path.join(save_imgs_dir, datav[2][0].replace('_leftImg8bit.png', '_predFine_color.png'))
+                        save_path = os.path.join(save_imgs_dir, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
                         x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
                         x1_sample_color.save(save_path)
                         prog_bar.update()
