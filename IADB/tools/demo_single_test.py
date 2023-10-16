@@ -19,9 +19,6 @@ from test_softmax_pred import main
 from mmcv.cnn import ConvModule
 import mmcv 
 
-## for now, not iterating over the whole dataset but rather demo testing on one single image! 
-# test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
-
 
 ## condition => the softmax prediction of cityscapes dataset from segformer model 
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
@@ -50,9 +47,21 @@ def get_model():
     )
     return UNet2DModel(block_out_channels=block_out_channels,out_channels=20, in_channels=20, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
-@torch.no_grad()
-def sample_iadb(model, x0, nb_step):
-    x_alpha = x0
+
+@torch.no_grad() 
+def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, conditional_transform): # arguments as: de-blending model, and neighbouring steps for deblending operation
+    model = model.eval() 
+    softmax_feats = torch.tensor(results_softmax_predictions[datav[2]]).to(device)
+    extended_softmax_feats = torch.rand((softmax_feats[0], num_classes, *tuple(softmax_feats[2:])), device=device)  ## for including background
+    extended_softmax_feats[:, :softmax_feats.shape[1], :, :] = softmax_feats # B,C,H,W ## C = 20 (including background) 
+    ## x0 as the stationary distribution 
+    x0 = torch.randn_like(extended_softmax_feats.shape)
+    ## conditional input 
+    conditional_feats = torch.cat([extended_softmax_feats, x0], dim=1)
+    conditional_feats = conditional_transform(conditional_feats)
+    
+    ## now debledning starts: 
+    x_alpha = conditional_feats
     for t in range(nb_step):
         alpha_start = (t/nb_step)
         alpha_end =((t+1)/nb_step)
@@ -61,14 +70,7 @@ def sample_iadb(model, x0, nb_step):
         x_alpha = x_alpha + (alpha_end-alpha_start)*d
 
     return x_alpha
-
-@torch.no_grad() 
-def sample_conditional_seg_iadb(model, nb_step): # arguments as: de-blending model, and neighbouring steps for deblending operation
-    model = model.eval() 
-    dataset = data_loader.dataset
     
-    
-    pass 
 
 
 
@@ -204,9 +206,9 @@ def main():
                     with torch.no_grad(): 
                         ## rather than the below commented code, I believe I think I should take softmax
                         # sample = (sample_conditional_seg_iadb(model, datav, nb_step=128) * 0.5) + 0.5 ## converting back to 0 to 1 | from [-1,1] 
-                        sample = sample_conditional_seg_iadb(model, datav, nb_step=128)
-                        sample = F.softmax(sample, dim=1)
-                        argmax_sample = torch.argmax(sample, dim=1) 
+                        x1_sample = sample_conditional_seg_iadb(model, datav, nb_step=128, device=device, num_classes=20, conditional_transform=conditional_transform)
+                        x1_sample = F.softmax(x1_sample, dim=1)
+                        argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
                         
                         
                         if loss.item() < best_loss:
