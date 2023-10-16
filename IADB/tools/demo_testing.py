@@ -20,7 +20,6 @@ from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
 
-
 ## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
 segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
@@ -183,7 +182,7 @@ def main():
         ).to(device)
     ## train dataloader 
     dataset_train = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'train')
-    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=2, shuffle=True, num_workers=0, drop_last=True)  
+    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=8, shuffle=True, num_workers=0, drop_last=True)  
     ## val dataloader
     dataset_val = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'val')
     dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0, drop_last=True)  
