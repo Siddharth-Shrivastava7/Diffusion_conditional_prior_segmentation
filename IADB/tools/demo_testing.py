@@ -194,7 +194,6 @@ def main():
     print('Model loaded into cuda')
 
     optimizer = Adam(model.parameters(), lr=1e-4)
-    nb_iter = 0
     best_loss = torch.finfo(torch.float32).max # init the best loss 
     print('Start training')
     for epoch in tqdm(range(100)):
@@ -254,7 +253,7 @@ def main():
                 if loss.item() < best_loss:
                     best_loss = loss
                     torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb_cond_seg/best_model_parameters.pt')
-                    print('Model updated! : current best model saved on: ' + str(nb_iter)) 
+                    print('Model updated! : current best model saved on: ' + str(epoch+1)) 
                         
 
 if __name__ == '__main__':
