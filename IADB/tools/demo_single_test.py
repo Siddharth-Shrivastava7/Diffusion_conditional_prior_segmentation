@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from test_softmax_pred import main 
 from mmcv.cnn import ConvModule
 import mmcv 
+from tqdm import tqdm
 
 
 ## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
@@ -83,18 +84,18 @@ def label_img_to_color(img: torch.tensor):
 @torch.no_grad() 
 def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, conditional_transform): # arguments as: de-blending model, and neighbouring steps for deblending operation
     model = model.eval() 
-    softmax_feats = torch.tensor(results_softmax_predictions_val[datav[2]]).to(device)
-    extended_softmax_feats = torch.rand((softmax_feats[0], num_classes, *tuple(softmax_feats[2:])), device=device)  ## for including background
+    softmax_feats = torch.tensor(results_softmax_predictions_val[datav[2][0]]).to(device).unsqueeze(dim=0) ## since batch size is 1
+    extended_softmax_feats = torch.rand((softmax_feats.shape[0], num_classes, *tuple(softmax_feats.shape[2:])), device=device)  ## for including background
     extended_softmax_feats[:, :softmax_feats.shape[1], :, :] = softmax_feats # B,C,H,W ## C = 20 (including background) 
     ## x0 as the stationary distribution 
-    x0 = torch.randn_like(extended_softmax_feats.shape)
+    x0 = torch.randn_like(extended_softmax_feats)
     ## conditional input 
     conditional_feats = torch.cat([extended_softmax_feats, x0], dim=1)
     conditional_feats = conditional_transform(conditional_feats)
     
-    ## now debledning starts: 
+    ## now deblending starts: 
     x_alpha = conditional_feats
-    for t in range(nb_step):
+    for t in tqdm(range(nb_step)):
         alpha_start = (t/nb_step)
         alpha_end =((t+1)/nb_step)
 
@@ -229,7 +230,7 @@ def main():
             optimizer.step()
             nb_iter += 1
 
-            if nb_iter % 0 == 0:  ## testing remainder factor by making it to 0 instead of 200
+            if nb_iter % 1 == 0:  ## testing remainder factor by making it to 0 instead of 200
                 print('In Sampling')
                 dataset = dataloader_val.dataset
                 prog_bar = mmcv.ProgressBar(len(dataset))
@@ -244,7 +245,7 @@ def main():
                         argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
                         results.append(argmax_x1_sample) 
                         save_path = os.path.join(save_imgs_dir, datav[2].replace('_leftImg8bit.png', '_predFine_color.png'))
-                        x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample))
+                        x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
                         x1_sample_color.save(save_path)
                         prog_bar.update()
                         
