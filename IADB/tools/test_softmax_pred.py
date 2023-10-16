@@ -35,10 +35,9 @@ def main(config_path, checkpoint_path, gpu_id = 0):
     # init distributed env first, since logger depends on the dist info.
     cfg.gpu_ids = [gpu_id]
     distributed = False
-   
-    # build the dataloader
-    # TODO: support multiple images per gpu (only minor changes are needed)
-    dataset = build_dataset(cfg.data.test) 
+
+    # build the val dataloader
+    dataset_val  = build_dataset(cfg.data.test) 
     # The default loader config
     loader_cfg = dict(
         # cfg.gpus will be ignored if distributed
@@ -59,8 +58,20 @@ def main(config_path, checkpoint_path, gpu_id = 0):
         'shuffle': False,  # Not shuffle by default
         **cfg.data.get('test_dataloader', {})
     }
-    # build the dataloader
-    data_loader = build_dataloader(dataset, **test_loader_cfg)
+    # build the val dataloader
+    data_loader_val = build_dataloader(dataset_val, **test_loader_cfg)
+
+    # build the train dataloader
+    dataset_train  = build_dataset(cfg.data.train)  
+    train_loader_cfg = {
+        **loader_cfg,
+        'samples_per_gpu': 1,
+        'shuffle': False,  # Not shuffle by default
+        **cfg.data.get('train_dataloader', {})
+    }
+    # build the train dataloader
+    data_loader_train = build_dataloader(dataset_train, **train_loader_cfg)
+
 
     # build the model and load checkpoint
     cfg.model.train_cfg = None
@@ -73,12 +84,12 @@ def main(config_path, checkpoint_path, gpu_id = 0):
         model.CLASSES = checkpoint['meta']['CLASSES']
     else:
         print('"CLASSES" not found in meta, use dataset.CLASSES instead')
-        model.CLASSES = dataset.CLASSES
+        model.CLASSES = dataset_val.CLASSES
     if 'PALETTE' in checkpoint.get('meta', {}):
         model.PALETTE = checkpoint['meta']['PALETTE']
     else:
         print('"PALETTE" not found in meta, use dataset.PALETTE instead')
-        model.PALETTE = dataset.PALETTE
+        model.PALETTE = dataset_val.PALETTE
 
     # clean gpu memory when starting a new evaluation.
     torch.cuda.empty_cache()
@@ -89,12 +100,19 @@ def main(config_path, checkpoint_path, gpu_id = 0):
         assert digit_version(mmcv.__version__) >= digit_version('1.4.4'), \
             'Please use MMCV >= 1.4.4 for CPU training!'
     model = revert_sync_batchnorm(model)
-    model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
-    results = single_gpu_test(
+    model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids) 
+    ## train results 
+    train_results = single_gpu_test(
         model,  
-        data_loader,
+        data_loader_train,
+        softmaxop=True) ## hard coded for softmax predictions
+
+    ## val results 
+    val_results = single_gpu_test(
+        model,  
+        data_loader_val,
         softmaxop=True) ## hard coded for softmax predictions 
 
-    return results  # results of softmax predictions of whole cityscapes dataset    
+    return train_results,val_results  # results of softmax predictions of whole cityscapes dataset    
         
 

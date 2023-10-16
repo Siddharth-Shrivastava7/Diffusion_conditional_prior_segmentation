@@ -20,11 +20,11 @@ from mmcv.cnn import ConvModule
 import mmcv 
 
 
-## condition => the softmax prediction of cityscapes dataset from segformer model 
+## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
 segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
 config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
-results_softmax_predictions = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check! 
+results_softmax_predictions_train, results_softmax_predictions_val = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check!  ## caching in train and val data softmax predictions; so that segformerb2 not have to predict every other data instant but rather can be easily indexed for softmax prediction generation.
 print('results consisting of softmax predictions loaded successfully!')
 
 def get_model():
@@ -83,7 +83,7 @@ def label_img_to_color(img: torch.tensor):
 @torch.no_grad() 
 def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, conditional_transform): # arguments as: de-blending model, and neighbouring steps for deblending operation
     model = model.eval() 
-    softmax_feats = torch.tensor(results_softmax_predictions[datav[2]]).to(device)
+    softmax_feats = torch.tensor(results_softmax_predictions_val[datav[2]]).to(device)
     extended_softmax_feats = torch.rand((softmax_feats[0], num_classes, *tuple(softmax_feats[2:])), device=device)  ## for including background
     extended_softmax_feats[:, :softmax_feats.shape[1], :, :] = softmax_feats # B,C,H,W ## C = 20 (including background) 
     ## x0 as the stationary distribution 
@@ -158,7 +158,7 @@ class custom_cityscapes_labels(Dataset):
 
 def main(): 
     print('in the main function')
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
     img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/'
     suffix = "_gtFine_labelTrainIds.png"
@@ -206,7 +206,7 @@ def main():
             ## x0 being the stationary distribution! 
             x0 = torch.randn_like(x1.float()) # standard normal distribution  # acc to original IADB 
             ## conditioning is done in terms of softmax-logits of a model(which to be improved)
-            c  = [torch.tensor(results_softmax_predictions[path]) for path in data[2]] # conditioning softmax prediciton
+            c  = [torch.tensor(results_softmax_predictions_train[path]) for path in data[2]] # conditioning softmax prediciton
             c = torch.stack(c) # B,C,H,W ## here C = 19
             extended_c = torch.rand(x1.shape, device=device)  ## for including background
             extended_c[:, :c.shape[1], :, :] = c # B,C,H,W ## C = 20 (including background) 
