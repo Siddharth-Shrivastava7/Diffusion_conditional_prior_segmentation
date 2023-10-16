@@ -197,7 +197,7 @@ def main():
     nb_iter = 0
     best_loss = torch.finfo(torch.float32).max # init the best loss 
     print('Start training')
-    for _ in tqdm(range(100)):
+    for epoch in tqdm(range(100)):
         for i, data in enumerate(dataloader_train):
             ## >>x1 being the target distribution<<
             labels_one_hot = F.one_hot(data[1].squeeze().long(), num_classes)
@@ -228,31 +228,33 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            nb_iter += 1
 
-            if nb_iter % 700 == 0:  ## testing remainder factor by making it to 0 instead of 200
-                print('In Sampling')
-                dataset = dataloader_val.dataset
-                prog_bar = mmcv.ProgressBar(len(dataset))
-                results = [] 
-                save_imgs_dir = '/home/sidd_s/scratch/saved_models/iadb_cond_seg/result_val_images'
-                for __, datav in enumerate(dataloader_val):
-                    with torch.no_grad(): 
-                        ## rather than the below commented code, I believe I think I should take softmax
-                        # sample = (sample_conditional_seg_iadb(model, datav, nb_step=128) * 0.5) + 0.5 ## converting back to 0 to 1 | from [-1,1] 
-                        x1_sample = sample_conditional_seg_iadb(model, datav, nb_step=128, device=device, num_classes=20, conditional_transform=conditional_transform)
-                        x1_sample = F.softmax(x1_sample, dim=1)
-                        argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
-                        results.append(argmax_x1_sample) 
-                        save_path = os.path.join(save_imgs_dir, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
-                        x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
-                        x1_sample_color.save(save_path)
-                        prog_bar.update()
-                        
-                        if loss.item() < best_loss:
-                            best_loss = loss
-                            torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb_cond_seg/best_model_parameters.pt')
-                            print('Model updated! : current best model saved') 
+    
+        print('In Sampling at epoch:' + str(epoch+1))
+        dataset = dataloader_val.dataset
+        prog_bar = mmcv.ProgressBar(len(dataset))
+        results = [] 
+        save_imgs_dir = '/home/sidd_s/scratch/saved_models/iadb_cond_seg/result_val_images'
+        for __, datav in enumerate(dataloader_val):
+            with torch.no_grad(): 
+                ## rather than the below commented code, I believe I think I should take softmax
+                # sample = (sample_conditional_seg_iadb(model, datav, nb_step=128) * 0.5) + 0.5 ## converting back to 0 to 1 | from [-1,1] 
+                x1_sample = sample_conditional_seg_iadb(model, datav, nb_step=128, device=device, num_classes=20, conditional_transform=conditional_transform)
+                x1_sample = F.softmax(x1_sample, dim=1)
+                argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
+                results.append(argmax_x1_sample) 
+                save_imgs_dir_ep = os.path.join(save_imgs_dir, str(epoch+1))
+                if not os.path.exists(save_imgs_dir_ep):
+                    os.makedirs(save_imgs_dir_ep)
+                save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+                x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
+                x1_sample_color.save(save_path)
+                prog_bar.update()
+                
+                if loss.item() < best_loss:
+                    best_loss = loss
+                    torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb_cond_seg/best_model_parameters.pt')
+                    print('Model updated! : current best model saved on: ' + str(nb_iter)) 
                         
 
 if __name__ == '__main__':
