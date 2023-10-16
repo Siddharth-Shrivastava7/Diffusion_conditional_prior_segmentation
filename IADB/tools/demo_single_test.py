@@ -16,6 +16,7 @@ import numpy as np
 from  torchvision.transforms.functional import InterpolationMode
 import torch.nn.functional as F 
 from test_softmax_pred import main 
+from mmcv.cnn import ConvModule
 
 ## for now, not iterating over the whole dataset but rather demo testing on one single image! 
 # test_gt_label_path = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/train/hamburg/hamburg_000000_000042_gtFine_labelTrainIds.png' # this will be x1 
@@ -108,7 +109,7 @@ class custom_cityscapes_labels(Dataset):
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
         
         return img, label, img_path
-        
+       
 
 def main(): 
     print('in the main function')
@@ -126,8 +127,17 @@ def main():
         transforms.ToTensor(), 
         transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # imagenet mean and std using
     ])
+    conditional_transform = ConvModule(
+            num_classes * 2,
+            num_classes,
+            1,
+            padding=0,
+            conv_cfg=None,
+            norm_cfg=None,
+            act_cfg=None
+        ).to(device)
     dataset = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform, mode, num_classes)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=True, num_workers=0, drop_last=True) 
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=True, num_workers=0, drop_last=True) 
     print('dataset loaded successfully!')
 
     model = get_model() 
@@ -139,19 +149,31 @@ def main():
     print('Start training')
     for _ in tqdm(range(100)):
         for i, data in enumerate(dataloader):
+            ## >>x1 being the target distribution<<
             labels_one_hot = F.one_hot(data[1].squeeze().long(), num_classes)
-            labels_one_hot = labels_one_hot.permute(0,3,1,2) # B, C, H, W
-            x1 = (labels_one_hot.to(device)*2)-1  # acc to original IADB
-            x0 = torch.randn_like(x1.float()) # standard normal distribution  # acc to original IADB
+            labels_one_hot = labels_one_hot.permute(0,3,1,2) # B, C, H, W ## in order to present any correct gt label, I have to proceed with one-hot (rather than logits type)
+            x1 = (labels_one_hot.to(device)*2)-1  # acc to original IADB ## => [-1,1]
+            
+            ## x0 being the stationary distribution! 
+            x0 = torch.randn_like(x1.float()) # standard normal distribution  # acc to original IADB 
+            ## conditioning is done in terms of softmax-logits of a model(which to be improved)
             c  = [torch.tensor(results_softmax_predictions[path]) for path in data[2]] # conditioning softmax prediciton
-            c = torch.stack(c) # B,C,H,W
-            bs = x0.shape[0]
+            c = torch.stack(c) # B,C,H,W ## here C = 19
+            extended_c = torch.rand(x1.shape, device=device)  ## for including background
+            extended_c[:, :c.shape[1], :, :] = c # B,C,H,W ## C = 20 (including background) 
+            extended_c = (extended_c * 2) - 1 ## similar to x1 => [-1,1]
+
+            ## conditional input ## conditioning is done similar to DDP model!
+            conditional_feats = torch.cat([extended_c, x0], dim=1)
+            conditional_feats = conditional_transform(conditional_feats) ## not doing anything cause, it will learn from itself to what value it should adjust to, while the learning of the whole objective is being carried out.
+             
+            bs = x0.shape[0] # batch size 
 
             alpha = torch.rand(bs, device=device)
-            x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
+            x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * conditional_feats
             
-            d = model(x_alpha, alpha)['sample']
-            loss = torch.sum((d - (x1-x0))**2)
+            d = model(x_alpha, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value
+            loss = torch.sum((d - (x1-conditional_feats))**2)
 
             optimizer.zero_grad()
             loss.backward()
