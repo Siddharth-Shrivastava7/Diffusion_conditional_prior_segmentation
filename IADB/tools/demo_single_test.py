@@ -47,7 +47,7 @@ def get_model():
         "UpBlock2D", 
         "UpBlock2D"  
     )
-    return UNet2DModel(block_out_channels=block_out_channels,out_channels=3, in_channels=3, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
+    return UNet2DModel(block_out_channels=block_out_channels,out_channels=20, in_channels=20, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
 @torch.no_grad()
 def sample_iadb(model, x0, nb_step):
@@ -172,7 +172,7 @@ def main():
             alpha = torch.rand(bs, device=device)
             x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * conditional_feats
             
-            d = model(x_alpha, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value
+            d = model(x_alpha, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
             loss = torch.sum((d - (x1-conditional_feats))**2)
 
             optimizer.zero_grad()
