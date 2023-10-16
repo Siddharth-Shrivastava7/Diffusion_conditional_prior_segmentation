@@ -47,6 +47,38 @@ def get_model():
     )
     return UNet2DModel(block_out_channels=block_out_channels,out_channels=20, in_channels=20, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
+def label_img_to_color(img: torch.tensor): 
+    label_to_color = {
+        0: [128, 64,128],
+        1: [244, 35,232],
+        2: [ 70, 70, 70],
+        3: [102,102,156],
+        4: [190,153,153],
+        5: [153,153,153],
+        6: [250,170, 30],
+        7: [220,220,  0],
+        8: [107,142, 35],
+        9: [152,251,152],
+        10: [ 70,130,180],
+        11: [220, 20, 60],
+        12: [255,  0,  0],
+        13: [  0,  0,142],
+        14: [  0,  0, 70],
+        15: [  0, 60,100],
+        16: [  0, 80,100],
+        17: [  0,  0,230],
+        18: [119, 11, 32],
+        19: [0,  0, 0] 
+        } 
+    img = np.array(img.squeeze()) 
+    img_height, img_width = img.shape
+    img_color = np.zeros((img_height, img_width, 3), dtype=np.uint8)
+    for row in range(img_height):
+        for col in range(img_width):
+            label = img[row][col] 
+            img_color[row, col] = np.array(label_to_color[label])  
+    return img_color
+
 
 @torch.no_grad() 
 def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, conditional_transform): # arguments as: de-blending model, and neighbouring steps for deblending operation
@@ -202,6 +234,7 @@ def main():
                 dataset = dataloader_val.dataset
                 prog_bar = mmcv.ProgressBar(len(dataset))
                 results = [] 
+                save_imgs_dir = '/home/sidd_s/scratch/saved_models/iadb_cond_seg/result_val_images'
                 for __, datav in enumerate(dataloader_val):
                     with torch.no_grad(): 
                         ## rather than the below commented code, I believe I think I should take softmax
@@ -209,12 +242,17 @@ def main():
                         x1_sample = sample_conditional_seg_iadb(model, datav, nb_step=128, device=device, num_classes=20, conditional_transform=conditional_transform)
                         x1_sample = F.softmax(x1_sample, dim=1)
                         argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
-                        
+                        results.append(argmax_x1_sample) 
+                        save_path = os.path.join(save_imgs_dir, datav[2].replace('_leftImg8bit.png', '_predFine_color.png'))
+                        x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample))
+                        x1_sample_color.save(save_path)
+                        prog_bar.update()
                         
                         if loss.item() < best_loss:
                             best_loss = loss
                             torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/iadb_cond_seg/best_model_parameters.pt')
-                            print('Model updated! : current best model saved')
+                            print('Model updated! : current best model saved') 
+                        
 
 if __name__ == '__main__':
     main()
