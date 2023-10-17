@@ -22,6 +22,13 @@ from tqdm import tqdm
 from torch.nn import DataParallel
 import torch.nn as nn
 
+## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
+## we will be loading trained model, so the configuration will be that of validation of mmseg model 
+segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
+results_softmax_predictions_train, results_softmax_predictions_val = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check!  ## caching in train and val data softmax predictions; so that segformerb2 not have to predict every other data instant but rather can be easily indexed for softmax prediction generation.
+print('results consisting of softmax predictions loaded successfully!')
+
 def get_model():
     block_out_channels=(128, 128, 256, 256, 512, 512)
     down_block_types=( 
@@ -99,50 +106,56 @@ def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, cond
     return x_alpha
     
 
+
+
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/', gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
-        self.img_list = []
-        self.img_dir = img_dir + mode
+    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/leftImg8bit/' , img_transform = None, gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, num_classes = 20, mode = 'train'):
+        self.img_transform = img_transform
+        self.img_data_list = []
         self.gt_dir = gt_dir + mode  
+        self.img_dir = img_dir + mode
         self.lb_transform = lb_transform 
-        self.label_list = []
+        self.data_list = []
+        self.num_classes = num_classes # 19 + background class 
+        
         
         for root, dirs, files in os.walk(self.gt_dir, topdown=False):
             for name in tqdm(sorted(files)):
                 path = os.path.join(root, name)
                 if path.find(suffix)!=-1:
-                    self.label_list.append(path)
-                    img_path = 
+                    self.data_list.append(path)
 
-
-        # for root, dirs, files in os.walk(self.img_dir, topdown=False):
-        #     for name in tqdm(sorted(files)):
-        #         img_path = os.path.join(root, name)
-        #         self.img_list.append(img_path)
+        for root, dirs, files in os.walk(self.img_dir, topdown=False):
+            for name in tqdm(sorted(files)):
+                img_path = os.path.join(root, name)
+                self.img_data_list.append(img_path)
 
 
         if mode == 'train':
-            assert len(self.label_list) == 2975 == len(self.img_list)
+            assert len(self.data_list) == 2975 == len(self.img_data_list)
         elif mode == 'val':
-            assert len(self.label_list) == 500 == len(self.img_list)
+            assert len(self.data_list) == 500 == len(self.img_data_list)
         else:
             raise Exception('mode has to be either train or val')
 
     def __len__(self):
-        return len(self.label_list) 
+        return len(self.data_list) 
     
     def __getitem__(self, index):
 
-        img_path = self.img_list[index] 
+        img_path = self.img_data_list[index] 
+        img = Image.open(img_path)
+        # if self.img_transform:
+        #     img = self.img_transform(img)
 
-        label_path = self.label_list[index]  
+        label_path = self.data_list[index]  
         label = torch.tensor(np.array(Image.open(label_path)))
         label[label==255] = 19
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
         
-        return label, img_path
+        return img, label, img_path
        
 
 def main(): 
@@ -157,6 +170,11 @@ def main():
     bit_scale = 0.01 #a hyper-param ##similar to DDP
     lb_transform = transforms.Compose([ 
         transforms.Resize((256,512), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) 
+    ])
+    img_transform = transforms.Compose([ 
+        transforms.Resize((256,512)), # (H/4, W/4) 
+        transforms.ToTensor(), 
+        transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)), # imagenet mean and std using
     ])
     conditional_transform = ConvModule(
             num_classes * 2,
@@ -185,27 +203,27 @@ def main():
     for epoch in tqdm(range(100)):
         for i, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
-            ### similar to one done for DDP
-            x1 = embedding_table(data[1]).squeeze().permute(0,3,1,2) 
-            x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale
+            labels_one_hot = F.one_hot(data[1].squeeze().long(), num_classes)
+            labels_one_hot = labels_one_hot.permute(0,3,1,2) # B, C, H, W ## in order to present any correct gt label, I have to proceed with one-hot (rather than logits type)
+            x1 = (labels_one_hot.to(device)*2)-1  # acc to original IADB ## => [-1,1]
+            # conditioning is done in terms of softmax-logits of a model(which to be improved)
+            x0 = torch.randn_like(x1.float())
+            c  = [torch.tensor(results_softmax_predictions_train[path]) for path in data[2]] # conditioning softmax prediciton
+            c = torch.stack(c) # B,C,H,W ## here C = 19    
+            extended_c = torch.rand(x1.shape, device=device)  ## for including background
+            extended_c[:, :c.shape[1], :, :] = c # B,C,H,W ## C = 20 (including background) 
+            extended_c = (extended_c * 2) - 1 ## similar to x1 => [-1,1]
+            # conditional input ## conditioning is done similar to DDP & DDPS model!
+            conditional_feats = torch.cat([extended_c, x0], dim=1)
+            conditional_feats = conditional_transform(conditional_feats) ## not doing anything cause, it will learn from itself to what value it should adjust to, while the learning of the whole objective is being carried out.
 
-            ## x0 being the stationary distribution! 
-            x0 = torch.randn_like(x1) # standard normal distribution  # acc to original IADB 
             
-            ## alpha blending taking place between x0 (not conditional feats!) and x1 
-            alpha = torch.rand(bs, device=device)
-            x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
-
-            ## similar to DDP 
-            city_name = img_metas[0]['filename'].split('/')[-2]  
-            pred_path = img_metas[0]['filename'].replace('leftImg8bit/val/' + city_name, 'pred/segformerb2/')
-            condition = 
-            condition = embedding_table(condition).squeeze(1).permute(0, 3, 1, 2) 
-            ## condition input 
-            conditional_feats = torch.cat([condition, x_alpha], dim=1)
-            conditional_feats = conditional_transform(conditional_feats)
              
             bs = x0.shape[0] # batch size 
+
+            ## alpha blending taking place between x0 (not conditional feats!) and x1 
+            alpha = torch.rand(bs, device=device)
+            x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * conditional_feats
 
             d = model(conditional_feats, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
             loss = torch.sum((d - (x1-x0))**2)
