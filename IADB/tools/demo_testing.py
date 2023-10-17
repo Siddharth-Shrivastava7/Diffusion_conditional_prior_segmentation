@@ -3,7 +3,6 @@ conditional image segementation map generation, using alpha bending of gaussian 
 '''
 
 import torch
-import torchvision
 from torchvision import transforms
 from diffusers import UNet2DModel
 from torch.optim import Adam 
@@ -19,7 +18,6 @@ from test_softmax_pred import main
 from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
-from torch.nn import DataParallel
 import torch.nn as nn
 
 def get_model():
@@ -76,15 +74,16 @@ def label_img_to_color(img: torch.tensor):
 
 
 @torch.no_grad() 
-def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, conditional_transform): # arguments as: de-blending model, and neighbouring steps for deblending operation
+def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step):
     model = model.eval() 
-    softmax_feats = torch.tensor(results_softmax_predictions_val[datav[2][0]]).to(device).unsqueeze(dim=0) ## since batch size is 1
-    extended_softmax_feats = torch.rand((softmax_feats.shape[0], num_classes, *tuple(softmax_feats.shape[2:])), device=device)  ## for including background
-    extended_softmax_feats[:, :softmax_feats.shape[1], :, :] = softmax_feats # B,C,H,W ## C = 20 (including background) 
+    pred_label = torch.tensor(np.array(Image.open([datav[1][0]]))).to(device).unsqueeze(dim=0) ## since batch size is 1
+    pred_label_emdb = embedding_table(pred_label).squeeze(1).permute(0, 3, 1, 2) 
+    pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale
+    
     ## x0 as the stationary distribution 
-    x0 = torch.randn_like(extended_softmax_feats)
+    x0 = torch.randn_like(pred_label_emdb)
     ## conditional input 
-    conditional_feats = torch.cat([extended_softmax_feats, x0], dim=1)
+    conditional_feats = torch.cat([pred_label_emdb, x0], dim=1)
     conditional_feats = conditional_transform(conditional_feats)
     
     ## now deblending starts: 
@@ -101,9 +100,9 @@ def sample_conditional_seg_iadb(model, datav, nb_step, device, num_classes, cond
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, img_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/', gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
-        self.img_list = []
-        self.img_dir = img_dir + mode
+    def __init__(self, pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/', gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
+        self.pred_list = []
+        self.pred_dir = pred_dir + mode
         self.gt_dir = gt_dir + mode  
         self.lb_transform = lb_transform 
         self.label_list = []
@@ -112,20 +111,15 @@ class custom_cityscapes_labels(Dataset):
             for name in tqdm(sorted(files)):
                 path = os.path.join(root, name)
                 if path.find(suffix)!=-1:
-                    self.label_list.append(path)
-                    img_path = 
-
-
-        # for root, dirs, files in os.walk(self.img_dir, topdown=False):
-        #     for name in tqdm(sorted(files)):
-        #         img_path = os.path.join(root, name)
-        #         self.img_list.append(img_path)
-
+                    self.label_list.append(path) 
+                    city_name = path.split('/')[-2] 
+                    pred_path = path.replace('/gtFine/' + mode + '/' + city_name, '/pred/segformerb2/' + mode).replace('_gtFine_labelTrainIds.png', '_leftImg8bit.png')
+                    self.pred_list.append(pred_path)
 
         if mode == 'train':
-            assert len(self.label_list) == 2975 == len(self.img_list)
+            assert len(self.label_list) == 2975 == len(self.pred_list)
         elif mode == 'val':
-            assert len(self.label_list) == 500 == len(self.img_list)
+            assert len(self.label_list) == 500 == len(self.pred_list)
         else:
             raise Exception('mode has to be either train or val')
 
@@ -134,22 +128,22 @@ class custom_cityscapes_labels(Dataset):
     
     def __getitem__(self, index):
 
-        img_path = self.img_list[index] 
+        pred_path = self.pred_list[index] 
 
         label_path = self.label_list[index]  
         label = torch.tensor(np.array(Image.open(label_path)))
-        label[label==255] = 19
+        label[label==255] = 19 # for background label 
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
         
-        return label, img_path
+        return label, pred_path
        
 
 def main(): 
     print('in the main function')
     device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
-    img_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/'
+    pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/'
     suffix = "_gtFine_labelTrainIds.png"
     num_classes = 19 
     embed_dim = 256 #a hyper-param ##similar to DDP
@@ -168,10 +162,10 @@ def main():
             act_cfg=None
         ).to(device)
     ## train dataloader 
-    dataset_train = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'train')
+    dataset_train = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'train')
     dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=4, shuffle=True, num_workers=0, drop_last=True)  
     ## val dataloader
-    dataset_val = custom_cityscapes_labels(img_dir, img_transform, gt_dir,suffix, lb_transform,num_classes, mode = 'val')
+    dataset_val = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'val')
     dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0, drop_last=True)  
     print('dataset loaded successfully!')
 
@@ -186,7 +180,7 @@ def main():
         for i, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
             ### similar to one done for DDP
-            x1 = embedding_table(data[1]).squeeze().permute(0,3,1,2) 
+            x1 = embedding_table(data[0]).squeeze().permute(0,3,1,2) 
             x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale
 
             ## x0 being the stationary distribution! 
@@ -197,12 +191,13 @@ def main():
             x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
 
             ## similar to DDP 
-            city_name = img_metas[0]['filename'].split('/')[-2]  
-            pred_path = img_metas[0]['filename'].replace('leftImg8bit/val/' + city_name, 'pred/segformerb2/')
-            condition = 
-            condition = embedding_table(condition).squeeze(1).permute(0, 3, 1, 2) 
+            pred_labels = [torch.tensor(np.array(Image.open(pred_path))) for pred_path in data[1]]
+            pred_labels = torch.stack(pred_labels, dim=0) 
+            pred_labels_emdb = embedding_table(pred_labels).squeeze(1).permute(0, 3, 1, 2) 
+            pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale
+
             ## condition input 
-            conditional_feats = torch.cat([condition, x_alpha], dim=1)
+            conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
             conditional_feats = conditional_transform(conditional_feats)
              
             bs = x0.shape[0] # batch size 
@@ -224,9 +219,7 @@ def main():
             os.makedirs(save_imgs_dir_ep)
         for __, datav in enumerate(dataloader_val):
             with torch.no_grad(): 
-                ## rather than the below commented code, I believe I think I should take softmax
-                # sample = (sample_conditional_seg_iadb(model, datav, nb_step=128) * 0.5) + 0.5 ## converting back to 0 to 1 | from [-1,1] 
-                x1_sample = sample_conditional_seg_iadb(model, datav, nb_step=128, device=device, num_classes=20, conditional_transform=conditional_transform)
+                x1_sample = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
                 x1_sample = F.softmax(x1_sample, dim=1)
                 argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
                 save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
