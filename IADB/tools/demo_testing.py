@@ -38,7 +38,7 @@ def get_model():
         "UpBlock2D", 
         "UpBlock2D"  
     )
-    return UNet2DModel(block_out_channels=block_out_channels,out_channels=20, in_channels=20, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
+    return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes+1, in_channels=num_classes + 1, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
 def label_img_to_color(img: torch.tensor): 
     label_to_color = {
@@ -153,8 +153,9 @@ def main():
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
     pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/'
     suffix = "_gtFine_labelTrainIds.png"
-    num_classes = 19 
-    embed_dim = 20 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
+    global num_classes
+    num_classes = 19 ## only foreground classes 
+    embed_dim = num_classes + 1 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
     embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device)
     bit_scale = 0.01 #a hyper-param ##similar to DDP
     lb_transform = transforms.Compose([ 
