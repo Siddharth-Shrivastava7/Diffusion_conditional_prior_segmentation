@@ -78,22 +78,25 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_t
     model = model.eval() 
     pred_label = torch.tensor(np.array(Image.open([datav[1][0]]))).to(device).unsqueeze(dim=0) ## since batch size is 1
     pred_label_emdb = embedding_table(pred_label).squeeze(1).permute(0, 3, 1, 2) 
-    pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale
+    pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale ## sort of logits
     
     ## x0 as the stationary distribution 
-    x0 = torch.randn_like(pred_label_emdb)
+    x0 = torch.randn_like(pred_label_emdb) ## sort of logits
     ## conditional input 
     conditional_feats = torch.cat([pred_label_emdb, x0], dim=1)
-    conditional_feats = conditional_transform(conditional_feats)
+    conditional_feats = conditional_transform(conditional_feats) ## sort of logits
     
     ## now deblending starts: 
-    x_alpha = conditional_feats
+    x_alpha = x0
     for t in tqdm(range(nb_step)):
         alpha_start = (t/nb_step)
         alpha_end =((t+1)/nb_step)
 
-        d = model(x_alpha, torch.tensor(alpha_start, device=x_alpha.device))['sample']
-        x_alpha = x_alpha + (alpha_end-alpha_start)*d
+        d = model(conditional_feats, torch.tensor(alpha_start, device=x_alpha.device))['sample'] ## this is giving ~ (\bar_{x1} - \bar{x0})
+        x_alpha = x_alpha + (alpha_end-alpha_start)*d 
+
+        conditional_feats = torch.cat([pred_label_emdb, x_alpha], dim=1)
+        conditional_feats = conditional_transform(conditional_feats)
 
     return x_alpha
     
@@ -180,10 +183,10 @@ def main():
             ## >>x1 being the target distribution<<
             ### similar to one done for DDP
             x1 = embedding_table(data[0]).squeeze().permute(0,3,1,2) 
-            x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale
+            x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale ## sort of logits (encoding of discrete labels)
 
             ## x0 being the stationary distribution! 
-            x0 = torch.randn_like(x1) # standard normal distribution  # acc to original IADB 
+            x0 = torch.randn_like(x1) # standard normal distribution  # acc to original IADB ## sort of logits
             
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
             alpha = torch.rand(bs, device=device)
@@ -193,7 +196,7 @@ def main():
             pred_labels = [torch.tensor(np.array(Image.open(pred_path))) for pred_path in data[1]]
             pred_labels = torch.stack(pred_labels, dim=0) 
             pred_labels_emdb = embedding_table(pred_labels).squeeze(1).permute(0, 3, 1, 2) 
-            pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale
+            pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
 
             ## condition input 
             conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
@@ -202,7 +205,7 @@ def main():
             bs = x0.shape[0] # batch size 
 
             d = model(conditional_feats, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
-            loss = torch.sum((d - (x1-x0))**2)
+            loss = torch.sum((d - (x1-x0))**2) ## based on IADB paper
 
             optimizer.zero_grad()
             loss.backward()
@@ -218,9 +221,9 @@ def main():
             os.makedirs(save_imgs_dir_ep)
         for __, datav in enumerate(dataloader_val):
             with torch.no_grad(): 
-                x1_sample = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
-                x1_sample = F.softmax(x1_sample, dim=1)
-                argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
+                x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
+                x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
+                argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
                 save_path = os.path.join(save_imgs_dir_ep, datav[1][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
                 x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
                 x1_sample_color.save(save_path)
