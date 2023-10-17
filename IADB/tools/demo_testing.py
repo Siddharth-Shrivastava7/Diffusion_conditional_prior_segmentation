@@ -140,8 +140,7 @@ class custom_cityscapes_labels(Dataset):
        
 
 def main(): 
-    print('in the main function')
-    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
     pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/'
     suffix = "_gtFine_labelTrainIds.png"
@@ -166,14 +165,14 @@ def main():
     dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=4, shuffle=True, num_workers=0, drop_last=True)  
     ## val dataloader
     dataset_val = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'val')
-    dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0, drop_last=True)  
+    dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0)  
     print('dataset loaded successfully!')
 
     model = get_model() 
     model = model.to(device)
     print('Model loaded into cuda')
 
-    optimizer = Adam(model.parameters(), lr=1e-4)
+    optimizer = Adam(model.parameters(), lr=1e-4) # hyper-param
     best_loss = torch.finfo(torch.float32).max # init the best loss 
     print('Start training')
     for epoch in tqdm(range(100)):
@@ -222,7 +221,7 @@ def main():
                 x1_sample = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
                 x1_sample = F.softmax(x1_sample, dim=1)
                 argmax_x1_sample = torch.argmax(x1_sample, dim=1) 
-                save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+                save_path = os.path.join(save_imgs_dir_ep, datav[1][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
                 x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
                 x1_sample_color.save(save_path)
                 prog_bar.update()
