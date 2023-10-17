@@ -76,18 +76,21 @@ def label_img_to_color(img: torch.tensor):
 @torch.no_grad() 
 def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step):
     model = model.eval() 
-    pred_label = torch.tensor(np.array(Image.open([datav[1][0]]))).to(device).unsqueeze(dim=0) ## since batch size is 1
-    pred_label_emdb = embedding_table(pred_label).squeeze(1).permute(0, 3, 1, 2) 
+    conditional_transform = conditional_transform.eval() 
+    
+    ## predictions of segformerb2 as the conditions
+    pred_label_emdb = embedding_table(datav[1].long().to(device)).squeeze(1).permute(0, 3, 1, 2) 
     pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale ## sort of logits
     
     ## x0 as the stationary distribution 
     x0 = torch.randn_like(pred_label_emdb) ## sort of logits
+
     ## conditional input 
     conditional_feats = torch.cat([pred_label_emdb, x0], dim=1)
     conditional_feats = conditional_transform(conditional_feats) ## sort of logits
     
     ## now deblending starts: 
-    x_alpha = x0
+    x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
     for t in tqdm(range(nb_step)):
         alpha_start = (t/nb_step)
         alpha_end =((t+1)/nb_step)
@@ -132,14 +135,17 @@ class custom_cityscapes_labels(Dataset):
     def __getitem__(self, index):
 
         pred_path = self.pred_list[index] 
+        pred_label = torch.tensor(np.array(Image.open(pred_path)))
 
         label_path = self.label_list[index]  
         label = torch.tensor(np.array(Image.open(label_path)))
         label[label==255] = 19 # for background label 
+
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
+            pred_label = self.lb_transform(pred_label.unsqueeze(dim=0))
         
-        return label, pred_path
+        return label, pred_label, pred_path
        
 
 def main(): 
@@ -148,24 +154,24 @@ def main():
     pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/'
     suffix = "_gtFine_labelTrainIds.png"
     num_classes = 19 
-    embed_dim = 256 #a hyper-param ##similar to DDP
-    embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim)
+    embed_dim = 20 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
+    embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device)
     bit_scale = 0.01 #a hyper-param ##similar to DDP
     lb_transform = transforms.Compose([ 
-        transforms.Resize((256,512), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) 
+        transforms.Resize((128,256), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) ## similar to DDP, where they were training using (512, 1024) images and performed diffusion in (H/4, W/4) => (128, 256) and then used bilinear upsampling of the logits to obtain final prediction label.
     ])
     conditional_transform = ConvModule(
-            num_classes * 2,
-            num_classes,
+            embed_dim * 2,
+            embed_dim,
             1,
             padding=0,
             conv_cfg=None,
             norm_cfg=None,
             act_cfg=None
-        ).to(device)
+        ).to(device) ## similar to DDP 
     ## train dataloader 
     dataset_train = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'train')
-    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=4, shuffle=True, num_workers=0, drop_last=True)  
+    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=8, shuffle=True, num_workers=0, drop_last=True)  
     ## val dataloader
     dataset_val = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'val')
     dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0)  
@@ -182,20 +188,19 @@ def main():
         for i, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
             ### similar to one done for DDP
-            x1 = embedding_table(data[0]).squeeze().permute(0,3,1,2) 
+            x1 = embedding_table(data[0].long().to(device)).squeeze(1).permute(0,3,1,2)
             x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale ## sort of logits (encoding of discrete labels)
 
             ## x0 being the stationary distribution! 
             x0 = torch.randn_like(x1) # standard normal distribution  # acc to original IADB ## sort of logits
             
+            bs = x0.shape[0] # batch size 
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
             alpha = torch.rand(bs, device=device)
             x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
 
             ## similar to DDP 
-            pred_labels = [torch.tensor(np.array(Image.open(pred_path))) for pred_path in data[1]]
-            pred_labels = torch.stack(pred_labels, dim=0) 
-            pred_labels_emdb = embedding_table(pred_labels).squeeze(1).permute(0, 3, 1, 2) 
+            pred_labels_emdb = embedding_table(data[1].long().to(device)).squeeze(1).permute(0, 3, 1, 2) 
             pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
 
             ## condition input 
@@ -224,7 +229,7 @@ def main():
                 x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
                 x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
                 argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
-                save_path = os.path.join(save_imgs_dir_ep, datav[1][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+                save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
                 x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
                 x1_sample_color.save(save_path)
                 prog_bar.update()
