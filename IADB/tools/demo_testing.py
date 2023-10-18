@@ -81,7 +81,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_t
     conditional_transform = conditional_transform.eval() 
     
     ## predictions of segformerb2 as the conditions
-    pred_label_emdb = embedding_table(datav[1].long()).squeeze(1).permute(0, 3, 1, 2) 
+    pred_label_emdb = embedding_table(datav[1].long().to(device, non_blocking=True)).squeeze(1).permute(0, 3, 1, 2) 
     pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale ## sort of logits
     
     ## x0 as the stationary distribution 
@@ -191,7 +191,7 @@ def main():
         for i, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
             ### similar to one done in DDP
-            x1 = embedding_table(data[0].long()).squeeze(1).permute(0,3,1,2)
+            x1 = embedding_table(data[0].long().to(device, non_blocking=True)).squeeze(1).permute(0,3,1,2)
             x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale ## sort of logits (encoding of discrete labels)
 
             ## x0 being the stationary distribution! 
@@ -203,7 +203,7 @@ def main():
             x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
 
             ## similar to DDP 
-            pred_labels_emdb = embedding_table(data[1].long()).squeeze(1).permute(0, 3, 1, 2) 
+            pred_labels_emdb = embedding_table(data[1].long().to(device, non_blocking=True)).squeeze(1).permute(0, 3, 1, 2) 
             pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
 
             ## condition input 
