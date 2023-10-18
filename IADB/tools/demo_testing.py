@@ -20,6 +20,8 @@ import mmcv
 from tqdm import tqdm
 import torch.nn as nn
 
+torch.backends.cudnn.benchmark = True ## for better speed 
+
 def get_model():
     block_out_channels=(128, 128, 256, 256, 512, 512)
     down_block_types=( 
@@ -40,7 +42,7 @@ def get_model():
     )
     return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes+1, in_channels=num_classes + 1, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
-def label_img_to_color(img: torch.tensor): 
+def label_img_to_color(img): 
     label_to_color = {
         0: [128, 64,128],
         1: [244, 35,232],
@@ -79,7 +81,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_t
     conditional_transform = conditional_transform.eval() 
     
     ## predictions of segformerb2 as the conditions
-    pred_label_emdb = embedding_table(datav[1].long().to(device)).squeeze(1).permute(0, 3, 1, 2) 
+    pred_label_emdb = embedding_table(datav[1].long()).squeeze(1).permute(0, 3, 1, 2) 
     pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale ## sort of logits
     
     ## x0 as the stationary distribution 
@@ -95,7 +97,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_t
         alpha_start = (t/nb_step)
         alpha_end =((t+1)/nb_step)
 
-        d = model(conditional_feats, torch.tensor(alpha_start, device=x_alpha.device))['sample'] ## this is giving ~ (\bar_{x1} - \bar{x0})
+        d = model(conditional_feats, torch.as_tensor(alpha_start, device=x_alpha.device))['sample'] ## this is giving ~ (\bar_{x1} - \bar{x0})
         x_alpha = x_alpha + (alpha_end-alpha_start)*d 
 
         conditional_feats = torch.cat([pred_label_emdb, x_alpha], dim=1)
@@ -135,15 +137,15 @@ class custom_cityscapes_labels(Dataset):
     def __getitem__(self, index):
 
         pred_path = self.pred_list[index] 
-        pred_label = torch.tensor(np.array(Image.open(pred_path)))
+        pred_label = torch.from_numpy(np.array(Image.open(pred_path)))
 
         label_path = self.label_list[index]  
-        label = torch.tensor(np.array(Image.open(label_path)))
+        label = torch.from_numpy(np.array(Image.open(label_path)))
         label[label==255] = 19 # for background label 
 
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
-            pred_label = self.lb_transform(pred_label.unsqueeze(dim=0))
+            pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was in the segformer model was upsampled in a biliner interpolation fashion on its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
         
         return label, pred_label, pred_path
        
@@ -151,7 +153,7 @@ class custom_cityscapes_labels(Dataset):
 def main(): 
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
-    pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/'
+    pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/res_128x256' ## opting for option 2, as written above, near below self.lb_transform usecase.
     suffix = "_gtFine_labelTrainIds.png"
     global num_classes
     num_classes = 19 ## only foreground classes 
@@ -172,10 +174,10 @@ def main():
         ).to(device) ## similar to DDP 
     ## train dataloader 
     dataset_train = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'train')
-    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=8, shuffle=True, num_workers=0, drop_last=True)  
+    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=8, shuffle=True, num_workers=4, drop_last=True, pin_memory = True)  
     ## val dataloader
     dataset_val = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'val')
-    dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=0)  
+    dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=4, pin_memory = True)  
     print('dataset loaded successfully!')
 
     model = get_model() 
@@ -188,8 +190,8 @@ def main():
     for epoch in tqdm(range(100)):
         for i, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
-            ### similar to one done for DDP
-            x1 = embedding_table(data[0].long().to(device)).squeeze(1).permute(0,3,1,2)
+            ### similar to one done in DDP
+            x1 = embedding_table(data[0].long()).squeeze(1).permute(0,3,1,2)
             x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale ## sort of logits (encoding of discrete labels)
 
             ## x0 being the stationary distribution! 
@@ -201,7 +203,7 @@ def main():
             x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
 
             ## similar to DDP 
-            pred_labels_emdb = embedding_table(data[1].long().to(device)).squeeze(1).permute(0, 3, 1, 2) 
+            pred_labels_emdb = embedding_table(data[1].long()).squeeze(1).permute(0, 3, 1, 2) 
             pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
 
             ## condition input 
@@ -231,7 +233,7 @@ def main():
                 x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
                 argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
                 save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
-                x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.cpu()))
+                x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.detach().cpu()))
                 x1_sample_color.save(save_path)
                 prog_bar.update()
                 
