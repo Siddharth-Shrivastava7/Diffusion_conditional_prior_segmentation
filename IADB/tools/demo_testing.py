@@ -145,7 +145,7 @@ class custom_cityscapes_labels(Dataset):
 
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
-            pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was in the segformer model was upsampled in a biliner interpolation fashion on its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
+            pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was earlier in the segformer model was upsampled in a biliner interpolation fashion through its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
         
         return label, pred_label, pred_path
        
@@ -159,6 +159,8 @@ def main():
     num_classes = 19 ## only foreground classes 
     embed_dim = num_classes + 1 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
     embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device)
+    gradient_accumulation_steps = 4 # a hyper-param 
+    batch_size = 8 # a hyper-param
     bit_scale = 0.01 #a hyper-param ##similar to DDP
     lb_transform = transforms.Compose([ 
         transforms.Resize((128,256), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) ## similar to DDP, where they were training using (512, 1024) images and performed diffusion in (H/4, W/4) => (128, 256) and then used bilinear upsampling of the logits to obtain final prediction label.
@@ -174,7 +176,7 @@ def main():
         ).to(device) ## similar to DDP 
     ## train dataloader 
     dataset_train = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'train')
-    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=8, shuffle=True, num_workers=4, drop_last=True, pin_memory = True)  
+    dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True, pin_memory = True)  
     ## val dataloader
     dataset_val = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'val')
     dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=4, pin_memory = True)  
@@ -184,11 +186,14 @@ def main():
     model = model.to(device)
     print('Model loaded into cuda')
 
-    optimizer = Adam(model.parameters(), lr=1e-4) # hyper-param
+    optimizer = Adam((list(model.parameters()) + list(embedding_table.parameters()) + list(conditional_transform.parameters())), lr=1e-4)  ## optimising multiple models as they are not in the same class 
+    
+    # hyper-param
     best_loss = torch.finfo(torch.float32).max # init the best loss 
+    optimizer.zero_grad() 
     print('Start training')
     for epoch in tqdm(range(100)):
-        for i, data in tqdm(enumerate(dataloader_train)):
+        for iter_step, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
             ### similar to one done in DDP
             x1 = embedding_table(data[0].long().to(device, non_blocking=True)).squeeze(1).permute(0,3,1,2)
@@ -215,11 +220,13 @@ def main():
             d = model(conditional_feats, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
             loss = torch.sum((d - (x1-x0))**2) ## based on IADB paper
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            # optimizer.zero_grad() 
+            loss.backward() 
+            if (iter_step+1) % gradient_accumulation_steps == 0: ## performing gradient accumulation
+                optimizer.step()
+                optimizer.zero_grad()
 
-    
+
         print('In Sampling at epoch:' + str(epoch+1))
         dataset = dataloader_val.dataset
         prog_bar = mmcv.ProgressBar(len(dataset))
