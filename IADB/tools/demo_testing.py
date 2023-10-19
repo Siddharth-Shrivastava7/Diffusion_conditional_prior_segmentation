@@ -158,7 +158,7 @@ class custom_cityscapes_labels(Dataset):
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
             pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was earlier in the segformer model was upsampled in a biliner interpolation fashion through its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
         
-        return label, pred_label, img_path
+        return label, pred_label, img_path, pred_path
        
 
 def main(): 
@@ -237,7 +237,9 @@ def main():
             # Create a mask where 1 is for non-ignored labels, 0 for ignored labels
             mask = (data[0] != 255)
             d = model(conditional_feats, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
-            loss = torch.sum((d - (x1-x0))[mask]**2) ## based on IADB paper
+            # loss = torch.sum((d - (x1-x0))[mask]**2) ## based on IADB paper
+            loss = torch.sum((d - (x1-x0))**2) ## based on IADB paper
+
 
             loss.backward() 
             optimizer.step()
@@ -260,7 +262,7 @@ def main():
                     x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
                     x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
                     argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
-                    save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+                    save_path = os.path.join(save_imgs_dir_ep, datav[3][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
                     x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.detach().cpu()))
                     x1_sample_color.save(save_path)
                     prog_bar.update()
