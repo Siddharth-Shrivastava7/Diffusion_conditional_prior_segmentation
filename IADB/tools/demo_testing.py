@@ -89,7 +89,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_
     
     ## predictions of segformerb2 as the conditions
     pred_labels_emdb  = [torch.tensor(results_softmax_predictions_val[path]) for path in datav[2]] # conditioning softmax prediciton
-    pred_labels_emdb = torch.stack(pred_labels_emdb) # B,C,H,W ## here C = 19    
+    pred_labels_emdb = torch.stack(pred_labels_emdb).to(device) # B,C,H,W ## here C = 19    
 
     ## x0 as the stationary distribution 
     x0 = torch.randn_like(pred_labels_emdb) ## sort of logits
@@ -153,6 +153,7 @@ class custom_cityscapes_labels(Dataset):
 
         label_path = self.label_list[index]  
         label = torch.from_numpy(np.array(Image.open(label_path)))
+        label[label==255]=torch.randint(0,19,size=(1,)).item()
 
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
@@ -208,7 +209,7 @@ def main():
         for iter_step, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
             gtlabel = data[0].clone()
-            gtlabel[gtlabel == 255] = torch.randint(0,num_classes+1, (1,)).item() ## random foreground class label for background in GT
+            #gtlabel[gtlabel == 255] = torch.randint(0,num_classes+1, (1,)).item() ## random foreground class label for background in GT
             x1 = F.one_hot(gtlabel.squeeze().long(), num_classes) # consist only foreground labels
             x1 = x1.permute(0,3,1,2).to(device)  # B, C, H, W 
 
