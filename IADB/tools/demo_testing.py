@@ -47,7 +47,7 @@ def get_model():
         "UpBlock2D", 
         "UpBlock2D"  
     )
-    return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes+1, in_channels=num_classes + 1, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
+    return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes, in_channels=num_classes, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
 def label_img_to_color(img): 
     label_to_color = {
@@ -168,7 +168,7 @@ def main():
     suffix = "_gtFine_labelTrainIds.png"
     global num_classes
     num_classes = 19 ## only foreground classes 
-    embed_dim = num_classes + 1 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
+    embed_dim = num_classes #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
     # embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device) ## not req here, cause using predefined softmax logits of segformerb2 as the conditions
     sampling_epoch_factor = 25 ## after every 25 epochs, perfrom sampling steps 
     # gradient_accumulation_steps = 4 # a hyper-param  ## change the batch statistics, opting to similar batch statics as given in DDP, thus commenting for now. ## from pytorch disscusion forum: Your gradient accumulation approach might change the model performance, if you are using batch-size-dependent layers such as batchnorm layers.
