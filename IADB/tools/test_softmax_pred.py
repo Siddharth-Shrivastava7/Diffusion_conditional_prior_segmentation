@@ -61,16 +61,33 @@ def main(config_path, checkpoint_path, gpu_id = 0):
     # build the val dataloader
     data_loader_val = build_dataloader(dataset_val, **test_loader_cfg)
 
-    # build the train dataloader
-    dataset_train  = build_dataset(cfg.data.train)  
-    train_loader_cfg = {
+    # # build the train dataloader < similar to test, just changing the directory > 
+    # cfg.data.test 
+    # dataset_train  = build_dataset(cfg.data.train)  
+    # train_loader_cfg = {
+    #     **loader_cfg,
+    #     'samples_per_gpu': 1,
+    #     'shuffle': False,  # Not shuffle by default
+    #     **cfg.data.get('train_dataloader', {})
+    # }
+    # # build the train dataloader
+    # data_loader_train = build_dataloader(dataset_train, **train_loader_cfg)
+    # build the val dataloader
+
+    train_test = cfg.data.test
+    train_test.img_dir= 'leftImg8bit/train'
+    train_test.ann_dir= 'gtFine/train'
+    
+    dataset_train_test  = build_dataset(train_test) 
+    # The default loader config
+    test_loader_cfg = {
         **loader_cfg,
         'samples_per_gpu': 1,
         'shuffle': False,  # Not shuffle by default
-        **cfg.data.get('train_dataloader', {})
+        **cfg.data.get('test_dataloader', {})
     }
-    # build the train dataloader
-    data_loader_train = build_dataloader(dataset_train, **train_loader_cfg)
+    # build the val dataloader
+    data_loader_train_test = build_dataloader(dataset_train_test, **test_loader_cfg)
 
 
     # build the model and load checkpoint
@@ -104,7 +121,7 @@ def main(config_path, checkpoint_path, gpu_id = 0):
     ## train results 
     train_results = single_gpu_test(
         model,  
-        data_loader_train,
+        data_loader_train_test,
         softmaxop=True) ## hard coded for softmax predictions
 
     ## val results 
