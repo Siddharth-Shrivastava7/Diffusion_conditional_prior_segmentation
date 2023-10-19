@@ -148,7 +148,6 @@ class custom_cityscapes_labels(Dataset):
 
         label_path = self.label_list[index]  
         label = torch.from_numpy(np.array(Image.open(label_path)))
-        label[label==255] = 19 # for background label 
 
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
@@ -203,8 +202,10 @@ def main():
     for epoch in tqdm(range(860)): ## 860 epochs of cityscapes data which is ~ 160k iterations
         for iter_step, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
-            x1 = F.one_hot(data[0].squeeze().long(), num_classes + 1) ## +1 for including background in GT 
-            x1 = x1.permute(0,3,1,2)  # B, C, H, W => C = 20 
+            gtlabel = data[0].clone()
+            gtlabel[gtlabel == 255] = torch.randint(0,num_classes+1, (1,)).item() ## random foreground class label for background in GT
+            x1 = F.one_hot(gtlabel.squeeze().long(), num_classes) # consist only foreground labels
+            x1 = x1.permute(0,3,1,2).to(device)  # B, C, H, W 
 
             ## x0 being the stationary distribution! 
             x0 = torch.randn_like(x1.float()) # standard normal distribution  # acc to original IADB ## sort of logits
@@ -219,7 +220,7 @@ def main():
             # pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
             ## our way :: to use pre-defined conditioning :: segformerb2 softmax-logits
             pred_labels_emdb  = [torch.tensor(results_softmax_predictions_train[path]) for path in data[2]] # conditioning softmax prediciton
-            pred_labels_emdb = torch.stack(pred_labels_emdb) # B,C,H,W ## here C = 19    
+            pred_labels_emdb = torch.stack(pred_labels_emdb).to(device) # B,C,H,W ## here C = 19    
             
 
             ## condition input 
@@ -228,8 +229,10 @@ def main():
              
             bs = x0.shape[0] # batch size 
 
+            # Create a mask where 1 is for non-ignored labels, 0 for ignored labels
+            mask = (data[0] != 255)
             d = model(conditional_feats, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
-            loss = torch.sum((d - (x1-x0))**2) ## based on IADB paper
+            loss = torch.sum((d - (x1-x0))[mask]**2) ## based on IADB paper
 
             loss.backward() 
             optimizer.step()
