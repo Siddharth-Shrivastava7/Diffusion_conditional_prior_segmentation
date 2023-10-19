@@ -159,6 +159,7 @@ def main():
     num_classes = 19 ## only foreground classes 
     embed_dim = num_classes + 1 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
     embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device)
+    sampling_epoch_factor = 25 ## after every 25 epochs, perfrom sampling steps 
     # gradient_accumulation_steps = 4 # a hyper-param  ## change the batch statistics, opting to similar batch statics as given in DDP, thus commenting for now. ## from pytorch disscusion forum: Your gradient accumulation approach might change the model performance, if you are using batch-size-dependent layers such as batchnorm layers.
     batch_size = 16 # a hyper-param ## similar to DDP 
     bit_scale = 0.01 #a hyper-param ##similar to DDP
@@ -192,7 +193,7 @@ def main():
     best_loss = torch.finfo(torch.float32).max # init the best loss 
     optimizer.zero_grad() 
     print('Start training')
-    for epoch in tqdm(range(100)):
+    for epoch in tqdm(range(860)): ## 860 epochs of cityscapes data which is ~ 160k iterations
         for iter_step, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
             ### similar to one done in DDP
@@ -220,29 +221,31 @@ def main():
             d = model(conditional_feats, alpha)['sample'] ## model involved for denoising/(de-blending here), the blended value.
             loss = torch.sum((d - (x1-x0))**2) ## based on IADB paper
 
-            # optimizer.zero_grad() 
             loss.backward() 
-            if (iter_step+1) % gradient_accumulation_steps == 0: ## performing gradient accumulation
-                optimizer.step()
-                optimizer.zero_grad()
+            optimizer.step()
+            optimizer.zero_grad()
 
+            # if (iter_step+1) % gradient_accumulation_steps == 0: ## performing gradient accumulation
+            #     optimizer.step()
+            #     optimizer.zero_grad()
 
-        print('In Sampling at epoch:' + str(epoch+1))
-        dataset = dataloader_val.dataset
-        prog_bar = mmcv.ProgressBar(len(dataset))
-        save_imgs_dir = '/home/sidd_s/scratch/saved_models/iadb_cond_seg/result_val_images'
-        save_imgs_dir_ep = os.path.join(save_imgs_dir, str(epoch+1))
-        if not os.path.exists(save_imgs_dir_ep):
-            os.makedirs(save_imgs_dir_ep)
-        for __, datav in enumerate(dataloader_val):
-            with torch.no_grad(): 
-                x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
-                x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
-                argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
-                save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
-                x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.detach().cpu()))
-                x1_sample_color.save(save_path)
-                prog_bar.update()
+        if epoch % sampling_epoch_factor == 0:
+            print('In Sampling at epoch:' + str(epoch+1))
+            dataset = dataloader_val.dataset
+            prog_bar = mmcv.ProgressBar(len(dataset))
+            save_imgs_dir = '/home/sidd_s/scratch/saved_models/iadb_cond_seg/result_val_images'
+            save_imgs_dir_ep = os.path.join(save_imgs_dir, str(epoch+1))
+            if not os.path.exists(save_imgs_dir_ep):
+                os.makedirs(save_imgs_dir_ep)
+            for __, datav in enumerate(dataloader_val):
+                with torch.no_grad(): 
+                    x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=32) ## nb_step is a hyper-param > taken from IADB 
+                    x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
+                    argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
+                    save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+                    x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.detach().cpu()))
+                    x1_sample_color.save(save_path)
+                    prog_bar.update()
                 
         if loss.item() < best_loss:
             best_loss = loss
