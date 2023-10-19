@@ -108,7 +108,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_t
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/', gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
+    def __init__(self, pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/res_128x256/', gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
         self.pred_list = []
         self.pred_dir = pred_dir + mode
         self.gt_dir = gt_dir + mode  
@@ -159,8 +159,8 @@ def main():
     num_classes = 19 ## only foreground classes 
     embed_dim = num_classes + 1 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
     embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device)
-    gradient_accumulation_steps = 4 # a hyper-param 
-    batch_size = 8 # a hyper-param
+    # gradient_accumulation_steps = 4 # a hyper-param  ## change the batch statistics, opting to similar batch statics as given in DDP, thus commenting for now. ## from pytorch disscusion forum: Your gradient accumulation approach might change the model performance, if you are using batch-size-dependent layers such as batchnorm layers.
+    batch_size = 16 # a hyper-param ## similar to DDP 
     bit_scale = 0.01 #a hyper-param ##similar to DDP
     lb_transform = transforms.Compose([ 
         transforms.Resize((128,256), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) ## similar to DDP, where they were training using (512, 1024) images and performed diffusion in (H/4, W/4) => (128, 256) and then used bilinear upsampling of the logits to obtain final prediction label.
