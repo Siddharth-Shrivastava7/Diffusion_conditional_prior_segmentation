@@ -22,6 +22,13 @@ import torch.nn as nn
 
 torch.backends.cudnn.benchmark = True ## for better speed 
 
+## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
+## we will be loading trained model, so the configuration will be that of validation of mmseg model 
+segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
+results_softmax_predictions_train, results_softmax_predictions_val = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check!  ## caching in train and val data softmax predictions; so that segformerb2 not have to predict every other data instant but rather can be easily indexed for softmax prediction generation.
+print('results consisting of softmax predictions loaded successfully!')
+
 def get_model():
     block_out_channels=(128, 128, 256, 256, 512, 512)
     down_block_types=( 
@@ -76,19 +83,19 @@ def label_img_to_color(img):
 
 
 @torch.no_grad() 
-def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step):
+def sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_step):
     model = model.eval() 
     conditional_transform = conditional_transform.eval() 
     
     ## predictions of segformerb2 as the conditions
-    pred_label_emdb = embedding_table(datav[1].long().to(device, non_blocking=True)).squeeze(1).permute(0, 3, 1, 2) 
-    pred_label_emdb = (torch.sigmoid(pred_label_emdb)*2 - 1)*bit_scale ## sort of logits
-    
+    pred_labels_emdb  = [torch.tensor(results_softmax_predictions_val[path]) for path in datav[2]] # conditioning softmax prediciton
+    pred_labels_emdb = torch.stack(pred_labels_emdb) # B,C,H,W ## here C = 19    
+
     ## x0 as the stationary distribution 
-    x0 = torch.randn_like(pred_label_emdb) ## sort of logits
+    x0 = torch.randn_like(pred_labels_emdb) ## sort of logits
 
     ## conditional input 
-    conditional_feats = torch.cat([pred_label_emdb, x0], dim=1)
+    conditional_feats = torch.cat([pred_labels_emdb, x0], dim=1)
     conditional_feats = conditional_transform(conditional_feats) ## sort of logits
     
     ## now deblending starts: 
@@ -100,7 +107,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_t
         d = model(conditional_feats, torch.as_tensor(alpha_start, device=x_alpha.device))['sample'] ## this is giving ~ (\bar_{x1} - \bar{x0})
         x_alpha = x_alpha + (alpha_end-alpha_start)*d 
 
-        conditional_feats = torch.cat([pred_label_emdb, x_alpha], dim=1)
+        conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
         conditional_feats = conditional_transform(conditional_feats)
 
     return x_alpha
@@ -158,7 +165,7 @@ def main():
     global num_classes
     num_classes = 19 ## only foreground classes 
     embed_dim = num_classes + 1 #a hyper-param ##used in order to arrive at a consistency with DDP and overcome the issue of random assignment for background
-    embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device)
+    # embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device) ## not req here, cause using predefined softmax logits of segformerb2 as the conditions
     sampling_epoch_factor = 25 ## after every 25 epochs, perfrom sampling steps 
     # gradient_accumulation_steps = 4 # a hyper-param  ## change the batch statistics, opting to similar batch statics as given in DDP, thus commenting for now. ## from pytorch disscusion forum: Your gradient accumulation approach might change the model performance, if you are using batch-size-dependent layers such as batchnorm layers.
     batch_size = 16 # a hyper-param ## similar to DDP 
@@ -187,7 +194,7 @@ def main():
     model = model.to(device)
     print('Model loaded into cuda')
 
-    optimizer = Adam((list(model.parameters()) + list(embedding_table.parameters()) + list(conditional_transform.parameters())), lr=1e-4)  ## optimising multiple models as they are not in the same class 
+    optimizer = Adam((list(model.parameters())  + list(conditional_transform.parameters())), lr=1e-4)  ## optimising multiple models as they are not in the same class 
     
     # hyper-param
     best_loss = torch.finfo(torch.float32).max # init the best loss 
@@ -196,12 +203,11 @@ def main():
     for epoch in tqdm(range(860)): ## 860 epochs of cityscapes data which is ~ 160k iterations
         for iter_step, data in tqdm(enumerate(dataloader_train)):
             ## >>x1 being the target distribution<<
-            ### similar to one done in DDP
-            x1 = embedding_table(data[0].long().to(device, non_blocking=True)).squeeze(1).permute(0,3,1,2)
-            x1 = (torch.sigmoid(x1)*2 - 1)*bit_scale ## sort of logits (encoding of discrete labels)
+            x1 = F.one_hot(data[0].squeeze().long(), num_classes + 1) ## +1 for including background in GT 
+            x1 = x1.permute(0,3,1,2)  # B, C, H, W => C = 20 
 
             ## x0 being the stationary distribution! 
-            x0 = torch.randn_like(x1) # standard normal distribution  # acc to original IADB ## sort of logits
+            x0 = torch.randn_like(x1.float()) # standard normal distribution  # acc to original IADB ## sort of logits
             
             bs = x0.shape[0] # batch size 
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
@@ -209,8 +215,12 @@ def main():
             x_alpha = alpha.view(-1,1,1,1) * x1 + (1-alpha).view(-1,1,1,1) * x0
 
             ## similar to DDP 
-            pred_labels_emdb = embedding_table(data[1].long().to(device, non_blocking=True)).squeeze(1).permute(0, 3, 1, 2) 
-            pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
+            # pred_labels_emdb = embedding_table(data[1].long().to(device, non_blocking=True)).squeeze(1).permute(0, 3, 1, 2) 
+            # pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
+            ## our way :: to use pre-defined conditioning :: segformerb2 softmax-logits
+            pred_labels_emdb  = [torch.tensor(results_softmax_predictions_train[path]) for path in data[2]] # conditioning softmax prediciton
+            pred_labels_emdb = torch.stack(pred_labels_emdb) # B,C,H,W ## here C = 19    
+            
 
             ## condition input 
             conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
@@ -239,7 +249,7 @@ def main():
                 os.makedirs(save_imgs_dir_ep)
             for __, datav in enumerate(dataloader_val):
                 with torch.no_grad(): 
-                    x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, embedding_table, bit_scale, device, nb_step=32) ## nb_step is a hyper-param > taken from IADB 
+                    x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
                     x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
                     argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
                     save_path = os.path.join(save_imgs_dir_ep, datav[2][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
