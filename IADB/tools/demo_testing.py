@@ -121,6 +121,7 @@ class custom_cityscapes_labels(Dataset):
         self.gt_dir = gt_dir + mode  
         self.lb_transform = lb_transform 
         self.label_list = []
+        self.img_list = []
         
         for root, dirs, files in os.walk(self.gt_dir, topdown=False):
             for name in tqdm(sorted(files)):
@@ -130,6 +131,8 @@ class custom_cityscapes_labels(Dataset):
                     city_name = path.split('/')[-2] 
                     pred_path = path.replace('/gtFine/' + mode + '/' + city_name, '/pred/segformerb2/' + mode).replace('_gtFine_labelTrainIds.png', '_leftImg8bit.png')
                     self.pred_list.append(pred_path)
+                    img_path = path.replace('/gtFine/','/leftImg8bit/').replace('_gtFine_labelTrainIds.png','_leftImg8bit.png')
+                    self.img_list.append(img_path)
 
         if mode == 'train':
             assert len(self.label_list) == 2975 == len(self.pred_list)
@@ -146,6 +149,8 @@ class custom_cityscapes_labels(Dataset):
         pred_path = self.pred_list[index] 
         pred_label = torch.from_numpy(np.array(Image.open(pred_path)))
 
+        img_path = self.img_list[index]
+
         label_path = self.label_list[index]  
         label = torch.from_numpy(np.array(Image.open(label_path)))
 
@@ -153,7 +158,7 @@ class custom_cityscapes_labels(Dataset):
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
             pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was earlier in the segformer model was upsampled in a biliner interpolation fashion through its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
         
-        return label, pred_label, pred_path
+        return label, pred_label, img_path
        
 
 def main(): 
