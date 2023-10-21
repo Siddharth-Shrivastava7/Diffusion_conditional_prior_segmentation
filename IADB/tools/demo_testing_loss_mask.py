@@ -24,8 +24,8 @@ torch.backends.cudnn.benchmark = True ## for better speed
 
 ## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
 ## we will be loading trained model, so the configuration will be that of validation of mmseg model 
-segformer_model_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
-config_file_path = '/home/sidd_s/scratch/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
+segformer_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+config_file_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
 results_softmax_predictions_train, results_softmax_predictions_val = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check!  ## caching in train and val data softmax predictions; so that segformerb2 not have to predict every other data instant but rather can be easily indexed for softmax prediction generation.
 print('results consisting of softmax predictions loaded successfully!')
 
@@ -115,7 +115,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/res_128x256/', gt_dir = "/home/sidd_s/scratch/dataset/cityscapes/gtFine/", suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
+    def __init__(self, pred_dir, gt_dir, suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
         self.pred_list = []
         self.pred_dir = pred_dir + mode
         self.gt_dir = gt_dir + mode  
@@ -164,8 +164,8 @@ class custom_cityscapes_labels(Dataset):
 
 def main(): 
     device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
-    gt_dir = '/home/sidd_s/scratch/dataset/cityscapes/gtFine/' 
-    pred_dir = '/home/sidd_s/scratch/dataset/cityscapes/pred/segformerb2/res_128x256' ## opting for option 2, as written above, near below self.lb_transform usecase.
+    gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine' 
+    pred_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/pred/segformerb2/res_128x256' ## opting for option 2, as written above, near below self.lb_transform usecase.
     suffix = "_gtFine_labelTrainIds.png"
     global num_classes
     num_classes = 19 ## only foreground classes 
@@ -255,7 +255,7 @@ def main():
             print('In Sampling at epoch:' + str(epoch+1))
             dataset = dataloader_val.dataset
             prog_bar = mmcv.ProgressBar(len(dataset))
-            save_imgs_dir = '/home/sidd_s/scratch/saved_models/mask_loss_iadb_cond_seg/result_val_images'
+            save_imgs_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/result_val_images'
             save_imgs_dir_ep = os.path.join(save_imgs_dir, 'mask_loss_' + str(epoch+1))
             if not os.path.exists(save_imgs_dir_ep):
                 os.makedirs(save_imgs_dir_ep)
@@ -271,10 +271,10 @@ def main():
                 
         if loss.item() < best_loss:
             best_loss = loss
-            torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/mask_loss_iadb_cond_seg/best_model_parameters.pt')
+            torch.save(model.state_dict(), f'/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/best_model_parameters.pt')
             print('Model updated! : current best model saved on: ' + str(epoch+1)) 
 
-        torch.save(model.state_dict(), f'/home/sidd_s/scratch/saved_models/mask_loss_iadb_cond_seg/current_model_parameters.pt')
+        torch.save(model.state_dict(), f'/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/current_model_parameters.pt')
         print('Model updated! : current model saved for epoch: ' + str(epoch+1))        
 
 if __name__ == '__main__':
