@@ -35,7 +35,7 @@ def get_model():
         "DownBlock2D",  # a regular ResNet downsampling block
         "DownBlock2D", 
         "DownBlock2D", 
-        "DownBlock2D", 
+        "DownBlock2D",  
         "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
         "DownBlock2D",
     )
@@ -156,7 +156,7 @@ class custom_cityscapes_labels(Dataset):
 
 def main(): 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine' 
+    gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/' 
     suffix = "_gtFine_labelTrainIds.png"
     global num_classes
     num_classes = 19 ## only foreground classes 
@@ -164,7 +164,7 @@ def main():
     # embedding_table = nn.Embedding(num_classes + 1, embedding_dim=embed_dim).to(device) ## not req here, cause using predefined softmax logits of segformerb2 as the conditions
     sampling_epoch_factor = 25 ## after every 25 epochs, perfrom sampling steps 
     # gradient_accumulation_steps = 4 # a hyper-param  ## change the batch statistics, opting to similar batch statics as given in DDP, thus commenting for now. ## from pytorch disscusion forum: Your gradient accumulation approach might change the model performance, if you are using batch-size-dependent layers such as batchnorm layers.
-    batch_size = 16 # a hyper-param ## similar to DDP 
+    batch_size = 16 # differ from DDP since compute issuasee
     lb_transform = transforms.Compose([ 
         transforms.Resize((512,1024), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) ## similar to DDP, where they were training using (512, 1024) images and performed diffusion in (H/4, W/4) => (128, 256) and then used bilinear upsampling of the logits to obtain final prediction label.
     ])
