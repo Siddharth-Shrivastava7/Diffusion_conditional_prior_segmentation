@@ -14,7 +14,7 @@ from PIL import Image
 import numpy as np
 from  torchvision.transforms.functional import InterpolationMode
 import torch.nn.functional as F 
-from test_softmax_pred import main 
+from test_softmax_pred import main  ## while debug use abosolute module address 
 from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
@@ -88,7 +88,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_
     conditional_transform = conditional_transform.eval() 
     
     ## predictions of segformerb2 as the conditions
-    pred_labels_emdb  = [torch.tensor(results_softmax_predictions_val[path]) for path in datav[2]] # conditioning softmax prediciton
+    pred_labels_emdb  = [torch.tensor(results_softmax_predictions_val[path]) for path in datav[1]] # conditioning softmax prediciton
     pred_labels_emdb = torch.stack(pred_labels_emdb).to(device) # B,C,H,W ## here C = 19    
 
     ## x0 as the stationary distribution 
@@ -115,9 +115,7 @@ def sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, pred_dir, gt_dir, suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
-        self.pred_list = []
-        self.pred_dir = pred_dir + mode
+    def __init__(self, gt_dir, suffix = '_gtFine_labelTrainIds.png', lb_transform = None, mode = 'train'):
         self.gt_dir = gt_dir + mode  
         self.lb_transform = lb_transform 
         self.label_list = []
@@ -128,16 +126,13 @@ class custom_cityscapes_labels(Dataset):
                 path = os.path.join(root, name)
                 if path.find(suffix)!=-1:
                     self.label_list.append(path) 
-                    city_name = path.split('/')[-2] 
-                    pred_path = path.replace('/gtFine/' + mode + '/' + city_name, '/pred/segformerb2/' + mode).replace('_gtFine_labelTrainIds.png', '_leftImg8bit.png')
-                    self.pred_list.append(pred_path)
                     img_path = path.replace('/gtFine/','/leftImg8bit/').replace('_gtFine_labelTrainIds.png','_leftImg8bit.png')
                     self.img_list.append(img_path)
 
         if mode == 'train':
-            assert len(self.label_list) == 2975 == len(self.pred_list)
+            assert len(self.label_list) == 2975 == len(self.img_list)
         elif mode == 'val':
-            assert len(self.label_list) == 500 == len(self.pred_list)
+            assert len(self.label_list) == 500 == len(self.img_list)
         else:
             raise Exception('mode has to be either train or val')
 
@@ -145,9 +140,6 @@ class custom_cityscapes_labels(Dataset):
         return len(self.label_list) 
     
     def __getitem__(self, index):
-
-        pred_path = self.pred_list[index] 
-        pred_label = torch.from_numpy(np.array(Image.open(pred_path)))
 
         img_path = self.img_list[index]
 
@@ -157,15 +149,14 @@ class custom_cityscapes_labels(Dataset):
 
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0)) # resizing the tensor, for working in low dimension
-            pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was earlier in the segformer model was upsampled in a biliner interpolation fashion through its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
+            # pred_label = self.lb_transform(pred_label.unsqueeze(dim=0)) ## Two cases emerge here: 1. resizing segformer output to 128x256, when its input image was 1024x2048 2. resizing the input to 128x256 and then use model prediction resizing at a reduced size, which was earlier in the segformer model was upsampled in a biliner interpolation fashion through its logits. =>> for now, going with 2. way, since we might find improvement earlier here. 
         
-        return label, pred_label, img_path, pred_path
+        return label, img_path
        
 
 def main(): 
-    device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine' 
-    pred_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/pred/segformerb2/res_128x256' ## opting for option 2, as written above, near below self.lb_transform usecase.
     suffix = "_gtFine_labelTrainIds.png"
     global num_classes
     num_classes = 19 ## only foreground classes 
@@ -174,9 +165,8 @@ def main():
     sampling_epoch_factor = 25 ## after every 25 epochs, perfrom sampling steps 
     # gradient_accumulation_steps = 4 # a hyper-param  ## change the batch statistics, opting to similar batch statics as given in DDP, thus commenting for now. ## from pytorch disscusion forum: Your gradient accumulation approach might change the model performance, if you are using batch-size-dependent layers such as batchnorm layers.
     batch_size = 16 # a hyper-param ## similar to DDP 
-    bit_scale = 0.01 #a hyper-param ##similar to DDP
     lb_transform = transforms.Compose([ 
-        transforms.Resize((128,256), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) ## similar to DDP, where they were training using (512, 1024) images and performed diffusion in (H/4, W/4) => (128, 256) and then used bilinear upsampling of the logits to obtain final prediction label.
+        transforms.Resize((512,1024), interpolation=InterpolationMode.NEAREST), # (H/4, W/4) ## similar to DDP, where they were training using (512, 1024) images and performed diffusion in (H/4, W/4) => (128, 256) and then used bilinear upsampling of the logits to obtain final prediction label.
     ])
     conditional_transform = ConvModule(
             embed_dim * 2,
@@ -188,10 +178,10 @@ def main():
             act_cfg=None
         ).to(device) ## similar to DDP 
     ## train dataloader 
-    dataset_train = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'train')
+    dataset_train = custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode = 'train')
     dataloader_train = torch.utils.data.DataLoader(dataset_train, batch_size=batch_size, shuffle=True, num_workers=4, drop_last=True, pin_memory = True)  
     ## val dataloader
-    dataset_val = custom_cityscapes_labels(pred_dir, gt_dir, suffix, lb_transform, mode = 'val')
+    dataset_val = custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode = 'val')
     dataloader_val = torch.utils.data.DataLoader(dataset_val, batch_size=1, shuffle=True, num_workers=4, pin_memory = True)  
     print('dataset loaded successfully!')
 
@@ -225,7 +215,7 @@ def main():
             # pred_labels_emdb = embedding_table(data[1].long().to(device, non_blocking=True)).squeeze(1).permute(0, 3, 1, 2) 
             # pred_labels_emdb = (torch.sigmoid(pred_labels_emdb)*2 - 1)*bit_scale ## sort of logits
             ## our way :: to use pre-defined conditioning :: segformerb2 softmax-logits
-            pred_labels_emdb  = [torch.tensor(results_softmax_predictions_train[path]) for path in data[2]] # conditioning softmax prediciton
+            pred_labels_emdb  = [torch.tensor(results_softmax_predictions_train[path]) for path in data[1]] # conditioning softmax prediciton
             pred_labels_emdb = torch.stack(pred_labels_emdb).to(device) # B,C,H,W ## here C = 19    
             
 
@@ -255,7 +245,7 @@ def main():
             print('In Sampling at epoch:' + str(epoch+1))
             dataset = dataloader_val.dataset
             prog_bar = mmcv.ProgressBar(len(dataset))
-            save_imgs_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/result_val_images'
+            save_imgs_dir = '/home/guest/scratch/siddharth/data/results/mask_loss_iadb_cond_seg/result_val_images'
             save_imgs_dir_ep = os.path.join(save_imgs_dir, 'mask_loss_' + str(epoch+1))
             if not os.path.exists(save_imgs_dir_ep):
                 os.makedirs(save_imgs_dir_ep)
@@ -264,7 +254,7 @@ def main():
                     x1_sample_logits = sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB 
                     x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
                     argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
-                    save_path = os.path.join(save_imgs_dir_ep, datav[3][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+                    save_path = os.path.join(save_imgs_dir_ep, datav[1][0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
                     x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.detach().cpu()))
                     x1_sample_color.save(save_path)
                     prog_bar.update()
