@@ -140,11 +140,12 @@ class MyEnsemble(nn.Module):
             act_cfg=None
         )
         
-    def forward(self, conditional_feats, alphas):
-        
+    def forward(self, conditional_feats, alphas, in_val = False):
         conditional_feats = self.combining_condition_model(conditional_feats)
-
-        d = self.denoising_model(conditional_feats, alphas)
+        if in_val:
+            d = self.denoising_model(conditional_feats, alphas)['sample']
+        else:
+            d = self.denoising_model(conditional_feats, alphas)
         return d 
 
 
@@ -183,6 +184,7 @@ class Trainer:
                 _to_correct_config_path: str, 
                 num_classes: int, 
                 save_imgs_dir: str, 
+                nb_steps: int, 
                 gpu_id = None) -> None: 
         
         if gpu_id:
@@ -197,7 +199,7 @@ class Trainer:
         self.save_every = save_every 
         self.snapshot_path = snapshot_path
         self.epochs_run = 0
-        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = self.softmax_logits_predictions(_to_correct_model_path, _to_correct_config_path)  
+        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = self._softmax_logits_predictions(_to_correct_model_path, _to_correct_config_path)  
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
         
@@ -207,8 +209,9 @@ class Trainer:
         
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
+        self.nb_steps = nb_steps
 
-    def softmax_logits_predictions(self, model_path, config_path):
+    def _softmax_logits_predictions(self, model_path, config_path):
         results_softmax_predictions_train, results_softmax_predictions_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
         print('results consisting of softmax predictions loaded successfully!')
         return results_softmax_predictions_train, results_softmax_predictions_val
@@ -272,6 +275,39 @@ class Trainer:
         print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
 
+    def _sample_conditional_seg_iadb(self, gt_label, img_path):
+        self.model = self.model.eval()
+
+        ## predictions of segformerb2 as the conditions
+        pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_val[path]) for path in img_path] # conditioning softmax prediciton
+        pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19    
+
+        ## x0 as the stationary distribution 
+        x0 = torch.randn_like(pred_labels_emdb) ## sort of logits 
+        
+        ## now deblending starts: 
+        x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
+        for t in tqdm(range(self.nb_steps)):
+            alpha_start = (t/self.nb_steps)
+            alpha_end =((t+1)/self.nb_steps)
+
+            ## conditional input 
+            conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
+        
+            ## this is giving ~ (\bar_{x1} - \bar{x0})
+            d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id), in_val = True) 
+            
+            ## reaching x1 by finding neighbouring x_alphas
+            x_alpha = x_alpha + (alpha_end-alpha_start)*d
+
+        
+        ## for the loss :: between gt_label and approximated x_1 through x_alpha
+          
+   
+        return x_alpha
+
+        
+
     def _run_val_sampling(self, epoch):
         print('In Sampling at epoch:' + str(epoch)) 
         save_imgs_dir_ep = os.path.join(self.save_imgs_dir, 'mask_loss_' + str(epoch))
@@ -284,7 +320,7 @@ class Trainer:
         prog_bar = mmcv.ProgressBar(len(self.val_data))
         for gt_label, img_path in self.val_data:
             with torch.no_grad(): 
-                x1_sample_logits, batch_loss = sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_step=128) ## nb_step is a hyper-param > taken from IADB  
+                x1_sample_logits, batch_loss = self._sample_conditional_seg_iadb(gt_label, img_path)  
                 x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
                 argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
                 save_path = os.path.join(save_imgs_dir_ep, img_path.split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
@@ -313,49 +349,13 @@ class Trainer:
                     self._save_snapshot(epoch)
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
-    
-
-@torch.no_grad() 
-def sample_conditional_seg_iadb(model, datav, conditional_transform, device, nb_step):
-    model = model.eval() 
-    conditional_transform = conditional_transform.eval() 
-    
-    ## predictions of segformerb2 as the conditions
-    pred_labels_emdb  = [torch.tensor(results_softmax_predictions_val[path]) for path in datav[1]] # conditioning softmax prediciton
-    pred_labels_emdb = torch.stack(pred_labels_emdb).to(device) # B,C,H,W ## here C = 19    
-
-    ## x0 as the stationary distribution 
-    x0 = torch.randn_like(pred_labels_emdb) ## sort of logits
-
-    ## conditional input 
-    conditional_feats = torch.cat([pred_labels_emdb, x0], dim=1)
-    conditional_feats = conditional_transform(conditional_feats) ## sort of logits
-    
-    ## now deblending starts: 
-    x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
-    for t in tqdm(range(nb_step)):
-        alpha_start = (t/nb_step)
-        alpha_end =((t+1)/nb_step)
-
-        d = model(conditional_feats, torch.as_tensor(alpha_start, device=x_alpha.device))['sample'] ## this is giving ~ (\bar_{x1} - \bar{x0})
-        x_alpha = x_alpha + (alpha_end-alpha_start)*d 
-
-        conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
-        conditional_feats = conditional_transform(conditional_feats)
-
-    return x_alpha
-    
 
 
 def main():
     model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
-
-
-
-    
         
-                
+
            
 
 if __name__ == '__main__':
