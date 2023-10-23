@@ -179,7 +179,7 @@ class Trainer:
                 val_data: DataLoader,
                 optimizer: torch.optim.Optimizer,
                 save_every: int,
-                snapshot_path: str,
+                snapshot_dir: str,
                 _to_correct_model_path: str, 
                 _to_correct_config_path: str, 
                 num_classes: int, 
@@ -192,15 +192,15 @@ class Trainer:
         self.val_data = val_data 
         self.optimizer = optimizer
         self.save_every = save_every 
-        self.snapshot_path = snapshot_path
+        self.snapshot_dir = snapshot_dir
         self.epochs_run = 0
         self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = self._softmax_logits_predictions(_to_correct_model_path, _to_correct_config_path)  
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
         
-        if os.path.exists(snapshot_path):
+        if os.path.exists(os.path.join(snapshot_dir, 'current_snapshot.pt')):
             print("Loading snapshot")
-            self._load_snapshot(snapshot_path) 
+            self._load_snapshot(snapshot_dir) 
         
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
@@ -211,8 +211,9 @@ class Trainer:
         print('results consisting of softmax predictions loaded successfully!')
         return results_softmax_predictions_train, results_softmax_predictions_val
     
-    def _load_snapshot(self, snapshot_path): 
+    def _load_snapshot(self, snapshot_dir): 
         loc = f"cuda:{self.gpu_id}"
+        snapshot_path = os.path.join(snapshot_dir, 'current_snapshot.pt')
         snapshot = torch.load(snapshot_path, map_location=loc)
         self.model.load_state_dict(snapshot["MODEL_STATE"])
         self.epochs_run = snapshot["EPOCHS_RUN"]
@@ -261,13 +262,19 @@ class Trainer:
             self._run_batch(conditional_feats, alphas, mask, targets) 
 
             
-    def _save_snapshot(self, epoch):
+    def _save_snapshot(self, epoch, save_best = False):
         snapshot = {
             "MODEL_STATE": self.model.module.state_dict(),
             "EPOCHS_RUN": epoch,
         }
-        torch.save(snapshot, self.snapshot_path)
-        print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
+        if save_best:
+            snapshot_path = os.path.join(self.snapshot_dir, 'best_snapshot.pt')
+            torch.save(snapshot, snapshot_path)
+            print(f"Epoch {epoch} | Training snapshot saved at {snapshot_path}") 
+        else:
+            snapshot_path = os.path.join(self.snapshot_dir, 'current_snapshot.pt')
+            torch.save(snapshot, snapshot_path)
+            print(f"Epoch {epoch} | Training snapshot saved at {snapshot_path}")
 
 
     def _sample_conditional_seg_iadb(self, gt_label, img_path):
@@ -341,16 +348,14 @@ class Trainer:
                 val_average_loss =  self._run_val_sampling(epoch)
                 if val_average_loss < self.best_loss:
                     self.best_loss = val_average_loss 
-                    self._save_snapshot(epoch)
+                    self._save_snapshot(epoch, save_best=True)
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
 
-def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, batch_size: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str ,snapshot_path: str = "snapshot.pt"):
+def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16 ):
+    
     ddp_setup() 
-    
-
-    
     
     
 
@@ -359,6 +364,14 @@ def main(to_correct_model_path: str, to_correct_config_path: str, save_every: in
 if __name__ == '__main__':
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
-    
+    save_every = 25
+    total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
+    nb_steps = 128 ## similar to IADB 
+    num_classes = 19 ## only considering foreground labels 
+    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/mask_loss_iadb_cond_seg/result_val_images'
+    gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
+    suffix = '_gtFine_labelTrainIds.png'
+    batch_size = 16
+    snapshot_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
 
-    main()
+    main(to_correct_model_path, to_correct_config_path, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, snapshot_dir, batch_size)
