@@ -276,35 +276,46 @@ class Trainer:
 
 
     def _sample_conditional_seg_iadb(self, gt_label, img_path):
-        self.model = self.model.eval()
+        with torch.no_grad(): 
+            self.model = self.model.eval()
 
-        ## predictions of segformerb2 as the conditions
-        pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_val[path]) for path in img_path] # conditioning softmax prediciton
-        pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19    
+            ## predictions of segformerb2 as the conditions
+            pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_val[path]) for path in img_path] # conditioning softmax prediciton
+            pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19    
 
-        ## x0 as the stationary distribution 
-        x0 = torch.randn_like(pred_labels_emdb) ## sort of logits 
-        
-        ## now deblending starts: 
-        x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
-        for t in tqdm(range(self.nb_steps)):
-            alpha_start = (t/self.nb_steps)
-            alpha_end =((t+1)/self.nb_steps)
-
-            ## conditional input 
-            conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
-        
-            ## this is giving ~ (\bar_{x1} - \bar{x0})
-            d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id), in_val = True) 
+            ## x0 as the stationary distribution 
+            x0 = torch.randn_like(pred_labels_emdb) ## sort of logits 
             
-            ## reaching x1 by finding neighbouring x_alphas
-            x_alpha = x_alpha + (alpha_end-alpha_start)*d
+            ## now deblending starts: 
+            x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
+            for t in tqdm(range(self.nb_steps)):
+                alpha_start = (t/self.nb_steps)
+                alpha_end =((t+1)/self.nb_steps)
 
+                ## conditional input 
+                conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
+            
+                ## this is giving ~ (\bar_{x1} - \bar{x0})
+                d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id), in_val = True) 
+                
+                ## reaching x1 by finding neighbouring x_alphas
+                x_alpha = x_alpha + (alpha_end-alpha_start)*d
+
+
+        approx_x1_sample_softmax = F.softmax(x_alpha, dim=1)
+        approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
+        ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
+
+        #creating mask where 1 is for non-ignored labels, 0 for ignored labels
+        mask = (gt_label != 255) # B, 1, H, W 
+        mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
         
-        ## for the loss :: between gt_label and approximated x_1 through x_alpha
-          
+        ## random foreground class label for background in GTs
+        gt_label[gt_label == 255] = torch.randint(0, self.num_classes, (1,)).item() 
+  
+        
    
-        return x_alpha
+        return x_alpha, val_batch_loss
 
         
 
@@ -319,16 +330,13 @@ class Trainer:
         val_epoch_loss = 0.0  # Initialize the cumulative loss for the epoch
         prog_bar = mmcv.ProgressBar(len(self.val_data))
         for gt_label, img_path in self.val_data:
-            with torch.no_grad(): 
-                x1_sample_logits, batch_loss = self._sample_conditional_seg_iadb(gt_label, img_path)  
-                x1_sample_softmax = F.softmax(x1_sample_logits, dim=1)
-                argmax_x1_sample = torch.argmax(x1_sample_softmax, dim=1) 
-                save_path = os.path.join(save_imgs_dir_ep, img_path.split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
-                x1_sample_color = Image.fromarray(label_img_to_color(argmax_x1_sample.detach().cpu()))
-                x1_sample_color.save(save_path)
-                # Accumulate batch loss to epoch loss
-                val_epoch_loss += batch_loss.item()
-                prog_bar.update()
+            approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(gt_label, img_path)  
+            save_path = os.path.join(save_imgs_dir_ep, img_path.split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+            approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
+            approx_x1_sample_color.save(save_path)
+            # Accumulate batch loss to epoch loss
+            val_epoch_loss += val_batch_loss.item()
+            prog_bar.update()
 
         # Calculate average loss for the epoch
         val_average_loss = val_epoch_loss / val_b_sz  # Number of batches in the epoch
