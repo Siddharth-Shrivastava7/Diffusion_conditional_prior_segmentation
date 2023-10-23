@@ -301,21 +301,13 @@ class Trainer:
                 ## reaching x1 by finding neighbouring x_alphas
                 x_alpha = x_alpha + (alpha_end-alpha_start)*d
 
+            approx_x1_sample_softmax = F.softmax(x_alpha, dim=1)
+            approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
+            ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
 
-        approx_x1_sample_softmax = F.softmax(x_alpha, dim=1)
-        approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
-        ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
+            val_batch_loss = F.cross_entropy(x_alpha, gt_label, ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
 
-        #creating mask where 1 is for non-ignored labels, 0 for ignored labels
-        mask = (gt_label != 255) # B, 1, H, W 
-        mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
-        
-        ## random foreground class label for background in GTs
-        gt_label[gt_label == 255] = torch.randint(0, self.num_classes, (1,)).item() 
-  
-        
-   
-        return x_alpha, val_batch_loss
+            return approx_x1_sample, val_batch_loss
 
         
 
@@ -360,9 +352,10 @@ class Trainer:
 
 
 def main():
-    model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
-    config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
-        
+    to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+    to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
+
+    
 
            
 
