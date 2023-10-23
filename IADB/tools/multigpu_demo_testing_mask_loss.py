@@ -1,13 +1,15 @@
 '''
 conditional image segementation map generation, using alpha bending of gaussian and cityscapes gt maps, with conditioned on segformer softmax prediction>>later will replace unet with transformers of ddp
 '''
+import os 
+os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
 
 import torch
 from torchvision import transforms
 from diffusers import UNet2DModel
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
-import os
 from tqdm import tqdm
 from PIL import Image 
 import numpy as np
@@ -23,11 +25,9 @@ import torch.nn as nn
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
-import os
+
 
 torch.backends.cudnn.benchmark = True ## for better speed 
-os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
 
 def ddp_setup():
     init_process_group(backend="nccl")
