@@ -151,10 +151,10 @@ class MyEnsemble(nn.Module):
         return d 
 
 
-def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/", suffix= "_gtFine_labelTrainIds.png" , num_classes = 19): 
+def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/", suffix= "_gtFine_labelTrainIds.png" , num_classes = 19, resize_shape: tuple = (512, 1024)): 
 
     lb_transform = transforms.Compose([ 
-        transforms.Resize((512,1024), interpolation=InterpolationMode.NEAREST)
+        transforms.Resize(resize_shape, interpolation=InterpolationMode.NEAREST)
     ])
     train_set =  custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode='train')# loading training dataset
     val_set = custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode = 'val')
@@ -355,10 +355,10 @@ class Trainer:
                 
 
 
-def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16 ):
+def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
     
     ddp_setup() 
-    train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes)
+    train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
     trainer = Trainer( 
@@ -372,6 +372,7 @@ def main(to_correct_model_path: str, to_correct_config_path: str, save_every: in
            
 
 if __name__ == '__main__':
+    resize_shape = (512, 1024)
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
     save_every = 25
@@ -384,4 +385,4 @@ if __name__ == '__main__':
     batch_size = 16
     snapshot_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
 
-    main(to_correct_model_path, to_correct_config_path, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, snapshot_dir, batch_size)
+    main(to_correct_model_path, to_correct_config_path, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, snapshot_dir, batch_size, resize_shape)
