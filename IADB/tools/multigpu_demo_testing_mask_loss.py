@@ -27,10 +27,12 @@ from torch.distributed import init_process_group, destroy_process_group
 import os
 
 torch.backends.cudnn.benchmark = True ## for better speed 
+os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
 
 def ddp_setup():
     init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  ## check if its working or not  >> for torchrun we generally use os.environ case 
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  ## check if its working or not  >> for torchrun we generally use os.environ case ## or can try by cuda visible devices
 
 
 def get_model(num_classes):
@@ -129,7 +131,7 @@ class custom_cityscapes_labels(Dataset):
 class MyEnsemble(nn.Module): 
     def __init__(self, embed_dim) -> None:
         super().__init__() 
-        self.denoising_model = get_model()
+        self.denoising_model = get_model(embed_dim)
         self.combining_condition_model = ConvModule(
             embed_dim * 2,
             embed_dim,
@@ -356,8 +358,16 @@ class Trainer:
 def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16 ):
     
     ddp_setup() 
-    
-    
+    train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes)
+    train_data = prepare_dataloader(train_set, batch_size)
+    val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
+    trainer = Trainer( 
+        model, train_data, val_data, optimizer, save_every, snapshot_dir, 
+        to_correct_model_path, to_correct_config_path, num_classes, save_imgs_dir, 
+        nb_steps
+    )
+    trainer.train(total_epochs)
+    destroy_process_group()
 
            
 
