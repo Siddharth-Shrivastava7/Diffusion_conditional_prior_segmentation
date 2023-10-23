@@ -1,11 +1,10 @@
 '''
-conditional image segementation map generation, using alpha bending of gaussian and cityscapes gt maps, with conditioned on segformer softmax prediction>>later will replace unet with transformers of ddp>>conditioning is achieved using concatenation here
+conditional image segementation map generation, using alpha bending of gaussian and cityscapes gt maps, with conditioned on segformer softmax prediction>>later will replace unet with transformers of ddp
 '''
 
 import torch
 from torchvision import transforms
 from diffusers import UNet2DModel
-from torch.optim import Adam 
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
 import os
@@ -168,6 +167,7 @@ def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of w
     return DataLoader(
         dataset,
         batch_size=batch_size,
+        num_workers=4, ## default case : for each gpu 4 is the standard num_workers to use
         pin_memory=True,
         shuffle=False,
         sampler=DistributedSampler(dataset)
