@@ -30,7 +30,7 @@ torch.backends.cudnn.benchmark = True ## for better speed
 
 def ddp_setup():
     init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  ## check if its working or not 
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  ## check if its working or not  >> for torchrun we generally use os.environ case 
 
 
 def get_model(num_classes):
@@ -184,14 +184,9 @@ class Trainer:
                 _to_correct_config_path: str, 
                 num_classes: int, 
                 save_imgs_dir: str, 
-                nb_steps: int, 
-                gpu_id = None) -> None: 
+                nb_steps: int) -> None: 
         
-        if gpu_id:
-            self.gpu_id = gpu_id
-        else: 
-            self.gpu_id = int(os.environ["LOCAL_RANK"]) 
-         
+        self.gpu_id = int(os.environ["LOCAL_RANK"]) 
         self.model = model.to(self.gpu_id) 
         self.train_data = train_data 
         self.val_data = val_data 
@@ -351,13 +346,19 @@ class Trainer:
                 
 
 
-def main():
-    to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
-    to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
+def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, batch_size: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str ,snapshot_path: str = "snapshot.pt"):
+    ddp_setup() 
+    
 
+    
+    
     
 
            
 
 if __name__ == '__main__':
+    to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
+    to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
+    
+
     main()
