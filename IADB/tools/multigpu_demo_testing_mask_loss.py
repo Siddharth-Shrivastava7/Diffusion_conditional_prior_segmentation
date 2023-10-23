@@ -32,7 +32,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, 
 
 def ddp_setup():
     init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))  ## check if its working or not  >> for torchrun we generally use os.environ case ## or can try by cuda visible devices
+    # torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
 
 
 def get_model(num_classes):
