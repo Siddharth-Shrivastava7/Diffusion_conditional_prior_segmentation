@@ -20,6 +20,13 @@ import mmcv
 from tqdm import tqdm
 import torch.nn as nn
 
+## distributed training with torchrun (fault tolerance with elasticity) 
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
+import os
+
+
 torch.backends.cudnn.benchmark = True ## for better speed 
 
 ## condition => the "softmax-logits" prediction of cityscapes dataset from segformer model 
@@ -28,6 +35,12 @@ segformer_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/se
 config_file_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py' 
 results_softmax_predictions_train, results_softmax_predictions_val = main(config_path= config_file_path, checkpoint_path= segformer_model_path) # lets check!  ## caching in train and val data softmax predictions; so that segformerb2 not have to predict every other data instant but rather can be easily indexed for softmax prediction generation.
 print('results consisting of softmax predictions loaded successfully!')
+
+
+def ddp_setup():
+    init_process_group(backend="nccl")
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+
 
 def get_model():
     block_out_channels=(128, 128, 256, 256, 512, 512)
