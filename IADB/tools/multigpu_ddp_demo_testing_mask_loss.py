@@ -26,10 +26,16 @@ from torch.distributed import init_process_group, destroy_process_group
 
 
 ## segformer <model to correct> prediction loading 
-def softmax_logits_predictions(model_path, config_path):
-    results_softmax_predictions_train, results_softmax_predictions_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
-    print('results consisting of softmax predictions loaded successfully!')
-    return results_softmax_predictions_train, results_softmax_predictions_val
+class _helper_for_Trainer:
+    def __init__(self, model_path, config_path) -> None:
+        self.model_path = model_path
+        self.config_path = config_path
+        self.softmax_logits_to_correct_train = {}
+        self.softmax_logits_to_correct_val = {}
+
+    def _run(self):
+        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=self. config_path, checkpoint_path= self.model_path)
+        print('results consisting of softmax predictions loaded successfully!') 
 
 
 def ddp_setup(rank, world_size): 
@@ -193,7 +199,8 @@ class Trainer:
                 num_classes: int, 
                 save_imgs_dir: str, 
                 nb_steps: int, 
-                gpu_id: int) -> None: 
+                gpu_id: int, 
+                softmax_logits_pred) -> None: 
         
         self.gpu_id = gpu_id
         self.model = model.to(self.gpu_id) 
@@ -208,8 +215,9 @@ class Trainer:
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
-        self.softmax_logits_to_correct_train = softmax_logits_to_correct_train 
-        self.softmax_logits_to_correct_val = softmax_logits_to_correct_val
+        self.softmax_logits_to_correct_train = softmax_logits_pred.softmax_logits_to_correct_train
+        self.softmax_logits_to_correct_val = softmax_logits_pred.softmax_logits_to_correct_val
+        
         
 
     def _run_batch(self, conditional_feats, alphas, mask, targets):
@@ -341,19 +349,17 @@ class Trainer:
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
-    
+def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, softmax_logits_pred):
+  
     ddp_setup(rank, world_size) 
     train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank, softmax_logits_pred
     )
     trainer.train(total_epochs)
     destroy_process_group()
-
-           
 
 if __name__ == '__main__':
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
@@ -368,11 +374,16 @@ if __name__ == '__main__':
     suffix = '_gtFine_labelTrainIds.png'
     batch_size = 16
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
-    softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_predictions(to_correct_model_path, to_correct_config_path)  
+    softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
+    softmax_logits_pred._run() ## calling and storing in its instance the value of softmax_logits of train and val data
 
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
-    print('world size is: ', world_size)
+    print('world size is: ', world_size)  
+
+    
+
+
     mp.spawn(main, args = (world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape), nprocs=world_size)
 
