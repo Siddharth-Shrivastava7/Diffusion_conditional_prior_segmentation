@@ -33,14 +33,9 @@ class _helper_for_Trainer:
     def __init__(self, model_path, config_path) -> None:
         self.model_path = model_path
         self.config_path = config_path
-        self.softmax_logits_to_correct_train = {}
-        self.softmax_logits_to_correct_val = {}
-
-    def __call__(self):
-        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=self.config_path, checkpoint_path= self.model_path)
-    
+        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=self.config_path, checkpoint_path= self.model_path)    
         print('results consisting of softmax predictions loaded successfully!')
-        
+
         
 def ddp_setup(rank, world_size): 
     """
@@ -385,8 +380,7 @@ if __name__ == '__main__':
     batch_size = 16
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
     
-    softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
-    softmax_logits_pred() ## for predicting both training and validation data
+    _helper_for_Trainer(to_correct_model_path, to_correct_config_path) # sole purpose to call model softmax logits
     
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
