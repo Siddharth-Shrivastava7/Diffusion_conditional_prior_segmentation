@@ -30,8 +30,13 @@ from torch.distributed import init_process_group, destroy_process_group
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 class _helper_for_Trainer:
-    def __call__(self, model_path, config_path):
-        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
+    def __init__(self, model_path, config_path) -> None:
+        self.model_path = model_path
+        self.config_path = config_path
+
+
+    def __call__(self):
+        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=self.config_path, checkpoint_path= self.model_path)
     
         print('results consisting of softmax predictions loaded successfully!')
         
@@ -52,7 +57,7 @@ def ddp_setup(rank, world_size):
         world_size: Total number of processes(gpus)
     """
     os.environ["MASTER_ADDR"] = "127.0.0.1" ## master since only one machine(node) we are using which have multiple processes (gpus) in it
-    os.environ["MASTER_PORT"] = "29500"
+    os.environ["MASTER_PORT"] = "29501"
     init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
     torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
 
@@ -382,8 +387,10 @@ if __name__ == '__main__':
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
     batch_size = 16
-    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
-    softmax_logits_to_correct_train, softmax_logits_to_correct_val = _helper_for_Trainer(to_correct_model_path, to_correct_config_path) 
+    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
+    
+    softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
+    softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_pred() 
     
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
