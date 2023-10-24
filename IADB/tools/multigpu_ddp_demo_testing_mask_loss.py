@@ -12,7 +12,7 @@ from PIL import Image
 import numpy as np
 from  torchvision.transforms.functional import InterpolationMode
 import torch.nn.functional as F 
-import test_softmax_pred 
+import test_softmax_pred    
 from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
