@@ -2,9 +2,6 @@
 conditional image segementation map generation, using alpha bending of gaussian and cityscapes gt maps, with conditioned on segformer softmax prediction>>later will replace unet with transformers of ddp
 '''
 import os 
-os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
-
 import torch
 from torchvision import transforms
 from diffusers import UNet2DModel
@@ -21,17 +18,26 @@ import mmcv
 from tqdm import tqdm
 import torch.nn as nn
 
-## distributed training with torchrun (fault tolerance with elasticity) 
+## distributed training with torchrun (fault tolerant) 
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 
-torch.backends.cudnn.benchmark = True ## for better speed 
+os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
+torch.backends.cudnn.benchmark = True ## for better speed ## trying without this 
+
+
+## segformer <model to correct> prediction loading 
+def softmax_logits_predictions(model_path, config_path):
+    results_softmax_predictions_train, results_softmax_predictions_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
+    print('results consisting of softmax predictions loaded successfully!')
+    return results_softmax_predictions_train, results_softmax_predictions_val
 
 def ddp_setup():
     init_process_group(backend="nccl")
-    # torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
 
 
 def get_model(num_classes):
@@ -182,8 +188,8 @@ class Trainer:
                 optimizer: torch.optim.Optimizer,
                 save_every: int,
                 snapshot_dir: str,
-                _to_correct_model_path: str, 
-                _to_correct_config_path: str, 
+                softmax_logits_to_correct_train: torch.tensor, 
+                softmax_logits_to_correct_val: torch.tensor, 
                 num_classes: int, 
                 save_imgs_dir: str, 
                 nb_steps: int) -> None: 
@@ -196,7 +202,8 @@ class Trainer:
         self.save_every = save_every 
         self.snapshot_dir = snapshot_dir
         self.epochs_run = 0
-        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = self._softmax_logits_predictions(_to_correct_model_path, _to_correct_config_path)  
+        self.softmax_logits_to_correct_train = softmax_logits_to_correct_train
+        self.softmax_logits_to_correct_val = softmax_logits_to_correct_val
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
         
@@ -208,10 +215,7 @@ class Trainer:
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
 
-    def _softmax_logits_predictions(self, model_path, config_path):
-        results_softmax_predictions_train, results_softmax_predictions_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
-        print('results consisting of softmax predictions loaded successfully!')
-        return results_softmax_predictions_train, results_softmax_predictions_val
+    
     
     def _load_snapshot(self, snapshot_dir): 
         loc = f"cuda:{self.gpu_id}"
@@ -355,7 +359,7 @@ class Trainer:
                 
 
 
-def main(to_correct_model_path: str, to_correct_config_path: str, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
+def main(softmax_logits_to_correct_train: torch.tensor, softmax_logits_to_correct_val: torch.tensor, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
     
     ddp_setup() 
     train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
@@ -363,7 +367,7 @@ def main(to_correct_model_path: str, to_correct_config_path: str, save_every: in
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
     trainer = Trainer( 
         model, train_data, val_data, optimizer, save_every, snapshot_dir, 
-        to_correct_model_path, to_correct_config_path, num_classes, save_imgs_dir, 
+        softmax_logits_to_correct_train, softmax_logits_to_correct_val, num_classes, save_imgs_dir, 
         nb_steps
     )
     trainer.train(total_epochs)
@@ -384,5 +388,6 @@ if __name__ == '__main__':
     suffix = '_gtFine_labelTrainIds.png'
     batch_size = 16
     snapshot_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
-
-    main(to_correct_model_path, to_correct_config_path, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, snapshot_dir, batch_size, resize_shape)
+    softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_predictions(to_correct_model_path, to_correct_config_path)  
+    
+    main(softmax_logits_to_correct_train, softmax_logits_to_correct_val, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, snapshot_dir, batch_size, resize_shape)
