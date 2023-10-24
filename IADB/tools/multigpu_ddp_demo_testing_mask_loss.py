@@ -384,5 +384,5 @@ if __name__ == '__main__':
     
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)
-    mp.spawn(main, args = (world_size, softmax_logits_to_correct_train, softmax_logits_to_correct_val, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape), nprocs=world_size)
+    mp.spawn(main, args = (world_size, softmax_logits_to_correct_train, softmax_logits_to_correct_val, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape,), nprocs=world_size)
 
