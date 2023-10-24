@@ -22,6 +22,7 @@ import torch.nn as nn
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
+from torch.distributed.elastic.multiprocessing.errors import record
 
 
 os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
@@ -358,7 +359,7 @@ class Trainer:
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-
+@record
 def main(softmax_logits_to_correct_train: torch.tensor, softmax_logits_to_correct_val: torch.tensor, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
     
     ddp_setup() 
