@@ -18,12 +18,14 @@ import mmcv
 from tqdm import tqdm
 import torch.nn as nn
 
-## distributed training with torchrun (fault tolerant) 
-from torch.utils.data.distributed import DistributedSampler
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.distributed import init_process_group, destroy_process_group
-from torch.distributed.elastic.multiprocessing.errors import record
+## distributed training with DDP 
+import torch.multiprocessing as mp 
+from torch.utils.data.distributed import DistributedSampler 
+from torch.nn.parallel import DistributedDataParallel as DDP 
+from torch.distributed import init_process_group, destroy_process_group 
 
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 
@@ -34,11 +36,16 @@ def softmax_logits_predictions(model_path, config_path):
     return results_softmax_predictions_train, results_softmax_predictions_val
 
 
-def ddp_setup():
-    os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
-    init_process_group(backend="nccl")
-    # torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
+def ddp_setup(rank, world_size): 
+    """
+    Args:
+        rank: Unique identifier of each process(gpu)
+        world_size: Total number of processes(gpus)
+    """
+    os.environ["MASTER_ADDR"] = "localhost" ## master since only one machine(node) we are using which have multiple processes (gpus) in it
+    os.environ["MASTER_PORT"] = "12355"
+    init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
+    torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
 
 
 def get_model(num_classes):
@@ -188,43 +195,31 @@ class Trainer:
                 val_data: DataLoader,
                 optimizer: torch.optim.Optimizer,
                 save_every: int,
-                snapshot_dir: str,
+                checkpoint_dir: str,
                 softmax_logits_to_correct_train: torch.tensor, 
                 softmax_logits_to_correct_val: torch.tensor, 
                 num_classes: int, 
                 save_imgs_dir: str, 
-                nb_steps: int) -> None: 
+                nb_steps: int, 
+                gpu_id: int) -> None: 
         
-        self.gpu_id = int(os.environ["LOCAL_RANK"]) 
+        self.gpu_id = gpu_id
         self.model = model.to(self.gpu_id) 
         self.train_data = train_data 
         self.val_data = val_data 
         self.optimizer = optimizer
         self.save_every = save_every 
-        self.snapshot_dir = snapshot_dir
+        self.checkpoint_dir = checkpoint_dir
         self.epochs_run = 0
         self.softmax_logits_to_correct_train = softmax_logits_to_correct_train
         self.softmax_logits_to_correct_val = softmax_logits_to_correct_val
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
         
-        if os.path.exists(os.path.join(snapshot_dir, 'current_snapshot.pt')):
-            print("Loading snapshot")
-            self._load_snapshot(snapshot_dir) 
-        
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
 
-    
-    
-    def _load_snapshot(self, snapshot_dir): 
-        loc = f"cuda:{self.gpu_id}"
-        snapshot_path = os.path.join(snapshot_dir, 'current_snapshot.pt')
-        snapshot = torch.load(snapshot_path, map_location=loc)
-        self.model.load_state_dict(snapshot["MODEL_STATE"])
-        self.epochs_run = snapshot["EPOCHS_RUN"]
-        print(f"Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _run_batch(self, conditional_feats, alphas, mask, targets):
         self.optimizer.zero_grad()
@@ -269,19 +264,16 @@ class Trainer:
             self._run_batch(conditional_feats, alphas, mask, targets) 
 
             
-    def _save_snapshot(self, epoch, save_best = False):
-        snapshot = {
-            "MODEL_STATE": self.model.module.state_dict(),
-            "EPOCHS_RUN": epoch,
-        }
+    def _save_checkpoint(self, epoch, save_best = False):
+        checkpoint = self.model.module.state_dict()
         if save_best:
-            snapshot_path = os.path.join(self.snapshot_dir, 'best_snapshot.pt')
-            torch.save(snapshot, snapshot_path)
-            print(f"Epoch {epoch} | Training snapshot saved at {snapshot_path}") 
+            checkpoint_path = os.path.join(self.checkpoint_dir, 'best_checkpoint.pt')
+            torch.save(checkpoint, checkpoint_path)
+            print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}") 
         else:
-            snapshot_path = os.path.join(self.snapshot_dir, 'current_snapshot.pt')
-            torch.save(snapshot, snapshot_path)
-            print(f"Epoch {epoch} | Training snapshot saved at {snapshot_path}")
+            checkpoint_path = os.path.join(self.checkpoint_dir, 'current_checkpoint.pt')
+            torch.save(checkpoint, checkpoint_path)
+            print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}")
 
 
     def _sample_conditional_seg_iadb(self, gt_label, img_path):
@@ -348,28 +340,27 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
-            if self.gpu_id == 0 and epoch % self.save_every == 0:
-                self._save_snapshot(epoch)
+            if self.gpu_id == 0 and epoch % self.save_every == 0: ## for gpu_id = 0, since We only need to save model checkpoints from one process.
+                self._save_checkpoint(epoch)
                 print('Model updated! : current model saved for epoch: ' + str(epoch))
 
                 val_average_loss =  self._run_val_sampling(epoch)
                 if val_average_loss < self.best_loss:
                     self.best_loss = val_average_loss 
-                    self._save_snapshot(epoch, save_best=True)
+                    self._save_checkpoint(epoch, save_best=True)
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-@record
-def main(softmax_logits_to_correct_train: torch.tensor, softmax_logits_to_correct_val: torch.tensor, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , snapshot_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
+def main(rank: int, world_size: int,softmax_logits_to_correct_train: torch.tensor, softmax_logits_to_correct_val: torch.tensor, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
     
-    ddp_setup() 
+    ddp_setup(rank, world_size) 
     train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, snapshot_dir, 
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, 
         softmax_logits_to_correct_train, softmax_logits_to_correct_val, num_classes, save_imgs_dir, 
-        nb_steps
+        nb_steps, rank
     )
     trainer.train(total_epochs)
     destroy_process_group()
@@ -388,7 +379,10 @@ if __name__ == '__main__':
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
     batch_size = 16
-    snapshot_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
+    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
     softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_predictions(to_correct_model_path, to_correct_config_path)  
     
-    main(softmax_logits_to_correct_train, softmax_logits_to_correct_val, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, snapshot_dir, batch_size, resize_shape)
+    
+    world_size = torch.cuda.device_count()
+    mp.spawn(main, args = (world_size, softmax_logits_to_correct_train, softmax_logits_to_correct_val, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape))
+
