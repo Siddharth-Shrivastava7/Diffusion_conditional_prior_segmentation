@@ -24,9 +24,6 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.distributed.elastic.multiprocessing.errors import record
 
-
-os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 
@@ -36,7 +33,10 @@ def softmax_logits_predictions(model_path, config_path):
     print('results consisting of softmax predictions loaded successfully!')
     return results_softmax_predictions_train, results_softmax_predictions_val
 
+
 def ddp_setup():
+    os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
     init_process_group(backend="nccl")
     # torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
 
