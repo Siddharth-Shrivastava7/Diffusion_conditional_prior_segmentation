@@ -25,23 +25,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group 
 
 
-
-torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
-
-
 ## segformer <model to correct> prediction loading 
 def softmax_logits_predictions(model_path, config_path):
-    global softmax_logits_to_correct_train
-    global softmax_logits_to_correct_val
-    softmax_logits_to_correct_train, softmax_logits_to_correct_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
+    results_softmax_predictions_train, results_softmax_predictions_val = test_softmax_pred.main(config_path=config_path, checkpoint_path= model_path)
     print('results consisting of softmax predictions loaded successfully!')
-    return softmax_logits_to_correct_train, softmax_logits_to_correct_val
+    return results_softmax_predictions_train, results_softmax_predictions_val
 
-class _helper_for_Trainer:
-    def __init__(self) -> None:
-        self.softmax_logits_to_correct_train = softmax_logits_to_correct_train
-        self.softmax_logits_to_correct_val = softmax_logits_to_correct_val
-        
 
 def ddp_setup(rank, world_size): 
     """
@@ -140,8 +129,6 @@ class custom_cityscapes_labels(Dataset):
 
         label_path = self.label_list[index]  
         label = torch.from_numpy(np.array(Image.open(label_path)))
-        # label[label==255]=torch.randint(0,19,size=(1,)).item()
-
         if self.lb_transform: 
             label = self.lb_transform(label.unsqueeze(dim=0))
         
@@ -195,7 +182,7 @@ def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of w
     )
 
 
-class Trainer(_helper_for_Trainer): 
+class Trainer: 
     def __init__(self, 
                 model: torch.nn.Module, 
                 train_data: DataLoader,
@@ -221,10 +208,9 @@ class Trainer(_helper_for_Trainer):
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
-        super().__init__()
+        self.softmax_logits_to_correct_train = softmax_logits_to_correct_train 
+        self.softmax_logits_to_correct_val = softmax_logits_to_correct_val
         
-    
-
 
     def _run_batch(self, conditional_feats, alphas, mask, targets):
         self.optimizer.zero_grad()
@@ -370,9 +356,9 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
            
 
 if __name__ == '__main__':
-    resize_shape = (512, 1024)
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
+    resize_shape = (512, 1024)
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     nb_steps = 128 ## similar to IADB 
@@ -382,8 +368,8 @@ if __name__ == '__main__':
     suffix = '_gtFine_labelTrainIds.png'
     batch_size = 16
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
-    
-    softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_predictions(to_correct_model_path, to_correct_config_path)
+    softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_predictions(to_correct_model_path, to_correct_config_path)  
+
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
