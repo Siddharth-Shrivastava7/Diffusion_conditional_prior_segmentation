@@ -25,7 +25,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group 
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
+
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 
@@ -381,7 +381,6 @@ if __name__ == '__main__':
     batch_size = 16
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/'
     softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_predictions(to_correct_model_path, to_correct_config_path)  
-    
     
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)
