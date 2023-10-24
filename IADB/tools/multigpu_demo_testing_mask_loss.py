@@ -26,7 +26,7 @@ from torch.distributed import init_process_group, destroy_process_group
 
 os.environ["LOCAL_RANK"] = "0" ## requires torchrun ## have to see, how to set this 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0, 3, 4, 5" ## may be tricky to use here, still taking risk
-torch.backends.cudnn.benchmark = True ## for better speed ## trying without this 
+torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 
 ## segformer <model to correct> prediction loading 
@@ -37,7 +37,7 @@ def softmax_logits_predictions(model_path, config_path):
 
 def ddp_setup():
     init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
+    # torch.cuda.set_device(int(os.environ["LOCAL_RANK"])) ## trying cuda visible devices environment variable, as suggested in pytorch docs 
 
 
 def get_model(num_classes):
@@ -173,7 +173,7 @@ def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of w
     return DataLoader(
         dataset,
         batch_size=batch_size,
-        num_workers=4, ## default case : for each gpu 4 is the standard num_workers to use
+        num_workers=4, ## usually 4 is used for each gpu
         pin_memory=True,
         shuffle=False,
         sampler=DistributedSampler(dataset)
