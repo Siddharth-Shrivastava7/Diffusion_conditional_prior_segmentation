@@ -17,6 +17,7 @@ from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
 import torch.nn as nn
+import dill 
 
 ## distributed training with DDP 
 import torch.multiprocessing as mp 
@@ -377,13 +378,13 @@ if __name__ == '__main__':
     softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
     softmax_logits_pred._run() ## calling and storing in its instance the value of softmax_logits of train and val data
 
+    ## adapted from chatgpt 
+    # Define the target function that will be executed by each spawned process
+    target_func = lambda rank, world_size: main(rank, world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, softmax_logits_pred)
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)  
 
-    
-
-
-    mp.spawn(main, args = (world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape), nprocs=world_size)
+    mp.spawn(target_func, args = (world_size,), nprocs=world_size)
 
