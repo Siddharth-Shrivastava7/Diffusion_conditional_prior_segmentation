@@ -33,6 +33,8 @@ class _helper_for_Trainer:
     def __init__(self, model_path, config_path) -> None:
         self.model_path = model_path
         self.config_path = config_path
+        self.softmax_logits_to_correct_train = {}
+        self.softmax_logits_to_correct_val = {}
 
     def __call__(self):
         self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=self.config_path, checkpoint_path= self.model_path)
@@ -47,7 +49,7 @@ def ddp_setup(rank, world_size):
         world_size: Total number of processes(gpus)
     """
     os.environ["MASTER_ADDR"] = "127.0.0.1" ## master since only one machine(node) we are using which have multiple processes (gpus) in it
-    os.environ["MASTER_PORT"] = "29501"
+    os.environ["MASTER_PORT"] = "29501" ## change the port, when one port is filled up
     init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
     torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
 
@@ -203,7 +205,9 @@ class Trainer(_helper_for_Trainer):
                 num_classes: int, 
                 save_imgs_dir: str, 
                 nb_steps: int, 
-                gpu_id: int) -> None: 
+                gpu_id: int, 
+                to_correct_model_path: str, 
+                to_correct_config_path: str) -> None: 
         
         self.gpu_id = gpu_id
         self.model = model.to(self.gpu_id) 
@@ -219,6 +223,8 @@ class Trainer(_helper_for_Trainer):
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
+
+        super().__init__(to_correct_model_path, to_correct_config_path) 
 
 
     def _run_batch(self, conditional_feats, alphas, mask, targets):
@@ -351,14 +357,14 @@ class Trainer(_helper_for_Trainer):
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
+def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, to_correct_model_path: str, to_correct_config_path: str, batch_size: int=16, resize_shape: tuple = (512, 1024)):
     
     ddp_setup(rank, world_size) 
     train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank, to_correct_model_path, to_correct_config_path
     )
     trainer.train(total_epochs)
     destroy_process_group()
@@ -386,5 +392,5 @@ if __name__ == '__main__':
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)
-    mp.spawn(main, args = (world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape,), nprocs=world_size)
+    mp.spawn(main, args = (world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir,  to_correct_model_path, to_correct_config_path, batch_size, resize_shape), nprocs=world_size)
 
