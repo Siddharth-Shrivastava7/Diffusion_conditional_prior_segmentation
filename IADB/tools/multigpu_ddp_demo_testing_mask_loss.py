@@ -375,7 +375,7 @@ if __name__ == '__main__':
     save_imgs_dir = '/home/guest/scratch/siddharth/data/results/mask_loss_iadb_cond_seg/result_val_images'
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
-    batch_size = 8
+    batch_size = 2
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
     softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
     softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_pred._run() ## calling and storing in its instance the value of softmax_logits of train and val data
