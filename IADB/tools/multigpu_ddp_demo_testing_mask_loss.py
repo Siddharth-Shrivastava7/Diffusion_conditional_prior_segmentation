@@ -17,7 +17,6 @@ from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
 import torch.nn as nn
-import dill 
 
 ## distributed training with DDP 
 import torch.multiprocessing as mp 
@@ -350,12 +349,17 @@ class Trainer:
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, softmax_logits_pred):
+def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, shared_list: list):
   
     ddp_setup(rank, world_size) 
     train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
+    
+    ## shared list calculation (acc to bing - gpt4)
+    shared_list.append(rank)
+    softmax_logits_pred = shared_list[0] 
+
     trainer = Trainer( 
         model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank, softmax_logits_pred
     )
@@ -378,13 +382,11 @@ if __name__ == '__main__':
     softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
     softmax_logits_pred._run() ## calling and storing in its instance the value of softmax_logits of train and val data
 
-    ## adapted from chatgpt 
-    # Define the target function that will be executed by each spawned process
-    target_func = lambda rank, world_size: main(rank, world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, softmax_logits_pred)
-
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)  
 
-    mp.spawn(target_func, args = (world_size,), nprocs=world_size)
-
+    with mp.Manager() as manager: 
+        shared_list = manager.list() 
+        shared_list.append(softmax_logits_pred)
+        mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, shared_list,), nprocs=world_size)
