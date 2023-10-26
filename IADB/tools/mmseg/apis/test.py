@@ -132,6 +132,10 @@ def single_gpu_test(model,
         for _ in range(batch_size):
             prog_bar.update()
 
+        ## experimenting below, with the block of code which tries to reduce gpu memory usage without decrease in performance
+        del result
+        torch.cuda.empty_cache()
+        
     return results
 
 
