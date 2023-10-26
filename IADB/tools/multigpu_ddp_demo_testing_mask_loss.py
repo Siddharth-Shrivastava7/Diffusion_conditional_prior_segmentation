@@ -305,7 +305,7 @@ class Trainer:
             approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
             ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
 
-            val_batch_loss = F.cross_entropy(x_alpha, gt_label.to(self.gpu_id).long(), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
+            val_batch_loss = F.cross_entropy(x_alpha, gt_label.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
 
             return approx_x1_sample, val_batch_loss
 
@@ -323,7 +323,7 @@ class Trainer:
         prog_bar = mmcv.ProgressBar(len(self.val_data))
         for gt_label, img_path in self.val_data:
             approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(gt_label, img_path)  
-            save_path = os.path.join(save_imgs_dir_ep, img_path.split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+            save_path = os.path.join(save_imgs_dir_ep, img_path[0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
             approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
             approx_x1_sample_color.save(save_path)
             # Accumulate batch loss to epoch loss
