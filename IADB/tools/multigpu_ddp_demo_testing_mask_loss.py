@@ -305,7 +305,7 @@ class Trainer:
             approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
             ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
 
-            val_batch_loss = F.cross_entropy(x_alpha, gt_label, ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
+            val_batch_loss = F.cross_entropy(x_alpha, gt_label.to(self.gpu_id).long(), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
 
             return approx_x1_sample, val_batch_loss
 
