@@ -24,6 +24,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP 
 from torch.distributed import init_process_group, destroy_process_group 
 
+# torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 ## segformer <model to correct> prediction loading 
 class _helper_for_Trainer:
@@ -156,12 +157,9 @@ class MyEnsemble(nn.Module):
             act_cfg=None
         )
         
-    def forward(self, conditional_feats, alphas, in_val = False):
+    def forward(self, conditional_feats, alphas):
         conditional_feats = self.combining_condition_model(conditional_feats)
-        if in_val:
-            d = self.denoising_model(conditional_feats, alphas)['sample']
-        else:
-            d = self.denoising_model(conditional_feats, alphas)
+        d = self.denoising_model(conditional_feats, alphas)['sample']
         return d 
 
 
@@ -298,7 +296,7 @@ class Trainer:
                 conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
             
                 ## this is giving ~ (\bar_{x1} - \bar{x0})
-                d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id), in_val = True) 
+                d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id)) 
                 
                 ## reaching x1 by finding neighbouring x_alphas
                 x_alpha = x_alpha + (alpha_end-alpha_start)*d
@@ -367,7 +365,7 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
 if __name__ == '__main__':
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
-    resize_shape = (256, 512) ## testing with lower dimension, for checking its working
+    resize_shape = (128, 256) ## testing with lower dimension, for checking its working
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     nb_steps = 128 ## similar to IADB 
