@@ -364,7 +364,7 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
 if __name__ == '__main__':
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
-    resize_shape = (512,1024) ## testing with lower dimension, for checking its working
+    resize_shape = (256, 512) ## testing with lower dimension, for checking its working
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     nb_steps = 128 ## similar to IADB 
@@ -372,7 +372,7 @@ if __name__ == '__main__':
     save_imgs_dir = '/home/guest/scratch/siddharth/data/results/mask_loss_iadb_cond_seg/result_val_images'
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
-    batch_size = 2
+    batch_size = 4
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
     softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
     softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_pred._run() ## calling and storing in its instance the value of softmax_logits of train and val data
