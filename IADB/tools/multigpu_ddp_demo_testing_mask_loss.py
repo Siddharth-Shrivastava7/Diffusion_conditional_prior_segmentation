@@ -257,7 +257,7 @@ class Trainer:
             pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_train[path]) for path in img_paths] 
             pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19   
 
-            ## similar to DDP -- condition input 
+            ## similar to DDP -- condition input ## have to put input RGB image here or RGB extracted features <<<< 
             conditional_feats = torch.cat([pred_labels_emdb, x_alphas], dim=1)  
             self._run_batch(conditional_feats, alphas, mask, targets) 
 
