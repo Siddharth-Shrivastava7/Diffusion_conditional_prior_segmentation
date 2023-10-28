@@ -337,15 +337,15 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
-            if self.gpu_id == 0 and epoch % self.save_every == 0: ## for gpu_id = 0, since We only need to save model checkpoints from one process.
-                self._save_checkpoint(epoch)
-                print('Model updated! : current model saved for epoch: ' + str(epoch))
-
-                val_average_loss =  self._run_val_sampling(epoch)
-                if val_average_loss < self.best_loss:
-                    self.best_loss = val_average_loss 
-                    self._save_checkpoint(epoch, save_best=True)
-                    print('Model updated! : current best model saved on: ' + str(epoch)) 
+            if epoch % self.save_every == 0: 
+                val_average_loss =  self._run_val_sampling(epoch) ## running validation over all the GPU processes
+                if self.gpu_id == 0: ## for gpu_id = 0, since We only need to save one model copy of the orignial model
+                    self._save_checkpoint(epoch)
+                    print('Model updated! : current model saved for epoch: ' + str(epoch))
+                    if val_average_loss < self.best_loss:
+                        self.best_loss = val_average_loss 
+                        self._save_checkpoint(epoch, save_best=True)
+                        print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
 def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, shared_softmax_logits_to_correct_train: dict, shared_softmax_logits_to_correct_val: dict):
