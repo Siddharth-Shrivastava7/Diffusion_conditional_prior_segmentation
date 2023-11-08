@@ -105,8 +105,8 @@ class custom_cityscapes_labels(Dataset):
                     path = os.path.join(root, name)
                     if path.find(suffix)!=-1:
                         self.gt_list.append(path)   
-                        self.pred_list.append(os.path.join(self.pred_dir, name))
-                        self.img_list.append(os.path.join(self.img_dir, name))
+                        self.pred_list.append(os.path.join(self.pred_dir, name.replace('_gtFine_labelTrainIds.png', '_leftImg8bit.png')))
+                        self.img_list.append(os.path.join(self.img_dir, name.replace('_gtFine_labelTrainIds.png', '_leftImg8bit.png')))
             
         elif mode == 'val': ## darkzurich val images (never seen by segformerb2)
             self.img_dir = os.path.join(root_folder, img_dir, 'dz_val') 
@@ -116,8 +116,8 @@ class custom_cityscapes_labels(Dataset):
             for path in sorted(os.listdir(self.gt_dir)):
                 if path.find(suffix)!=-1:
                     self.gt_list.append(os.path.join(self.gt_dir, path)) 
-                    self.pred_list.append(os.path.join(self.pred_dir, path))
-                    self.img_list.append(os.path.join(self.img_dir, path)) 
+                    self.pred_list.append(os.path.join(self.pred_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
+                    self.img_list.append(os.path.join(self.img_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png'))) 
 
         if mode == 'train':
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 2975
