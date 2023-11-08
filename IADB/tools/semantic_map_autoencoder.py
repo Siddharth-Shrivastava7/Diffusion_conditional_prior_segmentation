@@ -1,5 +1,5 @@
 '''
-conditional image segementation map generation, using alpha bending of gaussian and cityscapes gt maps, with conditioned on segformer softmax prediction>>later will replace unet with transformers of ddp
+    semantic map auto encoder :: for finding the latent dimension of semantic segmentation maps 
 '''
 import os
 import torch
@@ -17,24 +17,10 @@ import mmcv
 from tqdm import tqdm
 import torch.nn as nn
 
-## distributed training with DDP 
-import torch.multiprocessing as mp 
-from torch.utils.data.distributed import DistributedSampler 
-from torch.nn.parallel import DistributedDataParallel as DDP 
-from torch.distributed import init_process_group, destroy_process_group 
+## for converting ids to train_ids and train_ids to color images 
+from cityscapesscripts.helpers.labels import labels
 
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
-
-def ddp_setup(rank, world_size): 
-    """
-    Args:
-        rank: Unique identifier of each process(gpu)
-        world_size: Total number of processes(gpus)
-    """
-    os.environ["MASTER_ADDR"] = "127.0.0.1" ## master since only one machine(node) we are using which have multiple processes (gpus) in it
-    os.environ["MASTER_PORT"] = "29501" ## change the port, when one port is filled up
-    init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
-    torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
 
 
 def get_model(in_channels: int = 3, out_channels: int = 19):
@@ -57,7 +43,18 @@ def get_model(in_channels: int = 3, out_channels: int = 19):
     )
     return UNet2DModel(block_out_channels=block_out_channels,out_channels=out_channels, in_channels=in_channels, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
-def label_img_to_color(img): 
+
+def label_img_to_color(img, convert_to_train_id = False): 
+
+    if convert_to_train_id: # conversion from id 
+            id2train_id = {label.id: label.trainId  for label in labels}    
+            for k in range(34): # k is an instance of id
+                img[img==k] = id2train_id[k]
+        
+    ## can also use this below one to form color from train_ids
+    # label_to_color = {label.trainId: label.color  for label in labels}  
+    # label_to_color[255] = [0,0,0]
+    
     label_to_color = {
         0: [128, 64,128],
         1: [244, 35,232],
@@ -78,7 +75,7 @@ def label_img_to_color(img):
         16: [  0, 80,100],
         17: [  0,  0,230],
         18: [119, 11, 32],
-        19: [0,  0, 0] 
+        255: [0,  0, 0] 
         } 
     img = np.array(img.squeeze()) 
     img_height, img_width = img.shape
@@ -89,75 +86,103 @@ def label_img_to_color(img):
             img_color[row, col] = np.array(label_to_color[label])  
     return img_color
 
-## building custom dataset for x1 of alpha blending procedure 
+## building custom dataset for auto-encoding process 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self,gt_dir, suffix, lb_transform = None, mode = 'train'):
-        suffix = '_gtFine_labelTrainIds.png' 
-        self.gt_dir = gt_dir + mode  
-        self.lb_transform = lb_transform 
-        self.label_list = []
-        self.img_list = []
+    def __init__(self, root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , mode: str = 'train', lb_transform = None, img_transform = None): 
         
-        for root, dirs, files in os.walk(self.gt_dir, topdown=False):
-            for name in tqdm(sorted(files)):
-                path = os.path.join(root, name)
-                if path.find(suffix)!=-1:
-                    self.label_list.append(path) 
-                    img_path = path.replace('/gtFine/','/leftImg8bit/').replace('_gtFine_labelTrainIds.png','_leftImg8bit.png')
-                    self.img_list.append(img_path)
+        self.img_list = [] 
+        self.pred_list = []
+        self.gt_list = []
+        self.lb_transform = lb_transform 
+        self.img_transform = img_transform
+    
+        if mode == 'train': ## perturbed cityscapes (with random erasing) 
+            self.img_dir = os.path.join(root_folder, img_dir, 'custom_train') 
+            self.pred_dir = os.path.join(root_folder, pred_dir, 'custom_train') 
+            self.gt_dir = os.path.join(root_folder, gt_dir, 'train') 
+
+            for root, dirs, files in os.walk(self.gt_dir, topdown=False):
+                for name in tqdm(sorted(files)):
+                    path = os.path.join(root, name)
+                    if path.find(suffix)!=-1:
+                        self.gt_list.append(path)   
+                        self.pred_list.append(os.path.join(self.pred_dir, name))
+                        self.img_list.append(os.path.join(self.img_dir, name))
+            
+
+        elif mode == 'val': ## darkzurich val images (never seen by segformerb2)
+            self.img_dir = os.path.join(root_folder, img_dir, 'dz_val') 
+            self.pred_dir = os.path.join(root_folder, pred_dir, 'dz_val')
+            self.gt_dir = os.path.join(root_folder, gt_dir, 'dz_val') 
+            
+            self.gt_list = [os.path.join(self.gt_dir, path) for path in sorted(os.listdir(self.gt_dir))]
+            self.pred_list = [os.path.join(self.pred_dir, path) for path in sorted(os.listdir(self.pred_dir))]
+            self.img_list = [os.path.join(self.img_dir, path) for path in sorted(os.listdir(self.img_dir))] 
+
 
         if mode == 'train':
-            assert len(self.label_list) == 2975 == len(self.img_list)
+            assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 2975
         elif mode == 'val':
-            assert len(self.label_list) == 500 == len(self.img_list)
+            assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 50
         else:
             raise Exception('mode has to be either train or val')
 
     def __len__(self):
-        return len(self.label_list) 
+        return len(self.gt_list) 
     
     def __getitem__(self, index):
 
-        img_path = self.img_list[index]
+        ## for auto-encoding only gt and pred labels to be used 
 
-        label_path = self.label_list[index]  
-        label = torch.from_numpy(np.array(Image.open(label_path)))
-        if self.lb_transform: 
-            label = self.lb_transform(label.unsqueeze(dim=0))
+        ## gt is discrete label map, to be used in CE loss 
+        gt_path = self.gt_list[index]  
+        gt = torch.from_numpy(np.array(Image.open(gt_path))) 
+
+        ## currently pred is discrete single channel image but it is required to be in color RGB version!
+        pred_path = self.pred_list[index] 
+        pred = torch.from_numpy(np.array(Image.open(pred_path)))   
+
+        if self.lb_transform: ## resizing similar to resolution at which segformer was trained  
+            gt = self.lb_transform(gt.unsqueeze(dim=0))
+            pred = self.lb_transform(pred.unsqueeze(dim=0)) 
         
-        return label, img_path
+        ## convert pred into RGB  
+        pred = torch.tensor(label_img_to_color(pred, convert_to_train_id=True))
+        if self.img_transform:
+            pred = self.img_transform(pred)
+        
+        return pred, gt, prepare_dataloader
 
 
-class MyEnsemble(nn.Module): 
-    def __init__(self, embed_dim) -> None:
+class Myautoencoder(nn.Module): 
+    def __init__(self, in_channels: int = 3, out_channels: int = 19) -> None:
         super().__init__() 
-        self.denoising_model = get_model(embed_dim)
-        self.combining_condition_model = ConvModule(
-            embed_dim * 2,
-            embed_dim,
-            1,
-            padding=0,
-            conv_cfg=None,
-            norm_cfg=None,
-            act_cfg=None
-        )
-        
-    def forward(self, conditional_feats, alphas):
-        conditional_feats = self.combining_condition_model(conditional_feats)
-        d = self.denoising_model(conditional_feats, alphas)['sample']
-        return d 
+        self.autoencoder = get_model(in_channels=in_channels, out_channels=out_channels)
+
+    def forward(self, pred):
+        reconstructs = self.autoencoder(pred)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
+        return reconstructs 
 
 
-def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/", suffix= "_gtFine_labelTrainIds.png" , num_classes = 19, resize_shape: tuple = (512, 1024)): 
+def load_train_val_objs(root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024)): 
 
+    ## transforms for gt and predictions 
     lb_transform = transforms.Compose([ 
         transforms.Resize(resize_shape, interpolation=InterpolationMode.NEAREST)
     ])
-    train_set =  custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode='train')# loading training dataset
-    val_set = custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode = 'val')
+    ## transformations that could be done in label-rgb image (predictions)
+    img_transform = transforms.Compose([
+        transforms.ToTensor() 
+    ])
+
+    ## datasets form
+    train_set = custom_cityscapes_labels(root_folder, pred_dir, gt_dir, img_dir, suffix, mode='train', lb_transform=lb_transform, img_transform=img_transform)
+    val_set = custom_cityscapes_labels(root_folder, pred_dir, gt_dir, img_dir, suffix, mode='val', lb_transform=lb_transform, img_transform=img_transform)
+
+    model = Myautoencoder(in_channels=3, out_channels=num_classes) 
     
-    model = MyEnsemble(embed_dim=num_classes)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
     return train_set, val_set, model, optimizer
 
 
@@ -166,8 +191,8 @@ def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of w
         dataset,
         batch_size=batch_size,
         pin_memory=True,
-        shuffle=False,
-        sampler=DistributedSampler(dataset)
+        shuffle=True,
+        num_workers=4 ## use when not using DDP based training 
     )
 
 
@@ -181,33 +206,24 @@ class Trainer:
                 checkpoint_dir: str,
                 num_classes: int, 
                 save_imgs_dir: str, 
-                nb_steps: int, 
-                gpu_id: int, 
-                shared_softmax_logits_to_correct_train: dict, 
-                shared_softmax_logits_to_correct_val: dict) -> None: 
+                device: torch.device) -> None: 
         
-        self.gpu_id = gpu_id
+        self.gpu_id = device
         self.model = model.to(self.gpu_id) 
         self.train_data = train_data 
         self.val_data = val_data 
         self.optimizer = optimizer
         self.save_every = save_every 
         self.checkpoint_dir = checkpoint_dir
-        self.epochs_run = 0
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
-        self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
-        self.nb_steps = nb_steps
-        self.softmax_logits_to_correct_train = shared_softmax_logits_to_correct_train
-        self.softmax_logits_to_correct_val = shared_softmax_logits_to_correct_val
-        
-        
+              
 
-    def _run_batch(self, conditional_feats, alphas, mask, targets):
+    def _run_batch(self, pred, target):
         self.optimizer.zero_grad()
-        output = self.model(conditional_feats, alphas)
-        loss = torch.sum((output - targets)[mask]**2) # targets as (x1-x0)  
+        output = self.model(pred) ## 19 channel logits for calculating CE loss  
+        loss = F.cross_entropy(output, target.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
         loss.backward()
         self.optimizer.step()
     
@@ -215,40 +231,11 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         self.train_data.sampler.set_epoch(epoch)
-        for gt_labels, img_paths in self.train_data:
+        for pred, gt in self.train_data:
+            self._run_batch(pred=pred, target=gt) 
 
-            #creating mask where 1 is for non-ignored labels, 0 for ignored labels
-            mask = (gt_labels != 255) # B, 1, H, W 
-            mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
-
-            ## random foreground class label for background in GTs
-            gt_labels[gt_labels == 255] = torch.randint(0, self.num_classes, (1,)).item() 
-            
-            ## >>x1 being the target distribution<< 
-            x1 = F.one_hot(gt_labels.squeeze().long(), self.num_classes) # consist only foreground labels
-            x1 = x1.permute(0,3,1,2).to(self.gpu_id) 
-
-            ## x0 being the stationary distribution! 
-            x0 = torch.randn_like(x1.float()) 
-
-            ## similar to what IADB have defined
-            targets = (x1 - x0)
-
-            ## alpha blending taking place between x0 (not conditional feats!) and x1 
-            alphas = torch.rand(b_sz).to(self.gpu_id)
-            x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
-            
-            ## our way :: to use pre-defined conditioning :: segformerb2 softmax-logits
-            pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_train[path]) for path in img_paths] 
-            pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19   
-
-            ## similar to DDP -- condition input ## have to put input RGB image here or RGB extracted features <<<< 
-            conditional_feats = torch.cat([pred_labels_emdb, x_alphas], dim=1)  
-            self._run_batch(conditional_feats, alphas, mask, targets) 
-
-            
     def _save_checkpoint(self, epoch, save_best = False):
-        checkpoint = self.model.module.state_dict()
+        checkpoint = self.model.state_dict()
         if save_best:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'best_checkpoint.pt')
             torch.save(checkpoint, checkpoint_path)
@@ -259,45 +246,9 @@ class Trainer:
             print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}")
 
 
-    def _sample_conditional_seg_iadb(self, gt_label, img_path):
-        with torch.no_grad(): 
-            self.model = self.model.eval()
-
-            ## predictions of segformerb2 as the conditions
-            pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_val[path]) for path in img_path] # conditioning softmax prediciton
-            pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19    
-
-            ## x0 as the stationary distribution 
-            x0 = torch.randn_like(pred_labels_emdb) ## sort of logits 
-            
-            ## now deblending starts: 
-            x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
-            for t in tqdm(range(self.nb_steps)):
-                alpha_start = (t/self.nb_steps)
-                alpha_end =((t+1)/self.nb_steps)
-
-                ## conditional input 
-                conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
-            
-                ## this is giving ~ (\bar_{x1} - \bar{x0})
-                d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id)) 
-                
-                ## reaching x1 by finding neighbouring x_alphas
-                x_alpha = x_alpha + (alpha_end-alpha_start)*d
-
-            approx_x1_sample_softmax = F.softmax(x_alpha, dim=1)
-            approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
-            ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
-
-            val_batch_loss = F.cross_entropy(x_alpha, gt_label.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
-
-            return approx_x1_sample, val_batch_loss
-
-        
-
     def _run_val_sampling(self, epoch):
-        print('In Sampling at epoch:' + str(epoch)) 
-        save_imgs_dir_ep = os.path.join(self.save_imgs_dir, 'mask_loss_' + str(epoch))
+        print('Inference at epoch:' + str(epoch)) 
+        save_imgs_dir_ep = os.path.join(self.save_imgs_dir, str(epoch))
         if not os.path.exists(save_imgs_dir_ep):
             os.makedirs(save_imgs_dir_ep) 
         
@@ -305,10 +256,16 @@ class Trainer:
         self.val_data.sampler.set_epoch(epoch)
         val_epoch_loss = 0.0  # Initialize the cumulative loss for the epoch
         prog_bar = mmcv.ProgressBar(len(self.val_data))
-        for gt_label, img_path in self.val_data:
-            approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(gt_label, img_path)  
-            save_path = os.path.join(save_imgs_dir_ep, img_path[0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
-            approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
+        for pred, gt, pred_path in self.val_data:
+            with torch.no_grad(): 
+                self.model = self.model.eval()
+                output = self.model(pred)
+                val_batch_loss = F.cross_entropy(output, gt.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
+                
+            output_softmax =  F.softmax(output, dim=1)
+            output_sample = torch.argmax(output_softmax, dim=1)
+            save_path = os.path.join(save_imgs_dir_ep, pred_path.split('/')[-1])
+            approx_x1_sample_color = Image.fromarray(label_img_to_color(output_sample.detach().cpu()))
             approx_x1_sample_color.save(save_path)
             # Accumulate batch loss to epoch loss
             val_epoch_loss += val_batch_loss.item()
@@ -320,9 +277,9 @@ class Trainer:
         
 
     def train(self, max_epochs: int):
-        for epoch in range(self.epochs_run, max_epochs):
+        for epoch in range(max_epochs):
             self._run_epoch(epoch)
-            if self.gpu_id == 0 and epoch % self.save_every == 0: ## for gpu_id = 0, since We only need to save model checkpoints from one process.
+            if epoch % self.save_every == 0:
                 self._save_checkpoint(epoch)
                 print('Model updated! : current model saved for epoch: ' + str(epoch))
 
@@ -333,33 +290,33 @@ class Trainer:
                     print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, shared_softmax_logits_to_correct_train: dict, shared_softmax_logits_to_correct_val: dict):
-  
-    ddp_setup(rank, world_size) 
-    train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
+def main():
+    resize_shape = (1024, 1024) 
+    save_every = 25
+    total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
+    num_classes = 19 ## only considering foreground labels 
+    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/semantic_map_autoencoder/dz_val'
+    root_folder = '/home/guest/scratch/siddharth/data/dataset/cityscapes/'
+    pred_dir = 'pred/segformerb2'
+    gt_dir = 'gtFine'
+    suffix = '_gtFine_labelTrainIds.png'
+    img_dir = 'leftImg8bit' 
+    batch_size = 4
+    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val' 
+    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu") 
+
+    train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank, shared_softmax_logits_to_correct_train, shared_softmax_logits_to_correct_val
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, device
     )
     trainer.train(total_epochs)
-    destroy_process_group()
+
 
 if __name__ == '__main__':
-    resize_shape = (256, 512) ## testing with lower dimension, for checking its working
-    save_every = 25
-    total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
-    nb_steps = 128 ## similar to IADB 
-    num_classes = 19 ## only considering foreground labels 
-    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/mask_loss_iadb_cond_seg/result_val_images'
-    gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
-    suffix = '_gtFine_labelTrainIds.png'
-    batch_size = 4
-    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
+    main()
+    
 
-    # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
-    world_size = torch.cuda.device_count()
-    print('world size is: ', world_size)  
-
-    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, shared_softmax_logits_to_correct_train,shared_softmax_logits_to_correct_val, ), nprocs=world_size)
+    

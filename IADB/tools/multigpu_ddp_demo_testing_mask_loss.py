@@ -159,7 +159,7 @@ class MyEnsemble(nn.Module):
         
     def forward(self, conditional_feats, alphas):
         conditional_feats = self.combining_condition_model(conditional_feats)
-        d = self.denoising_model(conditional_feats, alphas)['sample']
+        d = self.denoising_model(conditional_feats, alphas)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
         return d 
 
 
