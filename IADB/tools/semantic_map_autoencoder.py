@@ -12,7 +12,6 @@ from PIL import Image
 import numpy as np
 from  torchvision.transforms.functional import InterpolationMode
 import torch.nn.functional as F 
-from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
 import torch.nn as nn
@@ -88,7 +87,7 @@ def label_img_to_color(img, convert_to_train_id = False):
 
 ## building custom dataset for auto-encoding process 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , mode: str = 'train', lb_transform = None, img_transform = None): 
+    def __init__(self, root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_labelTrainIds.png' , mode: str = 'train', lb_transform = None, img_transform = None): 
         
         self.img_list = [] 
         self.pred_list = []
@@ -109,17 +108,17 @@ class custom_cityscapes_labels(Dataset):
                         self.pred_list.append(os.path.join(self.pred_dir, name))
                         self.img_list.append(os.path.join(self.img_dir, name))
             
-
         elif mode == 'val': ## darkzurich val images (never seen by segformerb2)
             self.img_dir = os.path.join(root_folder, img_dir, 'dz_val') 
             self.pred_dir = os.path.join(root_folder, pred_dir, 'dz_val')
             self.gt_dir = os.path.join(root_folder, gt_dir, 'dz_val') 
-            
-            self.gt_list = [os.path.join(self.gt_dir, path) for path in sorted(os.listdir(self.gt_dir))]
-            self.pred_list = [os.path.join(self.pred_dir, path) for path in sorted(os.listdir(self.pred_dir))]
-            self.img_list = [os.path.join(self.img_dir, path) for path in sorted(os.listdir(self.img_dir))] 
 
-
+            for path in sorted(os.listdir(self.gt_dir)):
+                if path.find(suffix)!=-1:
+                    self.gt_list.append(os.path.join(self.gt_dir, path)) 
+                    self.pred_list.append(os.path.join(self.pred_dir, path))
+                    self.img_list.append(os.path.join(self.img_dir, path))
+             
         if mode == 'train':
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 2975
         elif mode == 'val':
