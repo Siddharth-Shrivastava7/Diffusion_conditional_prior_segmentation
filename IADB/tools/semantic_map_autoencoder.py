@@ -229,7 +229,7 @@ class Trainer:
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
-        for pred, gt in self.train_data:
+        for pred, gt, _ in self.train_data:
             self._run_batch(pred=pred, target=gt) 
 
     def _save_checkpoint(self, epoch, save_best = False):
