@@ -117,8 +117,8 @@ class custom_cityscapes_labels(Dataset):
                 if path.find(suffix)!=-1:
                     self.gt_list.append(os.path.join(self.gt_dir, path)) 
                     self.pred_list.append(os.path.join(self.pred_dir, path))
-                    self.img_list.append(os.path.join(self.img_dir, path))
-             
+                    self.img_list.append(os.path.join(self.img_dir, path)) 
+
         if mode == 'train':
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 2975
         elif mode == 'val':
@@ -298,7 +298,7 @@ def main():
     root_folder = '/home/guest/scratch/siddharth/data/dataset/cityscapes/'
     pred_dir = 'pred/segformerb2'
     gt_dir = 'gtFine'
-    suffix = '_gtFine_labelTrainIds.png'
+    suffix = '_labelTrainIds.png'
     img_dir = 'leftImg8bit' 
     batch_size = 4
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val' 
