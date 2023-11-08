@@ -347,8 +347,6 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
     destroy_process_group()
 
 if __name__ == '__main__':
-    to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
-    to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
     resize_shape = (256, 512) ## testing with lower dimension, for checking its working
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
@@ -364,8 +362,4 @@ if __name__ == '__main__':
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)  
 
-    with mp.Manager() as manager: 
-        shared_softmax_logits_to_correct_train = manager.dict(softmax_logits_to_correct_train)
-        shared_softmax_logits_to_correct_val = manager.dict(softmax_logits_to_correct_val)
-
-        mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, shared_softmax_logits_to_correct_train,shared_softmax_logits_to_correct_val, ), nprocs=world_size)
+    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, shared_softmax_logits_to_correct_train,shared_softmax_logits_to_correct_val, ), nprocs=world_size)
