@@ -146,11 +146,11 @@ class custom_cityscapes_labels(Dataset):
             pred = self.lb_transform(pred.unsqueeze(dim=0)) 
         
         ## convert pred into RGB  
-        pred = torch.tensor(label_img_to_color(pred, convert_to_train_id=True))
+        pred = label_img_to_color(pred, convert_to_train_id=True)
         if self.img_transform:
             pred = self.img_transform(pred)
         
-        return pred, gt, prepare_dataloader
+        return pred, gt, pred_path
 
 
 class Myautoencoder(nn.Module): 
@@ -159,8 +159,8 @@ class Myautoencoder(nn.Module):
         self.autoencoder = get_model(in_channels=in_channels, out_channels=out_channels)
 
     def forward(self, pred):
-        reconstructs = self.autoencoder(pred)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
-        return reconstructs 
+        reconstruct = self.autoencoder(pred)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
+        return reconstruct
 
 
 def load_train_val_objs(root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024)): 
@@ -229,7 +229,6 @@ class Trainer:
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
-        self.train_data.sampler.set_epoch(epoch)
         for pred, gt in self.train_data:
             self._run_batch(pred=pred, target=gt) 
 
@@ -252,7 +251,6 @@ class Trainer:
             os.makedirs(save_imgs_dir_ep) 
         
         val_b_sz = len(next(iter(self.val_data))[0]) # val batch size ## here taking it as 1
-        self.val_data.sampler.set_epoch(epoch)
         val_epoch_loss = 0.0  # Initialize the cumulative loss for the epoch
         prog_bar = mmcv.ProgressBar(len(self.val_data))
         for pred, gt, pred_path in self.val_data:
