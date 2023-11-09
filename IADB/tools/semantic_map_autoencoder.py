@@ -300,7 +300,7 @@ def main():
     gt_dir = 'gtFine'
     suffix = '_labelTrainIds.png'
     img_dir = 'leftImg8bit' 
-    batch_size = 12
+    batch_size = 8 ## batch size 12 in latent diffusion model, but here getting out of memory, so reducing for now, later will try to make it 12
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val' 
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu") 
 
