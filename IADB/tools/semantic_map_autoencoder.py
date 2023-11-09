@@ -263,7 +263,7 @@ class Trainer:
                 
             output_softmax =  F.softmax(output, dim=1)
             output_sample = torch.argmax(output_softmax, dim=1)
-            save_path = os.path.join(save_imgs_dir_ep, pred_path.split('/')[-1])
+            save_path = os.path.join(save_imgs_dir_ep, pred_path[0].split('/')[-1])
             approx_x1_sample_color = Image.fromarray(label_img_to_color(output_sample.detach().cpu()))
             approx_x1_sample_color.save(save_path)
             # Accumulate batch loss to epoch loss
