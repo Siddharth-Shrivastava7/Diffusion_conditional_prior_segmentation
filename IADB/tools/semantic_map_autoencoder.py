@@ -223,7 +223,7 @@ class Trainer:
 
     def _run_batch(self, pred, target):
         self.optimizer.zero_grad()
-        output, posterior = self.model(pred) ## 19 channel logits for calculating CE loss  
+        output, posterior = self.model(pred.to(self.gpu_id)) ## 19 channel logits for calculating CE loss  
         loss = F.cross_entropy(output, target.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
         loss.backward()
         self.optimizer.step()
@@ -258,7 +258,7 @@ class Trainer:
         for pred, gt, pred_path in self.val_data:
             with torch.no_grad(): 
                 self.model = self.model.eval()
-                output = self.model(pred)
+                output = self.model(pred.to(self.gpu_id))
                 val_batch_loss = F.cross_entropy(output, gt.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
                 
             output_softmax =  F.softmax(output, dim=1)
