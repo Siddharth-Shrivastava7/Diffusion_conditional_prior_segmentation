@@ -140,7 +140,7 @@ class Myautoencoder(nn.Module):  ## inspired from latent diffusion model paper
         self.z_channels = 3
         self.embed_dim = 3
         self.encoder = Encoder(z_channels=self.z_channels, num_res_blocks=2, in_channels=in_channels, attn_resolutions= [ ], ch=128, ch_mult=[1,2,4], dropout=0.0, double_z=True, out_ch=out_channels, resolution=256) 
-        self.decoder = Decoder(out_ch=out_channels, resolution=256,z_channels=3 ,num_res_blocks=2, attn_resolutions=[ ], dropout=0.0, ch=128, ch_mult=[1,2,4])
+        self.decoder = Decoder(out_ch=out_channels, resolution=256,z_channels=3 ,num_res_blocks=2, attn_resolutions=[ ], dropout=0.0, ch=128, ch_mult=[1,2,4], in_channels=in_channels)
         self.quant_conv = torch.nn.Conv2d(2*self.z_channels, 2*self.embed_dim,1) 
         self.post_quant_conv = torch.nn.Conv2d(self.embed_dim, self.z_channels, 1)
 
