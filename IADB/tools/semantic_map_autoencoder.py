@@ -4,7 +4,6 @@
 import os
 import torch
 from torchvision import transforms
-from diffusers import UNet2DModel
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
@@ -21,26 +20,8 @@ from cityscapesscripts.helpers.labels import labels
 
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
+from semanticmodules import Encoder, Decoder, DiagonalGaussianDistribution
 
-def get_model(in_channels: int = 3, out_channels: int = 19):
-    block_out_channels=(128, 128, 256, 256, 512, 512)
-    down_block_types=( 
-        "DownBlock2D",  # a regular ResNet downsampling block
-        "DownBlock2D", 
-        "DownBlock2D", 
-        "DownBlock2D",  
-        "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
-        "DownBlock2D",
-    )
-    up_block_types=(
-        "UpBlock2D",  # a regular ResNet upsampling block
-        "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
-        "UpBlock2D", 
-        "UpBlock2D", 
-        "UpBlock2D", 
-        "UpBlock2D"  
-    )
-    return UNet2DModel(block_out_channels=block_out_channels,out_channels=out_channels, in_channels=in_channels, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
 
 def label_img_to_color(img, convert_to_train_id = False): 
@@ -153,14 +134,35 @@ class custom_cityscapes_labels(Dataset):
         return pred, gt, pred_path
 
 
-class Myautoencoder(nn.Module): 
+class Myautoencoder(nn.Module):  ## inspired from latent diffusion model paper
     def __init__(self, in_channels: int = 3, out_channels: int = 19) -> None:
         super().__init__() 
-        self.autoencoder = get_model(in_channels=in_channels, out_channels=out_channels)
+        self.z_channels = 3
+        self.embed_dim = 3
+        self.encoder = Encoder(z_channels=self.z_channels, num_res_blocks=2, in_channels=in_channels, attn_resolutions= [ ], ch=128, ch_mult=[1,2,4], dropout=0.0, double_z=True) 
+        self.decoder = Decoder(out_ch=out_channels, resolution=256,z_channels=3 ,num_res_blocks=2, attn_resolutions=[ ], dropout=0.0, ch=128, ch_mult=[1,2,4])
+        self.quant_conv = torch.nn.Conv2d(2*self.z_channels, 2*self.embed_dim,1) 
+        self.post_quant_conv = torch.nn.Conv2d(self.embed_dim, self.z_channels, 1)
 
-    def forward(self, pred):
-        reconstruct = self.autoencoder(pred)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
-        return reconstruct
+    def encode(self, x):
+        h = self.encoder(x) 
+        moments = self.quant_conv(h)
+        posterior = DiagonalGaussianDistribution(moments) 
+        return posterior 
+
+    def decode(self, z):
+        z = self.post_quant_conv(z) 
+        dec = self.decoder(z)
+        return dec
+
+    def forward(self, input, sample_posterior = True): 
+        posterior = self.encode(input) 
+        if sample_posterior:
+            z = posterior.sample() 
+        else: 
+            z = posterior.mode() 
+        dec = self.decode(z)
+        return dec, posterior
 
 
 def load_train_val_objs(root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024)): 
@@ -174,7 +176,7 @@ def load_train_val_objs(root_folder: str = '/home/guest/scratch/siddharth/data/d
         transforms.ToTensor() 
     ])
 
-    ## datasets form
+    ## datasets from
     train_set = custom_cityscapes_labels(root_folder, pred_dir, gt_dir, img_dir, suffix, mode='train', lb_transform=lb_transform, img_transform=img_transform)
     val_set = custom_cityscapes_labels(root_folder, pred_dir, gt_dir, img_dir, suffix, mode='val', lb_transform=lb_transform, img_transform=img_transform)
 
@@ -221,7 +223,7 @@ class Trainer:
 
     def _run_batch(self, pred, target):
         self.optimizer.zero_grad()
-        output = self.model(pred) ## 19 channel logits for calculating CE loss  
+        output = self.model(pred, ) ## 19 channel logits for calculating CE loss  
         loss = F.cross_entropy(output, target.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
         loss.backward()
         self.optimizer.step()
@@ -288,7 +290,7 @@ class Trainer:
                 
 
 def main():
-    resize_shape = (1024, 1024) 
+    resize_shape = (256, 256)  # once for testing latent diffusion code then later will need to change to (1024, 1024) dimension or any other higher resolution
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     num_classes = 19 ## only considering foreground labels 
@@ -298,9 +300,9 @@ def main():
     gt_dir = 'gtFine'
     suffix = '_labelTrainIds.png'
     img_dir = 'leftImg8bit' 
-    batch_size = 4
+    batch_size = 12
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val' 
-    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu") 
+    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu") 
 
     train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
