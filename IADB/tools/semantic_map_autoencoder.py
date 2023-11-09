@@ -223,7 +223,7 @@ class Trainer:
 
     def _run_batch(self, pred, target):
         self.optimizer.zero_grad()
-        output = self.model(pred, ) ## 19 channel logits for calculating CE loss  
+        output, posterior = self.model(pred) ## 19 channel logits for calculating CE loss  
         loss = F.cross_entropy(output, target.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
         loss.backward()
         self.optimizer.step()
