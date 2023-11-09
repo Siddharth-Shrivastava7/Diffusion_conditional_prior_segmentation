@@ -231,7 +231,7 @@ class Trainer:
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
-        for pred, gt, _ in self.train_data:
+        for pred, gt, _ in tqdm(self.train_data):
             self._run_batch(pred=pred, target=gt) 
 
     def _save_checkpoint(self, epoch, save_best = False):
@@ -258,7 +258,7 @@ class Trainer:
         for pred, gt, pred_path in self.val_data:
             with torch.no_grad(): 
                 self.model = self.model.eval()
-                output = self.model(pred.to(self.gpu_id))
+                output, posterior = self.model(pred.to(self.gpu_id))
                 val_batch_loss = F.cross_entropy(output, gt.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
                 
             output_softmax =  F.softmax(output, dim=1)
@@ -276,7 +276,7 @@ class Trainer:
         
 
     def train(self, max_epochs: int):
-        for epoch in range(max_epochs):
+        for epoch in tqdm(range(max_epochs)):
             self._run_epoch(epoch)
             if epoch % self.save_every == 0:
                 self._save_checkpoint(epoch)
