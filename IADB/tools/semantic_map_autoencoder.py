@@ -101,7 +101,6 @@ class custom_cityscapes_labels(Dataset):
                     self.img_list.append(os.path.join(self.img_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png'))) 
 
         if mode == 'train':
-            print('**********', len(self.gt_list), len(self.img_list), len(self.pred_list))
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 2975
         elif mode == 'val':
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 50
