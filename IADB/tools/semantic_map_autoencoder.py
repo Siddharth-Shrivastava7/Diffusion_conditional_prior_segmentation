@@ -68,7 +68,7 @@ def label_img_to_color(img, convert_to_train_id = False):
 
 ## building custom dataset for auto-encoding process 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self, root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_labelTrainIds.png' , mode: str = 'train', lb_transform = None, img_transform = None): 
+    def __init__(self, root_folder: str = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_labelTrainIds.png' , mode: str = 'train', lb_transform = None, img_transform = None): 
         
         self.img_list = [] 
         self.pred_list = []
@@ -101,6 +101,7 @@ class custom_cityscapes_labels(Dataset):
                     self.img_list.append(os.path.join(self.img_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png'))) 
 
         if mode == 'train':
+            print('**********', len(self.gt_list), len(self.img_list), len(self.pred_list))
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 2975
         elif mode == 'val':
             assert len(self.gt_list) == len(self.img_list) == len(self.pred_list) == 50
@@ -165,7 +166,7 @@ class Myautoencoder(nn.Module):  ## inspired from latent diffusion model paper
         return dec, posterior
 
 
-def load_train_val_objs(root_folder: str = '/home/guest/scratch/siddharth/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024)): 
+def load_train_val_objs(root_folder: str = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024), resume_from: bool= False, checkpoint_dir: str = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val'): 
 
     ## transforms for gt and predictions 
     lb_transform = transforms.Compose([ 
@@ -181,6 +182,10 @@ def load_train_val_objs(root_folder: str = '/home/guest/scratch/siddharth/data/d
     val_set = custom_cityscapes_labels(root_folder, pred_dir, gt_dir, img_dir, suffix, mode='val', lb_transform=lb_transform, img_transform=img_transform)
 
     model = Myautoencoder(in_channels=3, out_channels=num_classes) 
+    if resume_from:
+        print('loading previous trained model and starting training from there')
+        checkpoint = torch.load(os.path.join(checkpoint_dir, 'current_checkpoint.pt'))
+        model.load_state_dict(checkpoint['model_state_dict'])
     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
@@ -238,11 +243,11 @@ class Trainer:
         checkpoint = self.model.state_dict()
         if save_best:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'best_checkpoint.pt')
-            torch.save(checkpoint, checkpoint_path)
+            torch.save(checkpoint.state_dict(), checkpoint_path)
             print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}") 
         else:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'current_checkpoint.pt')
-            torch.save(checkpoint, checkpoint_path)
+            torch.save(checkpoint.state_dict(), checkpoint_path)
             print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}")
 
 
@@ -294,15 +299,15 @@ def main():
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     num_classes = 19 ## only considering foreground labels 
-    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/semantic_map_autoencoder/dz_val'
-    root_folder = '/home/guest/scratch/siddharth/data/dataset/cityscapes/'
+    save_imgs_dir = '/home/sit/phd/anz208849/scratch/data/results/semantic_map_autoencoder/dz_val'
+    root_folder = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/'
     pred_dir = 'pred/segformerb2'
     gt_dir = 'gtFine'
     suffix = '_labelTrainIds.png'
     img_dir = 'leftImg8bit' 
     batch_size = 8 ## batch size 12 in latent diffusion model, but here getting out of memory, so reducing for now, later will try to make it 12
-    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val' 
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu") 
+    checkpoint_dir = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val' 
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu") 
 
     train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
