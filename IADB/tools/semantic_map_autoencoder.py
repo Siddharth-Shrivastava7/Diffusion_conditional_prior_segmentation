@@ -242,11 +242,11 @@ class Trainer:
         checkpoint = self.model.state_dict()
         if save_best:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'best_checkpoint.pt')
-            torch.save(checkpoint.state_dict(), checkpoint_path)
+            torch.save(checkpoint, checkpoint_path)
             print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}") 
         else:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'current_checkpoint.pt')
-            torch.save(checkpoint.state_dict(), checkpoint_path)
+            torch.save(checkpoint, checkpoint_path)
             print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}")
 
 
