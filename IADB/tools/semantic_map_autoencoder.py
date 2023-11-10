@@ -165,7 +165,7 @@ class Myautoencoder(nn.Module):  ## inspired from latent diffusion model paper
         return dec, posterior
 
 
-def load_train_val_objs(root_folder: str = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024), resume_from: bool= False, checkpoint_dir: str = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val'): 
+def load_train_val_objs(root_folder: str = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024), checkpoint_dir: str = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val', device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"), resume_from: bool= False): 
 
     ## transforms for gt and predictions 
     lb_transform = transforms.Compose([ 
@@ -183,9 +183,9 @@ def load_train_val_objs(root_folder: str = '/home/sit/phd/anz208849/scratch/data
     model = Myautoencoder(in_channels=3, out_channels=num_classes) 
     if resume_from:
         print('loading previous trained model and starting training from there')
-        checkpoint = torch.load(os.path.join(checkpoint_dir, 'current_checkpoint.pt'))
-        model.load_state_dict(checkpoint['model_state_dict'])
-    
+        checkpoint = torch.load(os.path.join(checkpoint_dir, 'current_checkpoint.pt'), map_location=device)
+        model.load_state_dict(checkpoint) ## the recommended way (given by pytorch) of loading models!
+     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
     return train_set, val_set, model, optimizer
@@ -239,7 +239,7 @@ class Trainer:
             self._run_batch(pred=pred, target=gt) 
 
     def _save_checkpoint(self, epoch, save_best = False):
-        checkpoint = self.model.state_dict()
+        checkpoint = self.model.state_dict() ## the recommeded way (given by pytorch) to save the model!
         if save_best:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'best_checkpoint.pt')
             torch.save(checkpoint, checkpoint_path)
@@ -308,7 +308,7 @@ def main():
     checkpoint_dir = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val' 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## not specifying cuda gpu number cause don't know which one I will get in non-interactive HPC jobs
 
-    train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape)
+    train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape, checkpoint_dir, device, resume_from=True)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
 
