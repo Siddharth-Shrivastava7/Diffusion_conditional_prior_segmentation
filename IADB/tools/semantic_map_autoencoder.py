@@ -306,7 +306,7 @@ def main():
     img_dir = 'leftImg8bit' 
     batch_size = 8 ## batch size 12 in latent diffusion model, but here getting out of memory, so reducing for now, later will try to make it 12
     checkpoint_dir = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val' 
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu") 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## not specifying anything cause don't know which one I will get in non-interactive HPC jobs
 
     train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape)
     train_data = prepare_dataloader(train_set, batch_size)
