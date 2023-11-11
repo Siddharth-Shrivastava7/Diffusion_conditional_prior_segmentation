@@ -238,3 +238,17 @@ Inference at epoch:200
 [GPUcuda] Epoch 204 | Batchsize: 8 | Steps: 372
 [GPUcuda] Epoch 205 | Batchsize: 8 | Steps: 372
 [GPUcuda] Epoch 206 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 207 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 208 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 209 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 210 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 211 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 212 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 213 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 214 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 215 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 216 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 217 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 218 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 219 | Batchsize: 8 | Steps: 372
+[GPUcuda] Epoch 220 | Batchsize: 8 | Steps: 372
