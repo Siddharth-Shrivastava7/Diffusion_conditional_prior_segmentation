@@ -1,0 +1,6 @@
+********** 2975 2975 2975
+making attention of type 'vanilla' with 512 in_channels
+Working with z of shape (1, 3, 64, 64) = 12288 dimensions.
+making attention of type 'vanilla' with 512 in_channels
+[GPUcuda:1] Epoch 0 | Batchsize: 8 | Steps: 372
+2

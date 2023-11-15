@@ -3,6 +3,8 @@ from PIL import Image, ImageEnhance
 import numpy as np 
 from tqdm import tqdm
 
+## this files is using for general use 
+
 def label_img_to_color(img): 
     label_to_color = {
         0: [128, 64,128],

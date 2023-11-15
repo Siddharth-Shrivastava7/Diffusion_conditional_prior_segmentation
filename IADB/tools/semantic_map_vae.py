@@ -165,7 +165,7 @@ class Myautoencoder(nn.Module):  ## inspired from latent diffusion model paper
         return dec, posterior
 
 
-def load_train_val_objs(root_folder: str = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024), checkpoint_dir: str = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val', device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu"), resume_from: bool= False): 
+def load_train_val_objs(root_folder: str = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/', pred_dir: str = 'pred/segformerb2', gt_dir: str = 'gtFine', img_dir:str = 'leftImg8bit' , suffix: str = '_gtFine_labelTrainIds.png' , num_classes = 19, resize_shape: tuple = (1024, 1024), checkpoint_dir: str = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val', device: torch.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), resume_from: bool= False): 
 
     ## transforms for gt and predictions 
     lb_transform = transforms.Compose([ 
@@ -211,7 +211,8 @@ class Trainer:
                 checkpoint_dir: str,
                 num_classes: int, 
                 save_imgs_dir: str, 
-                device: torch.device) -> None: 
+                device: torch.device, 
+                kl_weight: float) -> None: 
         
         self.gpu_id = device
         self.model = model.to(self.gpu_id) 
@@ -223,13 +224,18 @@ class Trainer:
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
         self.save_imgs_dir = save_imgs_dir
+        self.kl_weight = kl_weight
               
 
     def _run_batch(self, pred, target):
         self.optimizer.zero_grad()
         output, posterior = self.model(pred.to(self.gpu_id)) ## 19 channel logits for calculating CE loss  
         loss = F.cross_entropy(output, target.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255)
-        loss.backward()
+        kl_loss = posterior.kl() 
+        kl_loss = torch.sum(kl_loss) / kl_loss.shape[0]
+        total_loss = loss +  self.kl_weight * kl_loss 
+        # loss.backward()
+        total_loss.backward()
         self.optimizer.step()
     
     def _run_epoch(self, epoch):
@@ -298,22 +304,23 @@ def main():
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     num_classes = 19 ## only considering foreground labels 
-    save_imgs_dir = '/home/sit/phd/anz208849/scratch/data/results/semantic_map_autoencoder/dz_val'
+    save_imgs_dir = '/home/sit/phd/anz208849/scratch/data/results/semantic_map_vae/dz_val'
     root_folder = '/home/sit/phd/anz208849/scratch/data/dataset/cityscapes/'
     pred_dir = 'pred/segformerb2'
     gt_dir = 'gtFine'
     suffix = '_labelTrainIds.png'
     img_dir = 'leftImg8bit' 
     batch_size = 8 ## batch size 12 in latent diffusion model, but here getting out of memory, so reducing for now, later will try to make it 12
-    checkpoint_dir = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_autoencoder/dz_val' 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") ## not specifying cuda gpu number cause don't know which one I will get in non-interactive HPC jobs
+    checkpoint_dir = '/home/sit/phd/anz208849/scratch/data/saved_models/semantic_map_vae/dz_val' 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") ## not specifying cuda gpu number cause don't know which one I will get in non-interactive HPC jobs
+    kl_weight = 0.000001 
 
-    train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape, checkpoint_dir, device, resume_from=True)
+    train_set, val_set, model, optimizer = load_train_val_objs(root_folder, pred_dir, gt_dir, img_dir, suffix, num_classes, resize_shape, checkpoint_dir, device, resume_from=False)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, device
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, device, kl_weight
     )
     trainer.train(total_epochs)
 
