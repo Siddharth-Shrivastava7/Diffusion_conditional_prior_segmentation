@@ -22,7 +22,9 @@ import torch.nn as nn
 import torch.multiprocessing as mp 
 from torch.utils.data.distributed import DistributedSampler 
 from torch.nn.parallel import DistributedDataParallel as DDP 
-from torch.distributed import init_process_group, destroy_process_group 
+from torch.distributed import init_process_group, destroy_process_group  
+
+from dino_mod import ViTExtractor
 
 # torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
@@ -172,7 +174,7 @@ def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/city
     val_set = custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode = 'val')
     
     model = MyEnsemble(embed_dim=num_classes)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)    
     return train_set, val_set, model, optimizer
 
 
@@ -216,6 +218,8 @@ class Trainer:
         self.nb_steps = nb_steps
         self.softmax_logits_to_correct_train = shared_softmax_logits_to_correct_train
         self.softmax_logits_to_correct_val = shared_softmax_logits_to_correct_val
+        
+        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=self.gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 3rd/4th level of UNet
         
         
 
@@ -379,7 +383,11 @@ if __name__ == '__main__':
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
-    print('world size is: ', world_size)  
+    print('world size is: ', world_size)   
+    
+    ## image encoding 
+    descriptors = encoder.extract_descriptors(x_.float().cuda())
+    
 
     with mp.Manager() as manager: 
         shared_softmax_logits_to_correct_train = manager.dict(softmax_logits_to_correct_train)

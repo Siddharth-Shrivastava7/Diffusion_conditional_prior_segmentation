@@ -97,9 +97,9 @@ if __name__ == '__main__':
 
     p = {"cond_encoder": "dino_vits8", "dataset_file": "datasets.cityscapes"}
 
-    encoder = ViTExtractor(p["cond_encoder"], stride=8, device="cuda")
-    # x_ = torch.randn(size=(2, 3, 256, 512))
+    encoder = ViTExtractor(p["cond_encoder"], stride=8, device="cuda") # stride of this fitting in one gpu 
+    x_ = torch.randn(size=(2, 3, 256, 512))
     # encoder.model(x.float().cuda()) # (2, 384)
     # stride = 8
-    # descriptors = encoder.extract_descriptors(x_.float().cuda()) # (2, 1, 512, 384) --> torch.Size([2, 384, 32, 64])
-    # torch.save(descriptors, '/home/guest/scratch/siddharth/models/Diffusion_conditional_prior_segmentation/ccdm-stochastic-segmentation_mod/test.pt')
+    descriptors = encoder.extract_descriptors(x_.float().cuda()) # (2, 1, 512, 384) --> torch.Size([2, 384, 32, 64])
+    torch.save(descriptors, '/home/guest/scratch/siddharth/models/Diffusion_conditional_prior_segmentation/IADB/tools/test.pt')
