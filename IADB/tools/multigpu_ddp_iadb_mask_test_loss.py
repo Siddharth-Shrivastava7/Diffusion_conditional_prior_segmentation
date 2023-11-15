@@ -54,12 +54,13 @@ def ddp_setup(rank, world_size):
     torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
 
 
-def get_model(num_classes):
+def get_model(num_classes, conditions: bool = False):
     block_out_channels=(128, 128, 256, 256, 512, 512)
     down_block_types=( 
         "DownBlock2D",  # a regular ResNet downsampling block
         "DownBlock2D", 
         "DownBlock2D", 
+        ## by here have to add the conditional features try to see where to add...those features
         "DownBlock2D",  
         "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
         "DownBlock2D",
