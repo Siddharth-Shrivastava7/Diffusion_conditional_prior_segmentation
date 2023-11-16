@@ -162,7 +162,7 @@ class custom_cityscapes_labels(Dataset):
 
         img_path = self.img_list[index]
         label_path = self.label_list[index] 
-        pred_path = self.pred_path[index]
+        pred_path = self.pred_list[index]
         img = Image.open(img_path) 
         label = torch.from_numpy(np.array(Image.open(label_path)))
         pred = torch.from_numpy(np.array(Image.open(pred_path)))
@@ -277,7 +277,7 @@ class Trainer:
         ## latent semantic map feats
         ## semantic label map autoencoder ## loading the current pretrained model
         self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes) 
-        semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=self.gpu_id)
+        semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=torch.device('cuda:' + str(self.gpu_id)))
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
         
