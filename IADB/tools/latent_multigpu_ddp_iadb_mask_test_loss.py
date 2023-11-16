@@ -282,8 +282,8 @@ class Trainer:
         
         ## latent semantic map feats
         ## semantic label map autoencoder ## loading the current pretrained model
-        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes).to(self.gpu_id) 
-        semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=torch.device('cuda:' + str(self.gpu_id)))
+        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes)
+        semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=torch.device('cpu'))
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
         
@@ -317,7 +317,7 @@ class Trainer:
             mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
             
             ## >>x1 being the target latent distribution<< 
-            x1 = self.semantic_map_autoencoder.encode(label_color.to(self.gpu_id)) 
+            x1 = torch.tensor(self.semantic_map_autoencoder.encode(label_color)).to(self.gpu_id) 
             # x1 = x1.permute(0,3,1,2).to(self.gpu_id) 
 
             ## x0 being the stationary distribution! 
@@ -331,13 +331,13 @@ class Trainer:
             x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
             
             ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
-            self.img_feats = self.img_encoder.extract_descriptors(img.float().to(self.gpu_id)) # B,384,32,32 
+            self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
             self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
             self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
             self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred) # B,3,64,64
 
             ## similar to DDP -- condition input 
-            conditional_feats = torch.cat([self.latent_semantic_map_pred, x_alphas, self.img_feats], dim=1)  
+            conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas, self.img_feats.to(self.gpu_id)], dim=1)  
             self._run_batch(conditional_feats, alphas, mask, targets) 
 
             
@@ -361,13 +361,13 @@ class Trainer:
             self.model = self.model.eval()
             
             ## conditional feats => {latent semantic map pred,  x_alphas(latent_target_trained_model, stationary gaussian, alphas), image feats} 
-            self.img_feats = self.img_encoder.extract_descriptors(img.float().to(self.gpu_id)) # B,384,32,32 
+            self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
             self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
             self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
             self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred) # B,3,64,64
             
             ## x0 as the stationary distribution 
-            x0 = torch.randn_like(self.latent_semantic_map_pred) ## sort of logits 
+            x0 = torch.randn_like(self.latent_semantic_map_pred.to(self.gpu_id)) ## sort of logits 
             
             
             ## now deblending starts: 
@@ -377,7 +377,7 @@ class Trainer:
                 alpha_end =((t+1)/self.nb_steps)
 
                 ## conditional input 
-                conditional_feats = torch.cat([self.latent_semantic_map_pred, x_alpha, self.img_feats], dim=1)
+                conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alpha, self.img_feats.to(self.gpu_id)], dim=1)
             
                 ## this is giving ~ (\bar_{x1} - \bar{x0})
                 d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id)) 
@@ -385,12 +385,12 @@ class Trainer:
                 ## reaching x1 by finding neighbouring x_alphas
                 x_alpha = x_alpha + (alpha_end-alpha_start)*d
 
-            x_alpha_decoded = self.semantic_map_autoencoder.decode(x_alpha) ### decoder to output: (B,19,256,256)
+            x_alpha_decoded = self.semantic_map_autoencoder.decode(x_alpha.detach().cpu()) ### decoder to output: (B,19,256,256)
             approx_x1_sample_softmax = F.softmax(x_alpha_decoded, dim=1)
             approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
             ## for the loss :: between label (x1) and approximated x1 through x_alpha
 
-            val_batch_loss = F.cross_entropy(x_alpha, label.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
+            val_batch_loss = F.cross_entropy(x_alpha, label.long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
 
             return approx_x1_sample, val_batch_loss
 
@@ -409,7 +409,7 @@ class Trainer:
         for img, label, _, pred, pred_path in self.val_data:
             approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(img, label, pred)  
             save_path = os.path.join(save_imgs_dir_ep, pred_path[0].split('/')[-1].replace('_rgb_anon.png', '_predFine_color.png'))
-            approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
+            approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample))
             approx_x1_sample_color.save(save_path)
             # Accumulate batch loss to epoch loss
             val_epoch_loss += val_batch_loss.item()
