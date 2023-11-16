@@ -145,7 +145,6 @@ class custom_cityscapes_labels(Dataset):
             self.pred_dir = os.path.join(self.root_dir,  'pred/segformerb2/dz_val')
             self.gt_dir = os.path.join(self.root_dir,  'gtFine/dz_val') 
             
-            ## TODO from here 
             for path in sorted(os.listdir(self.gt_dir)):
                 if path.find(suffix)!=-1:
                     self.label_list.append(os.path.join(self.gt_dir, path)) 
@@ -185,6 +184,10 @@ class custom_cityscapes_labels(Dataset):
             transforms.ToTensor()])
         pred = pred_transform(pred)
         
+        ## label id to color (RGB)
+        label_color = label_img_to_color(label, convert_to_train_id=True)
+        label_color = pred_transform(label_color)
+        
         ## image transform
         if self.mode == 'train':
             img_transform = transforms.Compose([
@@ -202,7 +205,7 @@ class custom_cityscapes_labels(Dataset):
             ])
         img = img_transform(img)
             
-        return img, label, pred, pred_path
+        return img, label, label_color , pred, pred_path
 
 
 class MyEnsemble(nn.Module): 
@@ -307,17 +310,11 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         self.train_data.sampler.set_epoch(epoch)
-        for img, label, pred, _ in self.train_data:
+        for img, label, label_color, pred, _ in self.train_data:
 
             #creating mask where 1 is for non-ignored labels, 0 for ignored labels
             mask = (label != 255) # B, 1, H, W 
             mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
-
-            ## random foreground class label for background in GTs
-            label[label == 255] = torch.randint(0, self.num_classes, (1,)).item()  
-            
-            ## label id to color (RGB)
-            label_color = label_img_to_color(label, convert_to_train_id=True)
             
             ## >>x1 being the target latent distribution<< 
             x1 = self.semantic_map_autoencoder.encode(label_color.to(self.gpu_id)) 
@@ -409,7 +406,7 @@ class Trainer:
         self.val_data.sampler.set_epoch(epoch)
         val_epoch_loss = 0.0  # Initialize the cumulative loss for the epoch
         prog_bar = mmcv.ProgressBar(len(self.val_data))
-        for img, label, pred, pred_path in self.val_data:
+        for img, label, _, pred, pred_path in self.val_data:
             approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(img, label, pred)  
             save_path = os.path.join(save_imgs_dir_ep, pred_path[0].split('/')[-1].replace('_rgb_anon.png', '_predFine_color.png'))
             approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
