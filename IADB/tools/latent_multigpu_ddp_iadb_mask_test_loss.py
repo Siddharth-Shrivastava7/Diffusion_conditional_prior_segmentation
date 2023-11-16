@@ -134,7 +134,9 @@ class custom_cityscapes_labels(Dataset):
                             self.img_list.append(img_path)
                             self.pred_list.append(pred_path)
                 
-                assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 2975
+                ## can't use since in DDP, and distributed sampler is used in Distributed sampler
+                # assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 2975
+                
 
             elif self.mode == 'val': ## dark zurich val  
                 if root.find('/gtFine/dz_val')!= -1:
@@ -146,7 +148,8 @@ class custom_cityscapes_labels(Dataset):
                             self.img_list.append(img_path)
                             self.pred_list.append(pred_path)
                 
-                assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 50
+                ## can't use since in DDP, and distributed sampler is used in Distributed sampler
+                # assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 50
 
             else: 
                 raise Exception('mode has to be either train or val')
@@ -452,7 +455,7 @@ if __name__ == '__main__':
     save_imgs_dir = '/home/guest/scratch/siddharth/data/results/latent_mask_loss_iadb_cond_seg/result_val_images'
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
-    batch_size = 4
+    batch_size = 12
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_mask_loss_iadb_cond_seg/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     
@@ -460,4 +463,4 @@ if __name__ == '__main__':
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)   
         
-    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape), nprocs=world_size)
+    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, semantic_autoencoder_checkpoint_dir), nprocs=world_size)
