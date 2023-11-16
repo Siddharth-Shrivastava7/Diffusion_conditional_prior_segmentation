@@ -139,9 +139,10 @@ class custom_cityscapes_labels(Dataset):
                 
 
             elif self.mode == 'val': ## dark zurich val  
-                if root.find('/gtFine/dz_val')!= -1:
+                if root.find('/gtFine/dz_val')!= -1: 
                     for name in tqdm(sorted(files)):
-                        if path.find('_gt_labelTrainIds.png')!=-1: 
+                        path = os.path.join(root, name)
+                        if path.find(suffix)!=-1: ## suffix = '_gt_labelTrainIds.png' 
                             self.label_list.append(path)
                             img_path = path.replace('/gtFine/', '/leftImg8bit/').replace('_gt_labelTrainIds.png','_rgb_anon.png') 
                             pred_path = path.replace('/gtFine/', '/pred/segformerb2/').replace('_gt_labelTrainIds.png','_rgb_anon.png') 
@@ -221,12 +222,12 @@ class MyEnsemble(nn.Module):
         return d 
 
 
-def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/", suffix= "_gtFine_labelTrainIds.png" , num_classes = 19, resize_shape: tuple = (512, 1024)): 
+def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/", suffix= "_gtFine_labelTrainIds.png" , ip_latent_channels = 3, resize_shape: tuple = (512, 1024), val_suffix: str = '_gt_labelTrainIds.png'): 
 
     train_set =  custom_cityscapes_labels(gt_dir, suffix,  resize_shape, mode='train')# loading training dataset
-    val_set = custom_cityscapes_labels(gt_dir,  resize_shape, mode = 'val')
+    val_set = custom_cityscapes_labels(gt_dir, val_suffix, resize_shape = resize_shape, mode = 'val')
     
-    model = MyEnsemble(in_channels=3, out_channels=3)
+    model = MyEnsemble(ip_latent_channels)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     return train_set, val_set, model, optimizer
 
@@ -433,10 +434,10 @@ class Trainer:
                         print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, semantic_autoencoder_checkpoint_dir: str):
+def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, semantic_autoencoder_checkpoint_dir: str, val_suffix: str, ip_latent_channels: int):
   
     ddp_setup(rank, world_size) 
-    train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
+    train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, ip_latent_channels, resize_shape, val_suffix)
     train_data = prepare_dataloader(train_set, batch_size)
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
 
@@ -455,12 +456,14 @@ if __name__ == '__main__':
     save_imgs_dir = '/home/guest/scratch/siddharth/data/results/latent_mask_loss_iadb_cond_seg/result_val_images'
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
+    val_suffix = '_gt_labelTrainIds.png'
     batch_size = 12
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_mask_loss_iadb_cond_seg/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
+    ip_latent_channels = 3
     
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)   
         
-    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, semantic_autoencoder_checkpoint_dir), nprocs=world_size)
+    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, semantic_autoencoder_checkpoint_dir, val_suffix,ip_latent_channels), nprocs=world_size)
