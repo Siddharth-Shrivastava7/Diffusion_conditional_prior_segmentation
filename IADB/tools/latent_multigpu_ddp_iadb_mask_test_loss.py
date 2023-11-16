@@ -282,7 +282,7 @@ class Trainer:
         
         ## latent semantic map feats
         ## semantic label map autoencoder ## loading the current pretrained model
-        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes) 
+        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes).to(self.gpu_id) 
         semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=torch.device('cuda:' + str(self.gpu_id)))
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
@@ -457,7 +457,7 @@ if __name__ == '__main__':
     root_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/"
     suffix = '_gtFine_labelTrainIds.png'
     val_suffix = '_gt_labelTrainIds.png'
-    batch_size = 12
+    batch_size = 8
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_mask_loss_iadb_cond_seg/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     ip_latent_channels = 3
