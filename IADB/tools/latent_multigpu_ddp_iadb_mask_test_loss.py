@@ -37,6 +37,27 @@ from cityscapesscripts.helpers.labels import labels
 
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
+## latent iadb model  
+def get_model(in_channels: int, out_channels: int):
+    block_out_channels=(128, 128, 256, 256, 512, 512)
+    down_block_types=( 
+        "DownBlock2D",  # a regular ResNet downsampling block
+        "DownBlock2D", 
+        "DownBlock2D", 
+        "DownBlock2D",  
+        "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
+        "DownBlock2D",
+    )
+    up_block_types=(
+        "UpBlock2D",  # a regular ResNet upsampling block
+        "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
+        "UpBlock2D", 
+        "UpBlock2D", 
+        "UpBlock2D", 
+        "UpBlock2D"  
+    )
+    return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes, in_channels=num_classes, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
+
 def label_img_to_color(img, convert_to_train_id = False): 
 
     if convert_to_train_id: # conversion from id 
@@ -178,21 +199,36 @@ class custom_cityscapes_labels(Dataset):
 
 
 class MyEnsemble(nn.Module): 
-    def __init__(self, conditional_features) -> None:
+    def __init__(self, gpu_id: int, num_classes: int, semantic_autoencoder_checkpoint_dir: str) -> None:
         super().__init__() 
+        self.gpu_id = gpu_id
+        self.num_classes = num_classes
         
-        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=self.gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet
+        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet
         
         ## semantic label map autoencoder ## loading the current pretrained model
-        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes) 
-        semantic_checkpoint = torch.load(os.path.join(semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=self.gpu_id)
+        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=num_classes) 
+        semantic_checkpoint = torch.load(os.path.join(semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=gpu_id)
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
         
-        self.latent_deblending_model = UNet(n_channels=3, n_classes=3) ## latent iadb model 
+        # self.latent_deblending_model = UNet(n_channels=3, n_classes=3, condition=True) ## latent iadb model 
+        self.latent_deblending_model = get_model(in_channels=3, out_channels=3) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
+        self.combining_condition_model = ConvModule(
+            embed_dim * 2,
+            embed_dim,
+            1,
+            padding=0,
+            conv_cfg=None,
+            norm_cfg=None,
+            act_cfg=None
+        )
         
+    def forward(self, img, pred, alphas):
         
-    def forward(self, conditional_feats, alphas):
+        img_feats = self.img_encoder.extract_descriptors(img.float().to(self.gpu_id))
+        _, latent_semantic_map = self.semantic_map_autoencoder(pred) # 64x64x3
+        
         conditional_feats = self.combining_condition_model(conditional_feats)
         d = self.denoising_model(conditional_feats, alphas)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
         return d 
@@ -203,9 +239,7 @@ def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/city
     train_set =  custom_cityscapes_labels(gt_dir, suffix,  resize_shape, mode='train')# loading training dataset
     val_set = custom_cityscapes_labels(gt_dir,  resize_shape, mode = 'val')
     
-    model = MyEnsemble(embed_dim=num_classes)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)    
-    return train_set, val_set, model, optimizer
+    return train_set, val_set 
 
 
 def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of workers here 
@@ -220,24 +254,19 @@ def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of w
 
 class Trainer: 
     def __init__(self, 
-                model: torch.nn.Module, 
                 train_data: DataLoader,
                 val_data: DataLoader,
-                optimizer: torch.optim.Optimizer,
                 save_every: int,
                 checkpoint_dir: str,
                 num_classes: int, 
                 save_imgs_dir: str, 
                 nb_steps: int, 
                 gpu_id: int, 
-                shared_softmax_logits_to_correct_train: dict, 
-                shared_softmax_logits_to_correct_val: dict) -> None: 
+                semantic_autoencoder_checkpoint_dir: str) -> None: 
         
         self.gpu_id = gpu_id
-        self.model = model.to(self.gpu_id) 
         self.train_data = train_data 
         self.val_data = val_data 
-        self.optimizer = optimizer
         self.save_every = save_every 
         self.checkpoint_dir = checkpoint_dir
         self.epochs_run = 0
@@ -246,8 +275,9 @@ class Trainer:
         self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
-        self.softmax_logits_to_correct_train = shared_softmax_logits_to_correct_train
-        self.softmax_logits_to_correct_val = shared_softmax_logits_to_correct_val
+        self.semantic_autoencoder_checkpoint_dir = semantic_autoencoder_checkpoint_dir
+        self.model = MyEnsemble(self.gpu_id, self.num_classes, self.semantic_autoencoder_checkpoint_dir).to(self.gpu_id) 
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)    
         
 
     def _run_batch(self, conditional_feats, alphas, mask, targets):
@@ -409,10 +439,6 @@ if __name__ == '__main__':
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)   
-    
-    ## image encoding 
-    descriptors = encoder.extract_descriptors(x_.float().cuda())
-    
     
     
 

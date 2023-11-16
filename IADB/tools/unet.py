@@ -84,7 +84,7 @@ class OutConv(nn.Module):
 
 ## concatenation of image features will be at the (32x32), and the deblending operation will for the latent features (so, the latent features will be the input and the image encoded features will be the conditions)
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False, condition = None):
+    def __init__(self, n_channels, n_classes, bilinear=False, condition = False):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -109,12 +109,12 @@ class UNet(nn.Module):
         self.up4 = (Up(256, 128, bilinear))
         self.outc = (OutConv(128, n_classes))
 
-    def forward(self, x):
+    def forward(self, x, conditional_feats = None):
         x1 = self.inc(x) 
         x2 = self.down1(x1)
         
         if self.condition:
-            x_concat = torch.cat([x2, self.condition], dim=1) ## extracted image features concatenation
+            x_concat = torch.cat([x2, conditional_feats], dim=1) ## extracted image features concatenation
             x3 = self.down2(x_concat) ## its input is of (32x32) size, here we need to add image encoded features
         else: 
             x3 = self.down2(x2)
