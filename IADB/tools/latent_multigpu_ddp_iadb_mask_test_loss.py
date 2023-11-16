@@ -16,6 +16,8 @@ from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
 import torch.nn as nn
+
+## latent iadb model
 from unet import UNet
 
 ## distributed training with DDP 
@@ -24,37 +26,28 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP 
 from torch.distributed import init_process_group, destroy_process_group  
 
+## image feature extractor
 from dino_mod import ViTExtractor
 
-# torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
+## semantic label map autoencoder
+from semantic_map_autoencoder import Myautoencoder
 
-## segformer <model to correct> prediction loading 
-class _helper_for_Trainer:
-    def __init__(self, model_path, config_path) -> None:
-        self.model_path = model_path
-        self.config_path = config_path
-        self.softmax_logits_to_correct_train = {}
-        self.softmax_logits_to_correct_val = {}
+## for converting ids to train_ids and train_ids to color images 
+from cityscapesscripts.helpers.labels import labels
 
-    def _run(self):
-        self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val = test_softmax_pred.main(config_path=self. config_path, checkpoint_path= self.model_path)
-        print('results consisting of softmax predictions loaded successfully!') 
-        return self.softmax_logits_to_correct_train, self.softmax_logits_to_correct_val
+torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
+def label_img_to_color(img, convert_to_train_id = False): 
 
-def ddp_setup(rank, world_size): 
-    """
-    Args:
-        rank: Unique identifier of each process(gpu)
-        world_size: Total number of processes(gpus)
-    """
-    os.environ["MASTER_ADDR"] = "127.0.0.1" ## master since only one machine(node) we are using which have multiple processes (gpus) in it
-    os.environ["MASTER_PORT"] = "29501" ## change the port, when one port is filled up
-    init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
-    torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
-
-
-def label_img_to_color(img): 
+    if convert_to_train_id: # conversion from id 
+            id2train_id = {label.id: label.trainId  for label in labels}    
+            for k in range(34): # k is an instance of id
+                img[img==k] = id2train_id[k]
+        
+    ## can also use this below one to form color from train_ids
+    # label_to_color = {label.trainId: label.color  for label in labels}  
+    # label_to_color[255] = [0,0,0]
+    
     label_to_color = {
         0: [128, 64,128],
         1: [244, 35,232],
@@ -75,7 +68,7 @@ def label_img_to_color(img):
         16: [  0, 80,100],
         17: [  0,  0,230],
         18: [119, 11, 32],
-        19: [0,  0, 0] 
+        255: [0,  0, 0] 
         } 
     img = np.array(img.squeeze()) 
     img_height, img_width = img.shape
@@ -85,6 +78,18 @@ def label_img_to_color(img):
             label = img[row][col] 
             img_color[row, col] = np.array(label_to_color[label])  
     return img_color
+
+def ddp_setup(rank, world_size): 
+    """
+    Args:
+        rank: Unique identifier of each process(gpu)
+        world_size: Total number of processes(gpus)
+    """
+    os.environ["MASTER_ADDR"] = "127.0.0.1" ## master since only one machine(node) we are using which have multiple processes (gpus) in it
+    os.environ["MASTER_PORT"] = "29501" ## change the port, when one port is filled up
+    init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
+    torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
+
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
@@ -132,8 +137,10 @@ class custom_cityscapes_labels(Dataset):
 
         img_path = self.img_list[index]
         label_path = self.label_list[index] 
+        pred_path = self.pred_path[index]
         img = Image.open(img_path) 
         label = torch.from_numpy(np.array(Image.open(label_path)))
+        pred = torch.from_numpy(np.array(Image.open(pred_path)))
         
         ## label_transform is just resizing for both training and validation
         lb_transform = transforms.Compose([ 
@@ -141,6 +148,16 @@ class custom_cityscapes_labels(Dataset):
         ])
         label = lb_transform(label.unsqueeze(dim=0))
         
+        ## pred transform
+        pred = lb_transform(pred.unsqueeze(dim=0)) 
+        ## convert pred into RGB  
+        pred = label_img_to_color(pred, convert_to_train_id=True)
+        ## transformations that could be done in label-rgb image (predictions)
+        pred_transform = transforms.Compose([
+            transforms.ToTensor()])
+        pred = pred_transform(pred)
+        
+        ## image transform
         if self.mode == 'train':
             img_transform = transforms.Compose([
                 transforms.Resize(self.resize_shape),
@@ -157,22 +174,23 @@ class custom_cityscapes_labels(Dataset):
             ])
         img = img_transform(img)
             
-        return img, label, img_path
+        return img, label, pred
 
 
 class MyEnsemble(nn.Module): 
     def __init__(self, conditional_features) -> None:
         super().__init__() 
-        self.denoising_model = UNet(n_channels=3, n_classes=3)
-        self.combining_condition_model = ConvModule(
-            embed_dim * 2,
-            embed_dim,
-            1,
-            padding=0,
-            conv_cfg=None,
-            norm_cfg=None,
-            act_cfg=None
-        )
+        
+        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=self.gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet
+        
+        ## semantic label map autoencoder ## loading the current pretrained model
+        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes) 
+        semantic_checkpoint = torch.load(os.path.join(semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=self.gpu_id)
+        self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
+        self.semantic_map_autoencoder.eval()
+        
+        self.latent_deblending_model = UNet(n_channels=3, n_classes=3) ## latent iadb model 
+        
         
     def forward(self, conditional_feats, alphas):
         conditional_feats = self.combining_condition_model(conditional_feats)
@@ -230,9 +248,6 @@ class Trainer:
         self.nb_steps = nb_steps
         self.softmax_logits_to_correct_train = shared_softmax_logits_to_correct_train
         self.softmax_logits_to_correct_val = shared_softmax_logits_to_correct_val
-        
-        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=self.gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 3rd/4th level of UNet
-        
         
 
     def _run_batch(self, conditional_feats, alphas, mask, targets):
@@ -378,20 +393,18 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
     destroy_process_group()
 
 if __name__ == '__main__':
-    to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
-    to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
     resize_shape = (256, 256) ## testing with lower dimension, for checking its working
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     nb_steps = 128 ## similar to IADB 
     num_classes = 19 ## only considering foreground labels 
-    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/mask_loss_iadb_cond_seg/result_val_images'
+    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/latent_mask_loss_iadb_cond_seg/result_val_images'
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
     suffix = '_gtFine_labelTrainIds.png'
     batch_size = 4
-    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/mask_loss_iadb_cond_seg/' 
-    softmax_logits_pred = _helper_for_Trainer(to_correct_model_path, to_correct_config_path)
-    softmax_logits_to_correct_train, softmax_logits_to_correct_val = softmax_logits_pred._run() ## calling and storing in its instance the value of softmax_logits of train and val data
+    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_mask_loss_iadb_cond_seg/' 
+    semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
+    
 
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
@@ -400,9 +413,9 @@ if __name__ == '__main__':
     ## image encoding 
     descriptors = encoder.extract_descriptors(x_.float().cuda())
     
+    
+    
 
     with mp.Manager() as manager: 
-        shared_softmax_logits_to_correct_train = manager.dict(softmax_logits_to_correct_train)
-        shared_softmax_logits_to_correct_val = manager.dict(softmax_logits_to_correct_val)
-
+        
         mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, shared_softmax_logits_to_correct_train,shared_softmax_logits_to_correct_val, ), nprocs=world_size)
