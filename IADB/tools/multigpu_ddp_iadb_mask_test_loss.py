@@ -4,7 +4,7 @@ conditional image segementation map generation, using alpha bending of gaussian 
 import os
 import torch
 from torchvision import transforms
-from diffusers import UNet2DModel
+from diffusers import UNet2DModel ## modifying the unet given by the original authors "diffusers"
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
