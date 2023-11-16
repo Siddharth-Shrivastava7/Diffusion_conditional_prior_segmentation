@@ -82,69 +82,43 @@ class OutConv(nn.Module):
 
 """ Parts of the U-Net model: ends || The main unet module structure begins """
 
-## original
-
-class UNet_org(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False):
-        super(UNet_org, self).__init__()
-        self.n_channels = n_channels
-        self.n_classes = n_classes
-        self.bilinear = bilinear
-
-        self.inc = (DoubleConv(n_channels, 64))
-        self.down1 = (Down(64, 128))
-        self.down2 = (Down(128, 256))
-        self.down3 = (Down(256, 512))
-        factor = 2 if bilinear else 1
-        self.down4 = (Down(512, 1024 // factor))
-        self.up1 = (Up(1024, 512 // factor, bilinear))
-        self.up2 = (Up(512, 256 // factor, bilinear))
-        self.up3 = (Up(256, 128 // factor, bilinear))
-        self.up4 = (Up(128, 64, bilinear))
-        self.outc = (OutConv(64, n_classes))
-
-    def forward(self, x):
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
-        
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
-        logits = self.outc(x)
-        return logits
-
-## concatenation of image features will be at the (32x64), and the deblending operation will for the latent features (so, the latent features will be the input and the image encoded features will be the conditions)
+## concatenation of image features will be at the (32x32), and the deblending operation will for the latent features (so, the latent features will be the input and the image encoded features will be the conditions)
 class UNet(nn.Module):
-    def __init__(self, n_channels, n_classes, bilinear=False):
+    def __init__(self, n_channels, n_classes, bilinear=False, condition = None):
         super(UNet, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
+        self.condition = condition
 
-        ## nearly 5 downsampling layers 
+        ## 4 downsampling layers 
         self.inc = (DoubleConv(n_channels, 128))
-        self.down1 = (Down(128, 128)) 
-        self.down2 = (Down(128, 128)) 
-        self.down3 = (Down(128, 256))
-        self.down4 = (Down(256, 256))
-        self.down5 = (Down(256, 512)) 
+        self.down1 = (Down(128, 256))  
+        if self.condition:
+            self.down2 = (Down(256 +  384, 512)) # image conditioning : have to add here
+        else:
+            self.down2 = (Down(256, 512))
+        self.down2 = (Down(256, 512))
+        self.down3 = (Down(512, 1024))
+        self.down4 = (Down(1024, 2048))
         
-        ## nearly 5 upsampling layers
-        self.up1 = (Up(512, 256, bilinear))
-        self.up2 = (Up(256, 256, bilinear))
-        self.up3 = (Up(256, 128, bilinear))
-        self.up4 = (Up(128, 128, bilinear))
-        self.up5 = (Up(128, 128, bilinear))
+        ## 4 upsampling layers
+        self.up1 = (Up(2048, 1024, bilinear))
+        self.up2 = (Up(1024, 512, bilinear))
+        self.up3 = (Up(512, 256, bilinear))
+        self.up4 = (Up(256, 128, bilinear))
         self.outc = (OutConv(128, n_classes))
 
     def forward(self, x):
-        x1 = self.inc(x)
+        x1 = self.inc(x) 
         x2 = self.down1(x1)
-        x3 = self.down2(x2)
+        
+        if self.condition:
+            x_concat = torch.cat([x2, self.condition], dim=1) ## extracted image features concatenation
+            x3 = self.down2(x_concat) ## its input is of (32x32) size, here we need to add image encoded features
+        else: 
+            x3 = self.down2(x2)
+        
         x4 = self.down3(x3)
         x5 = self.down4(x4)
         
@@ -157,7 +131,6 @@ class UNet(nn.Module):
         return logits
     
 if __name__ == '__main__':
-    # model = UNet_org(3,19) ##  working smoothly 
-    model = UNet(3, 19) ## have to model it better 
+    model = UNet(3, 3) ## have to model it better 
     print(summary(model, (3, 64, 64)))
     

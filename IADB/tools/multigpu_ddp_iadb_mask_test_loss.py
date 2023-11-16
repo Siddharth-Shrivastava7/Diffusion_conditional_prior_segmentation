@@ -4,7 +4,6 @@ conditional image segementation map generation, using alpha bending of gaussian 
 import os
 import torch
 from torchvision import transforms
-from diffusers import UNet2DModel ## modifying the unet given by the original authors "diffusers"
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
@@ -17,6 +16,7 @@ from mmcv.cnn import ConvModule
 import mmcv 
 from tqdm import tqdm
 import torch.nn as nn
+from unet import UNet
 
 ## distributed training with DDP 
 import torch.multiprocessing as mp 
@@ -53,27 +53,6 @@ def ddp_setup(rank, world_size):
     init_process_group(backend="nccl", rank=rank, world_size=world_size) # initializes the distributed process group.
     torch.cuda.set_device(rank) # sets the default GPU for each process. This is important to prevent hangs or excessive memory utilization on GPU:0
 
-
-def get_model(num_classes, conditions: bool = False):
-    block_out_channels=(128, 128, 256, 256, 512, 512)
-    down_block_types=( 
-        "DownBlock2D",  # a regular ResNet downsampling block
-        "DownBlock2D", 
-        "DownBlock2D", 
-        ## by here have to add the conditional features try to see where to add...those features
-        "DownBlock2D",  
-        "AttnDownBlock2D",  # a ResNet downsampling block with spatial self-attention
-        "DownBlock2D",
-    )
-    up_block_types=(
-        "UpBlock2D",  # a regular ResNet upsampling block
-        "AttnUpBlock2D",  # a ResNet upsampling block with spatial self-attention
-        "UpBlock2D", 
-        "UpBlock2D", 
-        "UpBlock2D", 
-        "UpBlock2D"  
-    )
-    return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes, in_channels=num_classes, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
 def label_img_to_color(img): 
     label_to_color = {
@@ -149,7 +128,7 @@ class custom_cityscapes_labels(Dataset):
 class MyEnsemble(nn.Module): 
     def __init__(self, embed_dim) -> None:
         super().__init__() 
-        self.denoising_model = get_model(embed_dim)
+        self.denoising_model = UNet(n_channels=3, n_classes=3)
         self.combining_condition_model = ConvModule(
             embed_dim * 2,
             embed_dim,
