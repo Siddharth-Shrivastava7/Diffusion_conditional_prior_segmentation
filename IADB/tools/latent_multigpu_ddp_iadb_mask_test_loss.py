@@ -18,7 +18,7 @@ from tqdm import tqdm
 import torch.nn as nn
 
 ## latent iadb model
-from unet import UNet
+from diffusers import UNet2DModel
 
 ## distributed training with DDP 
 import torch.multiprocessing as mp 
@@ -38,7 +38,7 @@ from cityscapesscripts.helpers.labels import labels
 torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 ## latent iadb model  
-def get_model(in_channels: int, out_channels: int):
+def get_model(n_channels: int = 3):
     block_out_channels=(128, 128, 256, 256, 512, 512)
     down_block_types=( 
         "DownBlock2D",  # a regular ResNet downsampling block
@@ -56,7 +56,7 @@ def get_model(in_channels: int, out_channels: int):
         "UpBlock2D", 
         "UpBlock2D"  
     )
-    return UNet2DModel(block_out_channels=block_out_channels,out_channels=num_classes, in_channels=num_classes, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
+    return UNet2DModel(block_out_channels=block_out_channels,out_channels=n_channels, in_channels=n_channels, up_block_types=up_block_types, down_block_types=down_block_types, add_attention=True)
 
 def label_img_to_color(img, convert_to_train_id = False): 
 
@@ -195,28 +195,16 @@ class custom_cityscapes_labels(Dataset):
             ])
         img = img_transform(img)
             
-        return img, label, pred
+        return img, label, pred, pred_path
 
 
 class MyEnsemble(nn.Module): 
-    def __init__(self, gpu_id: int, num_classes: int, semantic_autoencoder_checkpoint_dir: str) -> None:
+    def __init__(self, n_channels: int = 3) -> None:
         super().__init__() 
-        self.gpu_id = gpu_id
-        self.num_classes = num_classes
-        
-        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet
-        
-        ## semantic label map autoencoder ## loading the current pretrained model
-        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=num_classes) 
-        semantic_checkpoint = torch.load(os.path.join(semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=gpu_id)
-        self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
-        self.semantic_map_autoencoder.eval()
-        
-        # self.latent_deblending_model = UNet(n_channels=3, n_classes=3, condition=True) ## latent iadb model 
-        self.latent_deblending_model = get_model(in_channels=3, out_channels=3) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
+        self.latent_deblending_model = get_model(n_channels) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
         self.combining_condition_model = ConvModule(
-            embed_dim * 2,
-            embed_dim,
+            n_channels*3,
+            n_channels,
             1,
             padding=0,
             conv_cfg=None,
@@ -224,13 +212,9 @@ class MyEnsemble(nn.Module):
             act_cfg=None
         )
         
-    def forward(self, img, pred, alphas):
-        
-        img_feats = self.img_encoder.extract_descriptors(img.float().to(self.gpu_id))
-        _, latent_semantic_map = self.semantic_map_autoencoder(pred) # 64x64x3
-        
+    def forward(self, conditional_feats, alphas):
         conditional_feats = self.combining_condition_model(conditional_feats)
-        d = self.denoising_model(conditional_feats, alphas)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
+        d = self.latent_deblending_model(conditional_feats, alphas)['sample'] ## sample here is The hidden states output from the last layer of the model. wref: hugging face community
         return d 
 
 
@@ -239,7 +223,9 @@ def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/city
     train_set =  custom_cityscapes_labels(gt_dir, suffix,  resize_shape, mode='train')# loading training dataset
     val_set = custom_cityscapes_labels(gt_dir,  resize_shape, mode = 'val')
     
-    return train_set, val_set 
+    model = MyEnsemble(in_channels=3, out_channels=3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    return train_set, val_set, model, optimizer
 
 
 def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of workers here 
@@ -254,8 +240,10 @@ def prepare_dataloader(dataset: Dataset, batch_size: int): ## to set number of w
 
 class Trainer: 
     def __init__(self, 
+                model: torch.nn.Module, 
                 train_data: DataLoader,
                 val_data: DataLoader,
+                optimizer: torch.optim.Optimizer,
                 save_every: int,
                 checkpoint_dir: str,
                 num_classes: int, 
@@ -265,8 +253,10 @@ class Trainer:
                 semantic_autoencoder_checkpoint_dir: str) -> None: 
         
         self.gpu_id = gpu_id
+        self.model = model.to(self.gpu_id) 
         self.train_data = train_data 
         self.val_data = val_data 
+        self.optimizer = optimizer
         self.save_every = save_every 
         self.checkpoint_dir = checkpoint_dir
         self.epochs_run = 0
@@ -276,10 +266,29 @@ class Trainer:
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
         self.semantic_autoencoder_checkpoint_dir = semantic_autoencoder_checkpoint_dir
-        self.model = MyEnsemble(self.gpu_id, self.num_classes, self.semantic_autoencoder_checkpoint_dir).to(self.gpu_id) 
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=1e-4)    
         
-
+        ## image feats
+        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=self.gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet
+        
+        ## latent semantic map feats
+        ## semantic label map autoencoder ## loading the current pretrained model
+        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes) 
+        semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=self.gpu_id)
+        self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
+        self.semantic_map_autoencoder.eval()
+        
+        ## reducing the dimensionity of the image feats using 1x1 conv and upsampling by learnable params
+        self.reduce_image_dim = ConvModule(
+            384,
+            3,
+            1,
+            padding=0,
+            conv_cfg=None,
+            norm_cfg=None,
+            act_cfg=None
+        ).to(self.gpu_id) 
+        self.upsample_image_feats = nn.ConvTranspose2d(in_channels= 3, out_channels= 3, kernel_size=2, stride=2).to(self.gpu_id) ## from (3,32,32) => (3,64,64)
+    
     def _run_batch(self, conditional_feats, alphas, mask, targets):
         self.optimizer.zero_grad()
         output = self.model(conditional_feats, alphas)
@@ -291,18 +300,21 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         self.train_data.sampler.set_epoch(epoch)
-        for gt_labels, img_paths in self.train_data:
+        for img, label, pred, _ in self.train_data:
 
             #creating mask where 1 is for non-ignored labels, 0 for ignored labels
-            mask = (gt_labels != 255) # B, 1, H, W 
+            mask = (label != 255) # B, 1, H, W 
             mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
 
             ## random foreground class label for background in GTs
-            gt_labels[gt_labels == 255] = torch.randint(0, self.num_classes, (1,)).item() 
+            label[label == 255] = torch.randint(0, self.num_classes, (1,)).item()  
             
-            ## >>x1 being the target distribution<< 
-            x1 = F.one_hot(gt_labels.squeeze().long(), self.num_classes) # consist only foreground labels
-            x1 = x1.permute(0,3,1,2).to(self.gpu_id) 
+            ## label id to color (RGB)
+            label_color = label_img_to_color(label, convert_to_train_id=True)
+            
+            ## >>x1 being the target latent distribution<< 
+            x1 = self.semantic_map_autoencoder.encode(label_color.to(self.gpu_id)) 
+            # x1 = x1.permute(0,3,1,2).to(self.gpu_id) 
 
             ## x0 being the stationary distribution! 
             x0 = torch.randn_like(x1.float()) 
@@ -314,17 +326,22 @@ class Trainer:
             alphas = torch.rand(b_sz).to(self.gpu_id)
             x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
             
-            ## our way :: to use pre-defined conditioning :: segformerb2 softmax-logits
-            pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_train[path]) for path in img_paths] 
-            pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19   
+            ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
+            self.img_feats = self.img_encoder.extract_descriptors(img.float().to(self.gpu_id)) # B,384,32,32 
+            self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
+            self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
+            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred) # B,3,64,64
 
-            ## similar to DDP -- condition input ## have to put input RGB image here or RGB extracted features <<<< 
-            conditional_feats = torch.cat([pred_labels_emdb, x_alphas], dim=1)  
+            ## similar to DDP -- condition input 
+            conditional_feats = torch.cat([self.latent_semantic_map_pred, x_alphas, self.img_feats], dim=1)  
             self._run_batch(conditional_feats, alphas, mask, targets) 
 
             
     def _save_checkpoint(self, epoch, save_best = False):
         checkpoint = self.model.module.state_dict()
+        if not os.path.exists(self.checkpoint_dir):
+            os.makedirs(self.checkpoint_dir) 
+        
         if save_best:
             checkpoint_path = os.path.join(self.checkpoint_dir, 'best_checkpoint.pt')
             torch.save(checkpoint, checkpoint_path)
@@ -335,16 +352,19 @@ class Trainer:
             print(f"Epoch {epoch} | Training checkpoint saved at {checkpoint_path}")
 
 
-    def _sample_conditional_seg_iadb(self, gt_label, img_path):
+    def _sample_conditional_seg_iadb(self, img, label, pred):
         with torch.no_grad(): 
             self.model = self.model.eval()
-
-            ## predictions of segformerb2 as the conditions
-            pred_labels_emdb  = [torch.tensor(self.softmax_logits_to_correct_val[path]) for path in img_path] # conditioning softmax prediciton
-            pred_labels_emdb = torch.stack(pred_labels_emdb).to(self.gpu_id) # B,C,H,W ## here C = 19    
-
+            
+            ## conditional feats => {latent semantic map pred,  x_alphas(latent_target_trained_model, stationary gaussian, alphas), image feats} 
+            self.img_feats = self.img_encoder.extract_descriptors(img.float().to(self.gpu_id)) # B,384,32,32 
+            self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
+            self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
+            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred) # B,3,64,64
+            
             ## x0 as the stationary distribution 
-            x0 = torch.randn_like(pred_labels_emdb) ## sort of logits 
+            x0 = torch.randn_like(self.latent_semantic_map_pred) ## sort of logits 
+            
             
             ## now deblending starts: 
             x_alpha = x0 # our stationary distribution is Gaussian distribution only! 
@@ -353,7 +373,7 @@ class Trainer:
                 alpha_end =((t+1)/self.nb_steps)
 
                 ## conditional input 
-                conditional_feats = torch.cat([pred_labels_emdb, x_alpha], dim=1)
+                conditional_feats = torch.cat([self.latent_semantic_map_pred, x_alpha, self.img_feats], dim=1)
             
                 ## this is giving ~ (\bar_{x1} - \bar{x0})
                 d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id)) 
@@ -361,11 +381,12 @@ class Trainer:
                 ## reaching x1 by finding neighbouring x_alphas
                 x_alpha = x_alpha + (alpha_end-alpha_start)*d
 
+            x_alpha_decoded = self.semantic_map_autoencoder(x_alpha)
             approx_x1_sample_softmax = F.softmax(x_alpha, dim=1)
             approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
-            ## for the loss :: between gt_label (x1) and approximated x1 through x_alpha
+            ## for the loss :: between label (x1) and approximated x1 through x_alpha
 
-            val_batch_loss = F.cross_entropy(x_alpha, gt_label.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
+            val_batch_loss = F.cross_entropy(x_alpha, label.to(self.gpu_id).long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
 
             return approx_x1_sample, val_batch_loss
 
@@ -381,9 +402,9 @@ class Trainer:
         self.val_data.sampler.set_epoch(epoch)
         val_epoch_loss = 0.0  # Initialize the cumulative loss for the epoch
         prog_bar = mmcv.ProgressBar(len(self.val_data))
-        for gt_label, img_path in self.val_data:
-            approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(gt_label, img_path)  
-            save_path = os.path.join(save_imgs_dir_ep, img_path[0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+        for img, label, pred, pred_path in self.val_data:
+            approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(img, label, pred)  
+            save_path = os.path.join(save_imgs_dir_ep, pred_path[0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
             approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
             approx_x1_sample_color.save(save_path)
             # Accumulate batch loss to epoch loss
@@ -417,7 +438,7 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank, shared_softmax_logits_to_correct_train, shared_softmax_logits_to_correct_val
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank
     )
     trainer.train(total_epochs)
     destroy_process_group()
