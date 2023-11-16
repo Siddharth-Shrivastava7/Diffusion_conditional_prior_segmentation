@@ -88,27 +88,42 @@ def label_img_to_color(img):
 
 ## building custom dataset for x1 of alpha blending procedure 
 class custom_cityscapes_labels(Dataset):
-    def __init__(self,gt_dir, suffix, lb_transform = None, mode = 'train'):
-        suffix = '_gtFine_labelTrainIds.png' 
-        self.gt_dir = gt_dir + mode  
-        self.lb_transform = lb_transform 
+    def __init__(self,gt_dir, suffix,  resize_shape, mode = 'train'):
+        self.gt_dir = gt_dir 
         self.label_list = []
         self.img_list = []
+        self.pred_list = []
+        self.mode = mode
+        self.resize_shape = resize_shape
         
         for root, dirs, files in os.walk(self.gt_dir, topdown=False):
-            for name in tqdm(sorted(files)):
-                path = os.path.join(root, name)
-                if path.find(suffix)!=-1:
-                    self.label_list.append(path) 
-                    img_path = path.replace('/gtFine/','/leftImg8bit/').replace('_gtFine_labelTrainIds.png','_leftImg8bit.png')
-                    self.img_list.append(img_path)
+            if self.mode == 'train':
+                if root.find('/gtFine/train')!= -1:
+                    for name in tqdm(sorted(files)):
+                        path = os.path.join(root, name)
+                        if path.find(suffix)!=-1: # suffix = '_gtFine_labelTrainIds.png'
+                            self.label_list.append(path)
+                            img_path = path.replace('/gtFine/','/leftImg8bit/custom_train/').replace('_gtFine_labelTrainIds.png','_leftImg8bit.png')
+                            pred_path = path.replace('/gtFine/','/pred/segformerb2/custom_train/').replace('_gtFine_labelTrainIds.png','_leftImg8bit.png')
+                            self.img_list.append(img_path)
+                            self.pred_list.append(pred_path)
+                
+                assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 2975
 
-        if mode == 'train':
-            assert len(self.label_list) == 2975 == len(self.img_list)
-        elif mode == 'val':
-            assert len(self.label_list) == 500 == len(self.img_list)
-        else:
-            raise Exception('mode has to be either train or val')
+            elif self.mode == 'val': ## dark zurich val  
+                if root.find('/gtFine/dz_val')!= -1:
+                    for name in tqdm(sorted(files)):
+                        if path.find('_gt_labelTrainIds.png')!=-1: 
+                            self.label_list.append(path)
+                            img_path = path.replace('/gtFine/', '/leftImg8bit/').replace('_gt_labelTrainIds.png','_rgb_anon.png') 
+                            pred_path = path.replace('/gtFine/', '/pred/segformerb2/').replace('_gt_labelTrainIds.png','_rgb_anon.png') 
+                            self.img_list.append(img_path)
+                            self.pred_list.append(pred_path)
+                
+                assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 50
+
+            else: 
+                raise Exception('mode has to be either train or val')
 
     def __len__(self):
         return len(self.label_list) 
@@ -116,17 +131,37 @@ class custom_cityscapes_labels(Dataset):
     def __getitem__(self, index):
 
         img_path = self.img_list[index]
-
-        label_path = self.label_list[index]  
+        label_path = self.label_list[index] 
+        img = Image.open(img_path) 
         label = torch.from_numpy(np.array(Image.open(label_path)))
-        if self.lb_transform: 
-            label = self.lb_transform(label.unsqueeze(dim=0))
         
-        return label, img_path
+        ## label_transform is just resizing for both training and validation
+        lb_transform = transforms.Compose([ 
+        transforms.Resize(self.resize_shape, interpolation=InterpolationMode.NEAREST)
+        ])
+        label = lb_transform(label.unsqueeze(dim=0))
+        
+        if self.mode == 'train':
+            img_transform = transforms.Compose([
+                transforms.Resize(self.resize_shape),
+                transforms.PILToTensor(),
+                transforms.ConvertImageDtype(torch.float),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ])
+        elif self.mode == 'val':
+            img_transform = transforms.Compose([
+                transforms.Resize(self.resize_shape),
+                transforms.PILToTensor(),
+                transforms.ConvertImageDtype(torch.float),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            ])
+        img = img_transform(img)
+            
+        return img, label, img_path
 
 
 class MyEnsemble(nn.Module): 
-    def __init__(self, embed_dim) -> None:
+    def __init__(self, conditional_features) -> None:
         super().__init__() 
         self.denoising_model = UNet(n_channels=3, n_classes=3)
         self.combining_condition_model = ConvModule(
@@ -147,11 +182,8 @@ class MyEnsemble(nn.Module):
 
 def load_train_val_objs(gt_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/", suffix= "_gtFine_labelTrainIds.png" , num_classes = 19, resize_shape: tuple = (512, 1024)): 
 
-    lb_transform = transforms.Compose([ 
-        transforms.Resize(resize_shape, interpolation=InterpolationMode.NEAREST)
-    ])
-    train_set =  custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode='train')# loading training dataset
-    val_set = custom_cityscapes_labels(gt_dir, suffix, lb_transform, mode = 'val')
+    train_set =  custom_cityscapes_labels(gt_dir, suffix,  resize_shape, mode='train')# loading training dataset
+    val_set = custom_cityscapes_labels(gt_dir,  resize_shape, mode = 'val')
     
     model = MyEnsemble(embed_dim=num_classes)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)    
@@ -348,7 +380,7 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
 if __name__ == '__main__':
     to_correct_model_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8x1_1024x1024_160k_cityscapes_20211207_134205-6096669a.pth'
     to_correct_config_path = '/home/guest/scratch/siddharth/data/saved_models/mmseg/segformer_b2_cityscapes_1024x1024/segformer_mit-b2_8xb1-160k_cityscapes-1024x1024.py'
-    resize_shape = (256, 512) ## testing with lower dimension, for checking its working
+    resize_shape = (256, 256) ## testing with lower dimension, for checking its working
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     nb_steps = 128 ## similar to IADB 
