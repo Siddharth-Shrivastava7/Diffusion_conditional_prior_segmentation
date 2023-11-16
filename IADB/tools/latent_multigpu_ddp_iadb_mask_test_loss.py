@@ -148,7 +148,7 @@ class custom_cityscapes_labels(Dataset):
             ## TODO from here 
             for path in sorted(os.listdir(self.gt_dir)):
                 if path.find(suffix)!=-1:
-                    self.gt_list.append(os.path.join(self.gt_dir, path)) 
+                    self.label_list.append(os.path.join(self.gt_dir, path)) 
                     self.pred_list.append(os.path.join(self.pred_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
                     self.img_list.append(os.path.join(self.img_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
             
