@@ -123,9 +123,9 @@ class custom_cityscapes_labels(Dataset):
         self.resize_shape = resize_shape
         
         if self.mode == 'train':
-            self.img_dir = os.path.join(root_folder, 'leftImg8bit/custom_train') 
-            self.pred_dir = os.path.join(root_folder, 'pred/segformerb2/custom_train') 
-            self.gt_dir = os.path.join(root_folder, 'gtFine/train') 
+            self.img_dir = os.path.join(self.root_dir, 'leftImg8bit/custom_train') 
+            self.pred_dir = os.path.join(self.root_dir, 'pred/segformerb2/custom_train') 
+            self.gt_dir = os.path.join(self.root_dir, 'gtFine/train') 
         
             for root, dirs, files in os.walk(self.gt_dir, topdown=False):
                 if root.find('/gtFine/train')!= -1:
@@ -140,23 +140,23 @@ class custom_cityscapes_labels(Dataset):
                 # assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 2975
                 
 
-            elif self.mode == 'val': ## dark zurich val  
-                self.img_dir = os.path.join(root_folder, 'leftImg8bit/dz_val') 
-                self.pred_dir = os.path.join(root_folder,  'pred/segformerb2/dz_val')
-                self.gt_dir = os.path.join(root_folder,  'gtFine/dz_val') 
-                
-                ## TODO from here 
-                for path in sorted(os.listdir(self.gt_dir)):
-                    if path.find(suffix)!=-1:
-                        self.gt_list.append(os.path.join(self.gt_dir, path)) 
-                        self.pred_list.append(os.path.join(self.pred_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
-                        self.img_list.append(os.path.join(self.img_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
-                
-                ## can't use since in DDP, and distributed sampler is used in Distributed sampler
-                # assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 50
+        elif self.mode == 'val': ## dark zurich val  
+            self.img_dir = os.path.join(self.root_dir, 'leftImg8bit/dz_val') 
+            self.pred_dir = os.path.join(self.root_dir,  'pred/segformerb2/dz_val')
+            self.gt_dir = os.path.join(self.root_dir,  'gtFine/dz_val') 
+            
+            ## TODO from here 
+            for path in sorted(os.listdir(self.gt_dir)):
+                if path.find(suffix)!=-1:
+                    self.gt_list.append(os.path.join(self.gt_dir, path)) 
+                    self.pred_list.append(os.path.join(self.pred_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
+                    self.img_list.append(os.path.join(self.img_dir, path.replace('_gt_labelTrainIds.png', '_rgb_anon.png')))
+            
+            ## can't use since in DDP, and distributed sampler is used in Distributed sampler
+            # assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 50
 
-            else: 
-                raise Exception('mode has to be either train or val')
+        else: 
+            raise Exception('mode has to be either train or val')
 
     def __len__(self):
         return len(self.label_list) 
