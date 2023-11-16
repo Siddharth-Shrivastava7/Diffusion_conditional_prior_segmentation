@@ -98,8 +98,8 @@ if __name__ == '__main__':
     p = {"cond_encoder": "dino_vits8", "dataset_file": "datasets.cityscapes"}
 
     encoder = ViTExtractor(p["cond_encoder"], stride=8, device="cuda") # stride of this fitting in one gpu 
-    x_ = torch.randn(size=(2, 3, 256, 512))
+    x_ = torch.randn(size=(2, 3, 256, 256)) ## 256 x 512 will be the size of the image 
     # encoder.model(x.float().cuda()) # (2, 384)
     # stride = 8
-    descriptors = encoder.extract_descriptors(x_.float().cuda()) # (2, 1, 512, 384) --> torch.Size([2, 384, 32, 64])
+    descriptors = encoder.extract_descriptors(x_.float().cuda()) # (2, 1, 512, 384) --> torch.Size([2, 384, 32, 32])
     torch.save(descriptors, '/home/guest/scratch/siddharth/models/Diffusion_conditional_prior_segmentation/IADB/tools/test.pt')

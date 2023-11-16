@@ -5,6 +5,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchsummary import summary 
 
 
 class DoubleConv(nn.Module):
@@ -81,9 +82,11 @@ class OutConv(nn.Module):
 
 """ Parts of the U-Net model: ends || The main unet module structure begins """
 
-class UNet(nn.Module):
+## original
+
+class UNet_org(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=False):
-        super(UNet, self).__init__()
+        super(UNet_org, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
@@ -106,9 +109,55 @@ class UNet(nn.Module):
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         x5 = self.down4(x4)
+        
         x = self.up1(x5, x4)
         x = self.up2(x, x3)
         x = self.up3(x, x2)
         x = self.up4(x, x1)
         logits = self.outc(x)
         return logits
+
+## concatenation of image features will be at the (32x64), and the deblending operation will for the latent features (so, the latent features will be the input and the image encoded features will be the conditions)
+class UNet(nn.Module):
+    def __init__(self, n_channels, n_classes, bilinear=False):
+        super(UNet, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.bilinear = bilinear
+
+        ## nearly 5 downsampling layers 
+        self.inc = (DoubleConv(n_channels, 128))
+        self.down1 = (Down(128, 128)) 
+        self.down2 = (Down(128, 128)) 
+        self.down3 = (Down(128, 256))
+        self.down4 = (Down(256, 256))
+        self.down5 = (Down(256, 512)) 
+        
+        ## nearly 5 upsampling layers
+        self.up1 = (Up(512, 256, bilinear))
+        self.up2 = (Up(256, 256, bilinear))
+        self.up3 = (Up(256, 128, bilinear))
+        self.up4 = (Up(128, 128, bilinear))
+        self.up5 = (Up(128, 128, bilinear))
+        self.outc = (OutConv(128, n_classes))
+
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        logits = self.outc(x) 
+        
+        return logits
+    
+if __name__ == '__main__':
+    # model = UNet_org(3,19) ##  working smoothly 
+    model = UNet(3, 19) ## have to model it better 
+    print(summary(model, (3, 64, 64)))
+    
