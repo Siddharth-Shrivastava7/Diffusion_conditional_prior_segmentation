@@ -100,7 +100,7 @@ def label_img_to_color(img, convert_to_train_id = False):
             img_color[row, col] = np.array(label_to_color[label])  
     return img_color
 
-def ddp_setup(rank, world_size): 
+def ddp_setup(rank: int, world_size: int): 
     """
     Args:
         rank: Unique identifier of each process(gpu)
@@ -381,8 +381,8 @@ class Trainer:
                 ## reaching x1 by finding neighbouring x_alphas
                 x_alpha = x_alpha + (alpha_end-alpha_start)*d
 
-            x_alpha_decoded = self.semantic_map_autoencoder(x_alpha)
-            approx_x1_sample_softmax = F.softmax(x_alpha, dim=1)
+            x_alpha_decoded = self.semantic_map_autoencoder.decode(x_alpha) ### decoder to output: (B,19,256,256)
+            approx_x1_sample_softmax = F.softmax(x_alpha_decoded, dim=1)
             approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
             ## for the loss :: between label (x1) and approximated x1 through x_alpha
 
@@ -404,7 +404,7 @@ class Trainer:
         prog_bar = mmcv.ProgressBar(len(self.val_data))
         for img, label, pred, pred_path in self.val_data:
             approx_x1_sample, val_batch_loss = self._sample_conditional_seg_iadb(img, label, pred)  
-            save_path = os.path.join(save_imgs_dir_ep, pred_path[0].split('/')[-1].replace('_leftImg8bit.png', '_predFine_color.png'))
+            save_path = os.path.join(save_imgs_dir_ep, pred_path[0].split('/')[-1].replace('_rgb_anon.png', '_predFine_color.png'))
             approx_x1_sample_color = Image.fromarray(label_img_to_color(approx_x1_sample.detach().cpu()))
             approx_x1_sample_color.save(save_path)
             # Accumulate batch loss to epoch loss
@@ -430,7 +430,7 @@ class Trainer:
                         print('Model updated! : current best model saved on: ' + str(epoch)) 
                 
 
-def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, shared_softmax_logits_to_correct_train: dict, shared_softmax_logits_to_correct_val: dict):
+def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_steps: int, num_classes: int, save_imgs_dir: str, gt_dir: str, suffix: str , checkpoint_dir: str, batch_size: int, resize_shape: tuple, semantic_autoencoder_checkpoint_dir: str):
   
     ddp_setup(rank, world_size) 
     train_set, val_set, model, optimizer = load_train_val_objs(gt_dir, suffix, num_classes, resize_shape)
@@ -438,7 +438,7 @@ def main(rank: int, world_size: int, save_every: int, total_epochs: int, nb_step
     val_data = prepare_dataloader(val_set, batch_size=1) ## taking batch size for val equal to 1 
 
     trainer = Trainer( 
-        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank
+        model, train_data, val_data, optimizer, save_every, checkpoint_dir, num_classes, save_imgs_dir, nb_steps, rank, semantic_autoencoder_checkpoint_dir
     )
     trainer.train(total_epochs)
     destroy_process_group()
@@ -447,7 +447,7 @@ if __name__ == '__main__':
     resize_shape = (256, 256) ## testing with lower dimension, for checking its working
     save_every = 25
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
-    nb_steps = 128 ## similar to IADB 
+    nb_steps = 256 ## similar to IADB ## increasing cause in latent dimension >> can increase more
     num_classes = 19 ## only considering foreground labels 
     save_imgs_dir = '/home/guest/scratch/siddharth/data/results/latent_mask_loss_iadb_cond_seg/result_val_images'
     gt_dir = '/home/guest/scratch/siddharth/data/dataset/cityscapes/gtFine/'
@@ -456,13 +456,8 @@ if __name__ == '__main__':
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_mask_loss_iadb_cond_seg/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     
-
     # Include new arguments rank (replacing device) and world_size. ## rank is auto-allocated by DDP when calling mp.spawn. ### world_size is the number of processes across the training job. For GPU training, this corresponds to the number of GPUs in use, and each process works on a dedicated GPU.
     world_size = torch.cuda.device_count()
     print('world size is: ', world_size)   
-    
-    
-
-    with mp.Manager() as manager: 
         
-        mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape, shared_softmax_logits_to_correct_train,shared_softmax_logits_to_correct_val, ), nprocs=world_size)
+    mp.spawn(main, args=(world_size, save_every, total_epochs, nb_steps, num_classes, save_imgs_dir, gt_dir, suffix, checkpoint_dir, batch_size, resize_shape), nprocs=world_size)
