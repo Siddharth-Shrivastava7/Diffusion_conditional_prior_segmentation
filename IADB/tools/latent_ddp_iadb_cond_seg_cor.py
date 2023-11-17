@@ -265,7 +265,6 @@ class Trainer:
             
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
             alphas = torch.rand(b_sz).to(self.gpu_id)
-            print('*******', x1.shape, x0.shape)
             x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
             
             ## similar to DDP -- condition input 
