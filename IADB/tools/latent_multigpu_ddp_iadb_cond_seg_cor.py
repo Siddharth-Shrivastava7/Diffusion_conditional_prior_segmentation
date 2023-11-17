@@ -299,10 +299,10 @@ class Trainer:
         ).to(self.gpu_id).train() 
         self.upsample_image_feats = nn.ConvTranspose2d(in_channels= 3, out_channels= 3, kernel_size=2, stride=2).to(self.gpu_id).train() ## from (3,32,32) => (3,64,64)
     
-    def _run_batch(self, conditional_feats, alphas, mask, targets):
+    def _run_batch(self, conditional_feats, alphas, targets):
         self.optimizer.zero_grad()
-        output = self.model(conditional_feats, alphas)
-        loss = torch.sum((output - targets)[mask]**2) # targets as (x1-x0)  
+        output = self.model(conditional_feats, alphas) 
+        loss = torch.sum((output - targets)**2) # targets as (x1-x0)  
         loss.backward()
         self.optimizer.step()
     
@@ -311,10 +311,6 @@ class Trainer:
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         self.train_data.sampler.set_epoch(epoch)
         for img, label, label_color, pred, _ in self.train_data:
-
-            #creating mask where 1 is for non-ignored labels, 0 for ignored labels
-            mask = (label != 255) # B, 1, H, W 
-            mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
             
             ## >>x1 being the target latent distribution<< 
             x1 = self.semantic_map_autoencoder.encode(label_color).sample().to(self.gpu_id) 
@@ -337,7 +333,7 @@ class Trainer:
 
             ## similar to DDP -- condition input 
             conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas, self.img_feats.to(self.gpu_id)], dim=1)  
-            self._run_batch(conditional_feats, alphas, mask, targets) 
+            self._run_batch(conditional_feats, alphas, targets) 
 
             
     def _save_checkpoint(self, epoch, save_best = False):
@@ -399,7 +395,7 @@ class Trainer:
 
     def _run_val_sampling(self, epoch):
         print('In Sampling at epoch:' + str(epoch)) 
-        save_imgs_dir_ep = os.path.join(self.save_imgs_dir, 'mask_loss_' + str(epoch))
+        save_imgs_dir_ep = os.path.join(self.save_imgs_dir, 'latent_' + str(epoch))
         if not os.path.exists(save_imgs_dir_ep):
             os.makedirs(save_imgs_dir_ep) 
         
@@ -454,12 +450,12 @@ if __name__ == '__main__':
     total_epochs = 860 ## similar to DDP 160k iter @ batch size 16
     nb_steps = 256 ## similar to IADB ## increasing cause in latent dimension >> can increase more
     num_classes = 19 ## only considering foreground labels 
-    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/latent_mask_loss_iadb_cond_seg/result_val_images'
+    save_imgs_dir = '/home/guest/scratch/siddharth/data/results/latent_iadb_cond_seg_cor/result_val_images'
     root_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/"
     suffix = '_gtFine_labelTrainIds.png'
     val_suffix = '_gt_labelTrainIds.png'
     batch_size = 8
-    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_mask_loss_iadb_cond_seg/' 
+    checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_iadb_cond_seg_cor/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     ip_latent_channels = 3
     
