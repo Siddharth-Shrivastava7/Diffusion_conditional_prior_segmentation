@@ -127,8 +127,8 @@ class custom_cityscapes_labels(Dataset):
         
         ## latent semantic map feats
         ## semantic label map autoencoder ## loading the current pretrained model
-        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=self.num_classes)
-        semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=torch.device('cpu'))
+        self.semantic_map_autoencoder = Myautoencoder(in_channels=3, out_channels=19)
+        semantic_checkpoint = torch.load(os.path.join('/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val', 'current_checkpoint.pt'), map_location=torch.device('cpu'))
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
         
@@ -217,11 +217,11 @@ class custom_cityscapes_labels(Dataset):
         
         ## transformation 
         with torch.no_grad(): 
-            img_enc =  self.img_encoder.extract_descriptors(img.float()) 
-            pred_latent = self.semantic_map_autoencoder.encode(pred).sample() 
-            label_color_latent = self.semantic_map_autoencoder.encode(label_color).sample()
+            img_enc =  self.img_encoder.extract_descriptors(img.float().unsqueeze(dim=0)) 
+            pred_latent = self.semantic_map_autoencoder.encode(pred.unsqueeze(dim=0)).sample() 
+            label_color_latent = self.semantic_map_autoencoder.encode(label_color.unsqueeze(dim=0)).sample()
     
-        return img_enc, label, label_color_latent , pred_latent, pred_path
+        return img_enc.squeeze(dim=0), label, label_color_latent.squeeze(dim=0) , pred_latent.squeeze(dim=0), pred_path
 
 
 class MyEnsemble(nn.Module): 
