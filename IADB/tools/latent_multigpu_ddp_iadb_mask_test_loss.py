@@ -213,7 +213,7 @@ class MyEnsemble(nn.Module):
         super().__init__() 
         self.latent_deblending_model = get_model(n_channels) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
         self.combining_condition_model = ConvModule(
-            n_channels*5, ## since using encoder method in semantic map auto-encoder rather than encode method
+            n_channels*3, ## since using encoder method in semantic map auto-encoder rather than encode method
             n_channels,
             1,
             padding=0,
@@ -317,7 +317,7 @@ class Trainer:
             mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
             
             ## >>x1 being the target latent distribution<< 
-            x1 = self.semantic_map_autoencoder.encoder(label_color).to(self.gpu_id) 
+            x1 = self.semantic_map_autoencoder.encode(label_color).sample().to(self.gpu_id) 
 
             ## x0 being the stationary distribution! 
             x0 = torch.randn_like(x1.float()) 
@@ -333,7 +333,7 @@ class Trainer:
             self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
             self.img_feats = self.reduce_image_dim(self.img_feats.to(self.gpu_id)) ## B,3,32,32
             self.img_feats = self.upsample_image_feats(self.img_feats.to(self.gpu_id))  ## B,3,64,64
-            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encoder(pred) # B,6,64,64, since not using encode method but rather using encoder method to capture latent representation
+            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64,
 
             ## similar to DDP -- condition input 
             conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas, self.img_feats.to(self.gpu_id)], dim=1)  
@@ -365,7 +365,7 @@ class Trainer:
             self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
             self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
             self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
-            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encoder(pred) # B,6,64,64
+            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64
             
             ## x0 as the stationary distribution 
             x0 = torch.randn_like(self.latent_semantic_map_pred.to(self.gpu_id)) ## sort of logits 
