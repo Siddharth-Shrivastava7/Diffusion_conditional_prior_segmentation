@@ -213,7 +213,7 @@ class MyEnsemble(nn.Module):
         super().__init__() 
         self.latent_deblending_model = get_model(n_channels) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
         self.combining_condition_model = ConvModule(
-            n_channels*3,
+            n_channels*5, ## since using encoder method in semantic map auto-encoder rather than encode method
             n_channels,
             1,
             padding=0,
@@ -277,8 +277,8 @@ class Trainer:
         self.nb_steps = nb_steps
         self.semantic_autoencoder_checkpoint_dir = semantic_autoencoder_checkpoint_dir
         
-        ## image feats
-        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device=self.gpu_id)  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet
+        ## image feats from pretrained vision transformer
+        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device='cpu').eval()  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet 
         
         ## latent semantic map feats
         ## semantic label map autoencoder ## loading the current pretrained model
@@ -296,8 +296,8 @@ class Trainer:
             conv_cfg=None,
             norm_cfg=None,
             act_cfg=None
-        ).to(self.gpu_id) 
-        self.upsample_image_feats = nn.ConvTranspose2d(in_channels= 3, out_channels= 3, kernel_size=2, stride=2).to(self.gpu_id) ## from (3,32,32) => (3,64,64)
+        ).to(self.gpu_id).train() 
+        self.upsample_image_feats = nn.ConvTranspose2d(in_channels= 3, out_channels= 3, kernel_size=2, stride=2).to(self.gpu_id).train() ## from (3,32,32) => (3,64,64)
     
     def _run_batch(self, conditional_feats, alphas, mask, targets):
         self.optimizer.zero_grad()
@@ -317,8 +317,7 @@ class Trainer:
             mask = mask.repeat(1, self.num_classes, 1, 1) # B, num_classes, H, W 
             
             ## >>x1 being the target latent distribution<< 
-            x1 = torch.tensor(self.semantic_map_autoencoder.encode(label_color)).to(self.gpu_id) 
-            # x1 = x1.permute(0,3,1,2).to(self.gpu_id) 
+            x1 = self.semantic_map_autoencoder.encoder(label_color).to(self.gpu_id) 
 
             ## x0 being the stationary distribution! 
             x0 = torch.randn_like(x1.float()) 
@@ -332,9 +331,9 @@ class Trainer:
             
             ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
             self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
-            self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
-            self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
-            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred) # B,3,64,64
+            self.img_feats = self.reduce_image_dim(self.img_feats.to(self.gpu_id)) ## B,3,32,32
+            self.img_feats = self.upsample_image_feats(self.img_feats.to(self.gpu_id))  ## B,3,64,64
+            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encoder(pred) # B,6,64,64, since not using encode method but rather using encoder method to capture latent representation
 
             ## similar to DDP -- condition input 
             conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas, self.img_feats.to(self.gpu_id)], dim=1)  
@@ -359,12 +358,14 @@ class Trainer:
     def _sample_conditional_seg_iadb(self, img, label, pred):
         with torch.no_grad(): 
             self.model = self.model.eval()
+            self.reduce_image_dim = self.reduce_image_dim.eval()
+            self.upsample_image_feats = self.upsample_image_feats.eval()
             
             ## conditional feats => {latent semantic map pred,  x_alphas(latent_target_trained_model, stationary gaussian, alphas), image feats} 
             self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
             self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
             self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
-            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred) # B,3,64,64
+            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encoder(pred) # B,6,64,64
             
             ## x0 as the stationary distribution 
             x0 = torch.randn_like(self.latent_semantic_map_pred.to(self.gpu_id)) ## sort of logits 
