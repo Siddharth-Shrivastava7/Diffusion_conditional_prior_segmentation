@@ -285,11 +285,10 @@ class Trainer:
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
     
-    def _run_batch(self, conditional_feats, alphas, targets):
+    def _run_batch(self, conditional_feats, alphas, target):
         self.optimizer.zero_grad()
         output = self.model(conditional_feats, alphas) 
-        loss = torch.sum((output - targets)**2) # targets as (x1-x0)  
-        print('**********', loss) ## toooo big loss 
+        loss = F.mse_loss(output, target)
         loss.backward()
         self.optimizer.step()
     
@@ -307,7 +306,7 @@ class Trainer:
                 x0 = torch.randn_like(x1.float()) 
 
                 ## similar to what IADB have defined
-                targets = (x1 - x0)
+                target = (x1 - x0)
                 
                 ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
                 self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
@@ -319,7 +318,7 @@ class Trainer:
             
             ## similar to DDP -- condition input 
             conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas], dim=1)  
-            self._run_batch(conditional_feats, alphas, targets) 
+            self._run_batch(conditional_feats, alphas, target) 
 
             
     def _save_checkpoint(self, epoch, save_best = False):

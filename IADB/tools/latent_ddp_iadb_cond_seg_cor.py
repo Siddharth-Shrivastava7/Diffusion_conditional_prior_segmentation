@@ -200,7 +200,7 @@ class MyEnsemble(nn.Module):
         super().__init__() 
         self.latent_deblending_model = get_model(n_channels) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
         self.combining_condition_model = ConvModule(
-            n_channels*2, ## since using encoder method in semantic map auto-encoder rather than encode method
+            n_channels*2 + 384, ## since using encoder method in semantic map auto-encoder rather than encode method
             n_channels,
             1,
             padding=0,
@@ -258,7 +258,6 @@ class Trainer:
         self.epochs_run = 0
         self.num_classes = num_classes
         self.best_loss = torch.finfo(torch.float32).max # init the best loss 
-        self.model = DDP(self.model, device_ids=[self.gpu_id])  ## this is how to wrap model around DDP   
         self.save_imgs_dir = save_imgs_dir
         self.nb_steps = nb_steps
         self.semantic_autoencoder_checkpoint_dir = semantic_autoencoder_checkpoint_dir
@@ -273,31 +272,30 @@ class Trainer:
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
     
-    def _run_batch(self, conditional_feats, alphas, targets):
+    def _run_batch(self, conditional_feats, alphas, target):
         self.optimizer.zero_grad()
         output = self.model(conditional_feats, alphas) 
-        loss = torch.sum((output - targets)**2) # targets as (x1-x0)  
-        print('**********', loss) ## toooo big loss 
+        loss = F.mse_loss(output, target)
         loss.backward()
         self.optimizer.step()
     
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
-        for img, label, label_color, pred, _ in tqdm(self.train_data):
+        for img, _, label_color, pred, _ in tqdm(self.train_data):
             
             ## >>x1 being the target latent distribution<< 
             with torch.no_grad():
-                x1 = self.semantic_map_autoencoder.encode(label_color).sample().to(self.gpu_id) 
+                x1 = self.semantic_map_autoencoder.encode(label_color).mode().to(self.gpu_id) 
 
                 ## x0 being the stationary distribution! 
                 x0 = torch.randn_like(x1.float()) 
 
                 ## similar to what IADB have defined
-                targets = (x1 - x0)
+                target = (x1 - x0)
                 
                 ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
-                self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
+                self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,64,64 
                 self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64,
 
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
@@ -305,8 +303,8 @@ class Trainer:
             x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
             
             ## similar to DDP -- condition input 
-            conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas], dim=1)  
-            self._run_batch(conditional_feats, alphas, targets) 
+            conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas, self.img_feats.to(self.gpu_id)], dim=1)  
+            self._run_batch(conditional_feats, alphas, target) 
 
             
     def _save_checkpoint(self, epoch, save_best = False):
@@ -419,7 +417,7 @@ if __name__ == '__main__':
     root_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/"
     suffix = '_gtFine_labelTrainIds.png'
     val_suffix = '_gt_labelTrainIds.png'
-    batch_size = 2
+    batch_size = 32
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_iadb_cond_seg_cor/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     ip_latent_channels = 3
