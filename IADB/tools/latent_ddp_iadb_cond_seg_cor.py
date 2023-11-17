@@ -33,7 +33,7 @@ from semantic_map_autoencoder import Myautoencoder
 ## for converting ids to train_ids and train_ids to color images 
 from cityscapesscripts.helpers.labels import labels
 
-torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
+# torch.backends.cudnn.benchmark = True ## for better speed ## trying without this ## for CNN specific
 
 ## latent iadb model  
 def get_model(n_channels: int = 3):
@@ -417,7 +417,7 @@ if __name__ == '__main__':
     root_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/"
     suffix = '_gtFine_labelTrainIds.png'
     val_suffix = '_gt_labelTrainIds.png'
-    batch_size = 32
+    batch_size = 8
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_iadb_cond_seg_cor/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     ip_latent_channels = 3
