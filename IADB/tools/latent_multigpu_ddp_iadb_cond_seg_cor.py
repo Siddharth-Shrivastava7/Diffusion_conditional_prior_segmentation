@@ -6,7 +6,6 @@ import torch
 from torchvision import transforms
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
-from tqdm import tqdm
 from PIL import Image 
 import numpy as np
 from  torchvision.transforms.functional import InterpolationMode
@@ -14,7 +13,6 @@ import torch.nn.functional as F
 import test_softmax_pred    
 from mmcv.cnn import ConvModule
 import mmcv 
-from tqdm import tqdm
 import torch.nn as nn
 
 ## latent iadb model
@@ -213,7 +211,7 @@ class MyEnsemble(nn.Module):
         super().__init__() 
         self.latent_deblending_model = get_model(n_channels) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
         self.combining_condition_model = ConvModule(
-            n_channels*2 + 384, ## since using encoder method in semantic map auto-encoder rather than encode method
+            n_channels*2, ## since using encoder method in semantic map auto-encoder rather than encode method
             n_channels,
             1,
             padding=0,
@@ -299,27 +297,28 @@ class Trainer:
         b_sz = len(next(iter(self.train_data))[0]) # batch size 
         print(f"[GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         self.train_data.sampler.set_epoch(epoch)
-        for img, label, label_color, pred, _ in self.train_data:
+        for img, label, label_color, pred, _ in tqdm(self.train_data):
             
             ## >>x1 being the target latent distribution<< 
-            x1 = self.semantic_map_autoencoder.encode(label_color).sample().to(self.gpu_id) 
+            with torch.no_grad():
+                x1 = self.semantic_map_autoencoder.encode(label_color).sample().to(self.gpu_id) 
 
-            ## x0 being the stationary distribution! 
-            x0 = torch.randn_like(x1.float()) 
+                ## x0 being the stationary distribution! 
+                x0 = torch.randn_like(x1.float()) 
 
-            ## similar to what IADB have defined
-            targets = (x1 - x0)
+                ## similar to what IADB have defined
+                targets = (x1 - x0)
+                
+                ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
+                self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
+                self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64,
 
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
             alphas = torch.rand(b_sz).to(self.gpu_id)
             x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
             
-            ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
-            self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
-            self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64,
-
             ## similar to DDP -- condition input 
-            conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas, self.img_feats.to(self.gpu_id)], dim=1)  
+            conditional_feats = torch.cat([self.latent_semantic_map_pred.to(self.gpu_id) , x_alphas], dim=1)  
             self._run_batch(conditional_feats, alphas, targets) 
 
             
