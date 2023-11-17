@@ -213,7 +213,7 @@ class MyEnsemble(nn.Module):
         super().__init__() 
         self.latent_deblending_model = get_model(n_channels) ## latent dimension of semantic labels are of (3x64x64), thus deblending for this dimension
         self.combining_condition_model = ConvModule(
-            n_channels*3, ## since using encoder method in semantic map auto-encoder rather than encode method
+            n_channels*2 + 384, ## since using encoder method in semantic map auto-encoder rather than encode method
             n_channels,
             1,
             padding=0,
@@ -278,7 +278,7 @@ class Trainer:
         self.semantic_autoencoder_checkpoint_dir = semantic_autoencoder_checkpoint_dir
         
         ## image feats from pretrained vision transformer
-        self.img_encoder = ViTExtractor("dino_vits8", stride=8, device='cpu').eval()  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet 
+        self.img_encoder = ViTExtractor("dino_vits8", stride=4, device='cpu').eval()  ## for image encoding part (the number of channels is fixed for now, later need to undo hardcode>>the num channels is 384) ## this extracted features will concatenated in the 2nd level of latent iadb UNet 
         
         ## latent semantic map feats
         ## semantic label map autoencoder ## loading the current pretrained model
@@ -286,23 +286,12 @@ class Trainer:
         semantic_checkpoint = torch.load(os.path.join(self.semantic_autoencoder_checkpoint_dir, 'current_checkpoint.pt'), map_location=torch.device('cpu'))
         self.semantic_map_autoencoder.load_state_dict(semantic_checkpoint) ## the recommended way (given by pytorch) of loading models!
         self.semantic_map_autoencoder.eval()
-        
-        ## reducing the dimensionity of the image feats using 1x1 conv and upsampling by learnable params
-        self.reduce_image_dim = ConvModule(
-            384,
-            3,
-            1,
-            padding=0,
-            conv_cfg=None,
-            norm_cfg=None,
-            act_cfg=None
-        ).to(self.gpu_id).train() 
-        self.upsample_image_feats = nn.ConvTranspose2d(in_channels= 3, out_channels= 3, kernel_size=2, stride=2).to(self.gpu_id).train() ## from (3,32,32) => (3,64,64)
     
     def _run_batch(self, conditional_feats, alphas, targets):
         self.optimizer.zero_grad()
         output = self.model(conditional_feats, alphas) 
         loss = torch.sum((output - targets)**2) # targets as (x1-x0)  
+        print('**********', loss) ## toooo big loss 
         loss.backward()
         self.optimizer.step()
     
@@ -327,8 +316,6 @@ class Trainer:
             
             ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
             self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
-            self.img_feats = self.reduce_image_dim(self.img_feats.to(self.gpu_id)) ## B,3,32,32
-            self.img_feats = self.upsample_image_feats(self.img_feats.to(self.gpu_id))  ## B,3,64,64
             self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64,
 
             ## similar to DDP -- condition input 
@@ -354,13 +341,9 @@ class Trainer:
     def _sample_conditional_seg_iadb(self, img, label, pred):
         with torch.no_grad(): 
             self.model = self.model.eval()
-            self.reduce_image_dim = self.reduce_image_dim.eval()
-            self.upsample_image_feats = self.upsample_image_feats.eval()
             
             ## conditional feats => {latent semantic map pred,  x_alphas(latent_target_trained_model, stationary gaussian, alphas), image feats} 
             self.img_feats = self.img_encoder.extract_descriptors(img.float()) # B,384,32,32 
-            self.img_feats = self.reduce_image_dim(self.img_feats) ## B,3,32,32
-            self.img_feats = self.upsample_image_feats(self.img_feats)  ## B,3,64,64
             self.latent_semantic_map_pred = self.semantic_map_autoencoder.encode(pred).sample() # B,3,64,64
             
             ## x0 as the stationary distribution 
@@ -454,7 +437,7 @@ if __name__ == '__main__':
     root_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/"
     suffix = '_gtFine_labelTrainIds.png'
     val_suffix = '_gt_labelTrainIds.png'
-    batch_size = 8
+    batch_size = 2
     checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/latent_iadb_cond_seg_cor/' 
     semantic_autoencoder_checkpoint_dir = '/home/guest/scratch/siddharth/data/saved_models/semantic_map_autoencoder/dz_val'
     ip_latent_channels = 3
