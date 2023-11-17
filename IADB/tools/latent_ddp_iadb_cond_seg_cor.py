@@ -132,7 +132,7 @@ class custom_cityscapes_labels(Dataset):
                     self.label_list.append(os.path.join(self.gt_dir, path)) 
                     self.pred_latent_list.append(os.path.join(self.pred_dir, path.replace(suffix, '_rgb_anon_latent_enc.pt')))
                     self.img_enc_list.append(os.path.join(self.img_dir, path.replace(suffix, '_rgb_anon_latent_vit_enc.pt')))
-                    self.label_latent_list.append(path.replace(suffix, '_gt_labelTrainIds_latent_enc.pt'))
+                    self.label_latent_list.append(os.path.join(self.gt_dir,path.replace(suffix, '_gt_labelTrainIds_latent_enc.pt')))
             
             ## can't use since in DDP, and distributed sampler is used in Distributed sampler
             # assert len(self.label_list) == len(self.img_list) == len(self.pred_list) == 50
@@ -186,7 +186,7 @@ class MyEnsemble(nn.Module):
         return d 
 
 
-def load_train_val_objs(root_dir= "/home/guest/scratch/siddharth/data/dataset/cityscapes/", suffix= "_gtFine_labelTrainIds.png" , ip_latent_channels = 3, resize_shape: tuple = (512, 1024), val_suffix: str = '_gt_labelTrainIds.png'): 
+def load_train_val_objs(root_dir= "~/scratch/siddharth/data/dataset/cityscapes/", suffix= "_gtFine_labelTrainIds.png" , ip_latent_channels = 3, resize_shape: tuple = (512, 1024), val_suffix: str = '_gt_labelTrainIds.png'): 
 
     train_set =  custom_cityscapes_labels(root_dir, suffix,  resize_shape, mode='train')# loading training dataset
     val_set = custom_cityscapes_labels(root_dir, val_suffix, resize_shape = resize_shape, mode = 'val')
@@ -265,11 +265,11 @@ class Trainer:
             
             ## alpha blending taking place between x0 (not conditional feats!) and x1 
             alphas = torch.rand(b_sz).to(self.gpu_id)
-            x_alphas = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
+            x_alpha = alphas.view(-1,1,1,1) * x1 + (1-alphas).view(-1,1,1,1) * x0 
             
             ## similar to DDP -- condition input 
-            ## conditional feats => {latent semantic map pred,  x_alphas(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
-            conditional_feats = torch.cat([pred_latent.to(self.gpu_id) , x_alphas, img_enc.to(self.gpu_id)], dim=1)  
+            ## conditional feats => {latent semantic map pred,  x_alpha(latent_semantic_map_gt, stationary gaussian, alphas), image feats}
+            conditional_feats = torch.cat([pred_latent.to(self.gpu_id) , x_alpha, img_enc.to(self.gpu_id)], dim=1)  
             self._run_batch(conditional_feats, alphas, target) 
 
             
@@ -301,13 +301,13 @@ class Trainer:
                 alpha_start = (t/self.nb_steps)
                 alpha_end =((t+1)/self.nb_steps)
 
-                ## conditional feats => {latent semantic map pred,  x_alphas(latent_target_trained_model, stationary gaussian, alphas), image feats} 
+                ## conditional feats => {latent semantic map pred,  x_alpha(latent_target_trained_model, stationary gaussian, alphas), image feats} 
                 conditional_feats = torch.cat([pred_latent.to(self.gpu_id) , x_alpha, img_enc.to(self.gpu_id)], dim=1)
             
                 ## this is giving ~ (\bar_{x1} - \bar{x0})
                 d = self.model(conditional_feats, torch.as_tensor(alpha_start, device=self.gpu_id)) 
                 
-                ## reaching x1 by finding neighbouring x_alphas
+                ## reaching x1 by finding neighbouring x_alpha
                 x_alpha = x_alpha + (alpha_end-alpha_start)*d
 
             x_alpha_decoded = self.semantic_map_autoencoder.decode(x_alpha.detach().cpu()) ### decoder to output: (B,19,256,256)
@@ -315,7 +315,7 @@ class Trainer:
             approx_x1_sample = torch.argmax(approx_x1_sample_softmax, dim=1)
             ## for the loss :: between label (x1) and approximated x1 through x_alpha
 
-            val_batch_loss = F.cross_entropy(x_alpha, label.long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
+            val_batch_loss = F.cross_entropy(x_alpha_decoded, label.long().squeeze(dim=1), ignore_index=255) ## as the cross-entropy cares about the order of the discrete ground truth labels 
 
             return approx_x1_sample, val_batch_loss
 
