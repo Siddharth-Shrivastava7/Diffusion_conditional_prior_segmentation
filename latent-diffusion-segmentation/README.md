@@ -177,3 +177,5 @@ This software is released under a creative commons license which allows for pers
 ## Acknoledgements
 
 I'm thankful for all the public repositories (see also references in the code), and in particular for the [detectron2](https://github.com/facebookresearch/detectron2) and [diffusers](https://github.com/huggingface/diffusers) libaries.
+
+### have to build on top of this paper! (mostly)
