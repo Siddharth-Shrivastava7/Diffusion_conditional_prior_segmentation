@@ -507,7 +507,7 @@ def build_engine(trainer: Trainer,
         loader = _loader_subset(validation_loader, num_images, randomize=True)
         grid_shuffle = grid_of_predictions(_flatten(trainer.average_model), trainer.average_feature_cond_encoder, loader, num_predictions,
                                            cond_vis_fn, params)
-        grid = torch.concat([grid, grid_shuffle], dim=0)
+        grid = torch.cat([grid, grid_shuffle], dim=0)
         filename = os.path.join(output_path, f"images_{engine.state.iteration:06}.png")
         LOGGER.info("Saving images to %s...", filename)
         os.makedirs(output_path, exist_ok=True)
