@@ -1,4 +1,4 @@
-output_path: "./logs/output_${SLURM_JOB_ID}_${NOW}"
+output_path: "/raid/ai24resch01002/predictions/ccdm_org/output_${SLURM_JOB_ID}_${NOW}"
 
 cudnn:
     benchmark: yes
@@ -8,11 +8,11 @@ dataset_file: datasets.cityscapes
 
 dataset_pipeline_train: ["flip",  "resize", "colorjitter", "torchvision_normalise"]
 dataset_pipeline_train_settings:
-    target_size:  [128, 256]
+    target_size:  [256, 512]
 
 dataset_pipeline_val: ["resize", "torchvision_normalise"]
 dataset_pipeline_val_settings:
-    target_size: [128, 256]
+    target_size: [256, 512]
 
 dataset_val_max_size: 100  # One of "null" (=full val size), or any number
 class_weights: "uniform"
@@ -44,7 +44,7 @@ diffusion_type: "categorical"
 time_steps: 250
 
 feature_cond_encoder:
-    type: 'none' # ['dino', 'none']
+    type: 'dino' # ['dino', 'none']
     model: 'dino_vits8' # 'dino_vitb8
     channels: 384 # 768 for vitb, 384 for vits
     conditioning: "concat_pixels_concat_features"
