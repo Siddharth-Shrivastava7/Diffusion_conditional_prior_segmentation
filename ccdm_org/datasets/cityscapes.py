@@ -12,7 +12,8 @@ import ddpm
 from datasets.cityscapes_config import encode_target
 from typing import Union
 
-BASE_PATH = os.path.expandvars("${TMPDIR}/cityscapes/")
+# BASE_PATH = os.path.expandvars("${TMPDIR}/cityscapes/")
+BASE_PATH = os.path.expandvars("/raid/ai24resch01002/datasets/cityscapes")
 
 NUM_CLASSES = 20
 BACKGROUND_CLASS = 19

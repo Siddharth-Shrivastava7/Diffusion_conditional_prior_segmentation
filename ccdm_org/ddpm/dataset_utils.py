@@ -180,7 +180,8 @@ class TransformedImgLblDataset(Dataset):
 
         if self.apply_one_hot:
             lbl_tensor = torch.nn.functional.one_hot(lbl_tensor.long(), self.num_classes)
-            lbl_tensor = torch.permute(lbl_tensor, (2, 0, 1))
+            # lbl_tensor = torch.permute(lbl_tensor, (2, 0, 1))
+            lbl_tensor = lbl_tensor.permute((2, 0, 1))
 
         if self.return_metadata:
             # write custom collate to allow batched passing of filenames from dataloader,
