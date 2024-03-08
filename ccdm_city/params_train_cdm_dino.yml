@@ -18,8 +18,8 @@ dataset_pipeline_val_settings:
 dataset_val_max_size: 32  # One of "null" (=full val size), or any number
 class_weights: "uniform"  # One of ["uniform", "weighted", "weighted_cs_train", "weighted_cs_train_v2"]
 
-multigpu: no
-distributed: no # set this to yes to use ddp
+multigpu: yes
+distributed: yes # set this to yes to use ddp
 
 mp_loaders: 2
 batch_size: 16
