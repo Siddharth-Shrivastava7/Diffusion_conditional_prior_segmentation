@@ -331,89 +331,56 @@ class DDP(EncoderDecoder):
         return times
 
     ## The modified one 
-    # @torch.no_grad()
-    # def ddim_sample(self, x, img_metas):
-    #     b, c, h, w, device = *x.shape, x.device
-    #     time_pairs = self._get_sampling_timesteps(b, device=device)
-    #     x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
-    #     ## below holds the modification code for inferecing ddp with the starting point as the prediction of either DA or DG model 
-    #     # if img_metas[0]['filename'].find('dark_zurich')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
-    #     if img_metas[0]['filename'].find('cityscapes')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
-    #     # if img_metas[0]['filename'].find('bdd100k')!=-1:
-    #         # ## loading the predicted image
-    #         # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/segformer_pred/')
-    #         # pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
-    #         # pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
-    #         # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
-    #         # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
-    #         # pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
-    #         # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', img_metas[0]['filename']) # image path of the dataset 
-    #         # pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
-    #         # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/robustnet_pred/') # Robustnet prediction on DZ-val images
-    #         city_name = img_metas[0]['filename'].split('/')[-2]  
-    #         pred_path = img_metas[0]['filename'].replace('leftImg8bit/val/' + city_name, 'pred/segformerb2/')
-    #         pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
-    #         pred[pred==255] = self.num_classes ## for gt case 
-    #         pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
-    #         ## have to resize pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
-    #         pred_down = resize(pred.float(), size=(h, w), mode="nearest")
-    #         # encoding the predicted image
-    #         mask_enc = self.embedding_table(pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
-    #         mask_enc = (torch.sigmoid(mask_enc) * 2 - 1) * self.bit_scale 
-    #         # print(mask_enc.shape) # torch.Size([1, 256, 256, 512])
-    #         ## corrupting the predicted image 
-    #         # sample time
-    #         # times = torch.zeros((b,), device=device).float().uniform_(self.sample_range[0],
-    #         #                                                             self.sample_range[1])  # [bs]
-    #         # # print(times)
-    #         # # random noise
-    #         # noise = torch.randn_like(mask_enc)
-    #         # noise_level = self.log_snr(times)
-    #         # padded_noise_level = self.right_pad_dims_to(x, noise_level)
-    #         # alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
-    #         # mask_t = alpha * mask_enc + sigma * noise           
-    #         mask_t = mask_enc
-    #     # mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
-    #     outs = list()
-    #     for idx, (times_now, times_next) in enumerate(time_pairs):
-    #         # x_mod = torch.zeros_like(x)
-    #         # feat = torch.cat([x_mod, mask_t], dim=1) 
-    #         feat = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
-    #         feat = self.transform(feat) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
-    #         # feat = mask_t # not working ...only features 
-    #         log_snr = self.log_snr(times_now)
-    #         log_snr_next = self.log_snr(times_next)
-
-    #         padded_log_snr = self.right_pad_dims_to(mask_t, log_snr)
-    #         padded_log_snr_next = self.right_pad_dims_to(mask_t, log_snr_next)
-    #         alpha, sigma = log_snr_to_alpha_sigma(padded_log_snr)
-    #         alpha_next, sigma_next = log_snr_to_alpha_sigma(padded_log_snr_next)
-
-    #         input_times = self.time_mlp(log_snr)
-    #         mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  # [bs, 150, ] ## it is the map_pred :: the decoded y_0^{hat} from the map decoder 
-    #         mask_pred = torch.argmax(mask_logit, dim=1) ## the label map from the map decoder logit output
-    #         mask_pred = self.embedding_table(mask_pred).permute(0, 3, 1, 2) ## encoding the map pred from the map decoder part 
-    #         mask_pred = (torch.sigmoid(mask_pred) * 2 - 1) * self.bit_scale ## encoding the map pred from the map decoder part
-    #         pred_noise = (mask_t - alpha * mask_pred) / sigma.clamp(min=1e-8) ## eps calculating exactly same as what was mentioned in the paper 
-    #         mask_t = mask_pred * alpha_next + pred_noise * sigma_next ## this mask_t is basically the mask_{t+1}; they used it as mask_t since, it will be reused in the next iteration of the timesteps ## and this is main step of DDIM formulation...OLA!!!
-    #         if self.accumulation:
-    #             outs.append(mask_logit.softmax(1))
-    #     if self.accumulation:
-    #         mask_logit = torch.cat(outs, dim=0)
-    #     logit = mask_logit.mean(dim=0, keepdim=True)
-    #     return logit
-    
-    ## the original one by the author
     @torch.no_grad()
     def ddim_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
         time_pairs = self._get_sampling_timesteps(b, device=device)
         x = repeat(x, 'b c h w -> (r b) c h w', r=self.randsteps)
-        mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device)
+        ## below holds the modification code for inferecing ddp with the starting point as the prediction of either DA or DG model 
+        # if img_metas[0]['filename'].find('dark_zurich')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
+        if img_metas[0]['filename'].find('cityscapes')!=-1: ## dataset we are dealing with, requires DDP to act as a correction module
+        # if img_metas[0]['filename'].find('bdd100k')!=-1:
+            # ## loading the predicted image
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/segformer_pred/')
+            # pred_path = img_metas[0]['filename'].replace('/rgb_anon/', '/gt/').replace('_rgb_anon.png','_gt_labelTrainIds.png') ## gt pred path for testing its upperlimit # Dz val testing 
+            # pred_path = img_metas[0]['filename'].replace('/leftImg8bit/', '/gtFine/').replace('_leftImg8bit.png','_gtFine_labelTrainIds.png') ## gt path for cityscapes 
+            # city_name = img_metas[0]['filename'].split('/')[-2] ## cityscapes prediction by Robustnet
+            # pred_path = img_metas[0]['filename'].replace('dataset/cityscapes/leftImg8bit/val/' + city_name ,'results/oneformer/semantic_inference/') ## cityscapes prediction by Robustnet
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val_ref/day/GOPR0356_ref/','pred/mic_pred/') # when using day ref images for MIC pred DZ Day data input images
+            # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>', img_metas[0]['filename']) # image path of the dataset 
+            # pred_path = img_metas[0]['filename'].replace('/dataset/bdd100k_seg/bdd100k/seg/images/val/','/results/robustnet/bdd100k/saved_models/val/pred_trainids/').replace('.jpg', '.png') # when using day ref images for Robustnet pred BDD100k data input images
+            # pred_path = img_metas[0]['filename'].replace('rgb_anon/val/night/GOPR0356/','pred/robustnet_pred/') # Robustnet prediction on DZ-val images
+            city_name = img_metas[0]['filename'].split('/')[-2]  
+            pred_path = img_metas[0]['filename'].replace('leftImg8bit/val/' + city_name, 'pred/segformerb2/')
+            pred = torch.tensor(np.array(Image.open(pred_path))).to(device) # loading MIC prediction {as a starting point to correct it further}  
+            pred[pred==255] = self.num_classes ## for gt case 
+            pred = pred.view(1,1, pred.shape[0], pred.shape[1]) ## shape => (1, 1, 1080, 1920)
+            ## have to resize pred::in order to bring it to shape of x ##(b,1,h/4, w/4) 
+            pred_down = resize(pred.float(), size=(h, w), mode="nearest")
+            # encoding the predicted image
+            mask_enc = self.embedding_table(pred_down.long()).squeeze(1).permute(0, 3, 1, 2) ## shape would be (b, 256, h/4, w/4)
+            mask_enc = (torch.sigmoid(mask_enc) * 2 - 1) * self.bit_scale 
+            # print(mask_enc.shape) # torch.Size([1, 256, 256, 512])
+            ## corrupting the predicted image 
+            # sample time
+            # times = torch.zeros((b,), device=device).float().uniform_(self.sample_range[0],
+            #                                                             self.sample_range[1])  # [bs]
+            # # print(times)
+            # # random noise
+            # noise = torch.randn_like(mask_enc)
+            # noise_level = self.log_snr(times)
+            # padded_noise_level = self.right_pad_dims_to(x, noise_level)
+            # alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
+            # mask_t = alpha * mask_enc + sigma * noise           
+            mask_t = mask_enc
+        # mask_t = torch.randn((self.randsteps, self.decode_head.in_channels[0], h, w), device=device) # this is the "map_t" in the algorithm; which is the sample from the normal distribution # original
         outs = list()
         for idx, (times_now, times_next) in enumerate(time_pairs):
-            feat = torch.cat([x, mask_t], dim=1)
-            feat = self.transform(feat)
+            # x_mod = torch.zeros_like(x)
+            # feat = torch.cat([x_mod, mask_t], dim=1) 
+            feat = torch.cat([x, mask_t], dim=1) # for decoding << before that concatenating the img encoding and corrupted gt map which is for sampling is the sample from the normal distribution >> 
+            feat = self.transform(feat) ## converting (512 concat feats to 256 feats for having compatibility to decoder input module)
+            # feat = mask_t # not working ...only features 
             log_snr = self.log_snr(times_now)
             log_snr_next = self.log_snr(times_next)
 
@@ -423,13 +390,12 @@ class DDP(EncoderDecoder):
             alpha_next, sigma_next = log_snr_to_alpha_sigma(padded_log_snr_next)
 
             input_times = self.time_mlp(log_snr)
-            mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  # [bs, 150, ]
-            mask_pred = torch.argmax(mask_logit, dim=1)
-            mask_pred = self.embedding_table(mask_pred).permute(0, 3, 1, 2)
-            mask_pred = (torch.sigmoid(mask_pred) * 2 - 1) * self.bit_scale
-            pred_noise = (mask_t - alpha * mask_pred) / sigma.clamp(min=1e-8)
-            mask_t = mask_pred * alpha_next + pred_noise * sigma_next
-            
+            mask_logit = self._decode_head_forward_test([feat], input_times, img_metas=img_metas)  # [bs, 150, ] ## it is the map_pred :: the decoded y_0^{hat} from the map decoder 
+            mask_pred = torch.argmax(mask_logit, dim=1) ## the label map from the map decoder logit output
+            mask_pred = self.embedding_table(mask_pred).permute(0, 3, 1, 2) ## encoding the map pred from the map decoder part 
+            mask_pred = (torch.sigmoid(mask_pred) * 2 - 1) * self.bit_scale ## encoding the map pred from the map decoder part
+            pred_noise = (mask_t - alpha * mask_pred) / sigma.clamp(min=1e-8) ## eps calculating exactly same as what was mentioned in the paper 
+            mask_t = mask_pred * alpha_next + pred_noise * sigma_next ## this mask_t is basically the mask_{t+1}; they used it as mask_t since, it will be reused in the next iteration of the timesteps ## and this is main step of DDIM formulation...OLA!!!
             if self.accumulation:
                 outs.append(mask_logit.softmax(1))
         if self.accumulation:
