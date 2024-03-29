@@ -157,7 +157,7 @@ class SelfAlignedDDP(EncoderDecoder):
             # conditional input
             feat = torch.cat([x, noise], dim=1)
             feat = self.transform(feat)
-            logits = self._decode_head_forward_test([feat], input_times, img_metas)
+            logits = self._decode_head_forward_test([feat], input_times, img_metas) ## this is where they are taking the model prediction in order to correct use them for noising and denoising
             preds = torch.argmax(logits, dim=1)
             
         preds = self.embedding_table(preds.detach()).squeeze(1).permute(0, 3, 1, 2)
