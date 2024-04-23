@@ -6,9 +6,6 @@ from torch.special import expm1
 from einops import rearrange, reduce, repeat
 from mmcv.cnn import ConvModule
 import math
-from PIL import Image 
-import numpy as np
-import torch.nn.functional as F
 
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
@@ -47,23 +44,6 @@ class LearnedSinusoidalPosEmb(nn.Module):
         fouriered = torch.cat((freqs.sin(), freqs.cos()), dim=-1)
         fouriered = torch.cat((x, fouriered), dim=-1)
         return fouriered
-
-## adding file for model prediction 
-def get_model_pred(img_metas, device):
-    if img_metas[0]['filename'].find('cityscapes')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/cityscapes_train/saved_models/train/rgb/'
-        pred_ls = []
-        for ind in range(len(img_metas)):
-            img_name = img_metas[ind]['filename'].split('/')[-1] 
-            img_name = img_name.split('.')[0] + '_color.png'
-            pred_path = pred_folder_name + img_name
-            pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
-            pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
-            pred_ls.append(pred)         
-        preds = torch.cat(pred_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
-    else: 
-        raise Exception("Only cityscapes predictions are supported, for now!")
-    return preds
 
 
 @SEGMENTORS.register_module()
@@ -136,9 +116,7 @@ class DDP(EncoderDecoder):
         map of the same size as input."""
         x = self.extract_feat(img)[0]
         if self.diffusion == "ddim":
-            # out = self.ddim_sample(x, img_metas)
-            ## modifying for segmentation correction
-            out = self.mod_alpha_deblend_sample(x, img_metas)
+            out = self.ddim_sample(x, img_metas)
         elif self.diffusion == 'ddpm':
             out = self.ddpm_sample(x, img_metas)
         else:
@@ -163,73 +141,50 @@ class DDP(EncoderDecoder):
                 used if the architecture supports semantic segmentation task.
         Returns:
             dict[str, Tensor]: a dictionary of loss components
-            
-        DISCLAIMER:: chaning this original DDP training to my mod training procedure
         """
 
         # backbone & neck
         x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *x.shape, x.device
-        ## model_prediction calling 
-        preds = get_model_pred(img_metas, device)
-        
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
         gt_down[gt_down == 255] = self.num_classes
+
         gt_down = self.embedding_table(gt_down).squeeze(1).permute(0, 3, 1, 2)
-        gt_down = (torch.sigmoid(gt_down) * 2 - 1) * self.bit_scale 
-        ## model_pred resizing and taking the embedding 
-        preds_down = resize(preds.float(), size=(h, w), mode="nearest")
-        preds_down = preds_down.to(gt_semantic_seg.dtype)
-        preds_down[preds_down == 255] = self.num_classes
-        preds_down_enc = self.embedding_table(preds_down).squeeze(1).permute(0, 3, 1, 2)
-        preds_down_enc = (torch.sigmoid(preds_down_enc) * 2 - 1) * self.bit_scale 
-        
-        # sample times
-        # times = torch.zeros((batch,), device=device).float().uniform_(self.sample_range[0],
-        #                                                               self.sample_range[1])  # [bs]
-        ## sample alpha
-        alpha = torch.zeros((batch,), device=device).float().uniform_(self.sample_range[0],
+        gt_down = (torch.sigmoid(gt_down) * 2 - 1) * self.bit_scale
+
+        # sample time
+        times = torch.zeros((batch,), device=device).float().uniform_(self.sample_range[0],
                                                                       self.sample_range[1])  # [bs]
 
         # random noise
-        # noise = torch.randn_like(gt_down)
-        # noise_level = self.log_snr(times)
-        # padded_noise_level = self.right_pad_dims_to(img, noise_level)
-        # alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
-        # noised_gt = alpha * gt_down + sigma * noise
-        ## alpha blending 
-        alpha_broadcast = self.right_pad_dims_to(img, alpha) ## increasing the dimensions of alpha
-        map_alpha = (1-alpha_broadcast) * preds_down_enc + alpha_broadcast * gt_down
-        
+        noise = torch.randn_like(gt_down)
+        noise_level = self.log_snr(times)
+        padded_noise_level = self.right_pad_dims_to(img, noise_level)
+        alpha, sigma = log_snr_to_alpha_sigma(padded_noise_level)
+        noised_gt = alpha * gt_down + sigma * noise
+
         # conditional input
-        # feat = torch.cat([x, noised_gt], dim=1)
-        # feat = self.transform(feat)
-        ## conditional input for model pred correction 
-        feat = torch.cat([x, map_alpha], dim=1)
+        feat = torch.cat([x, noised_gt], dim=1)
         feat = self.transform(feat)
-        
+
         losses = dict()
-        # input_times = self.time_mlp(noise_level)
-        input_times = self.time_mlp(alpha)
-        loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg, preds_down)
+        input_times = self.time_mlp(noise_level)
+        loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg)
         losses.update(loss_decode)
-        # if self.with_auxiliary_head:
-        #     loss_aux = self._auxiliary_head_forward_train(
-        #         [x], img_metas, gt_semantic_seg)
-        #     losses.update(loss_aux)
+        if self.with_auxiliary_head:
+            loss_aux = self._auxiliary_head_forward_train(
+                [x], img_metas, gt_semantic_seg)
+            losses.update(loss_aux)
         return losses
 
-    def _decode_head_forward_train(self, x, t, img_metas, gt_semantic_seg, preds_down): ## changed from original 
+    def _decode_head_forward_train(self, x, t, img_metas, gt_semantic_seg):
         """Run forward function and calculate loss for decode head in
         training."""
         losses = dict()
-        # loss_decode = self.decode_head.forward_train(x, t, img_metas,
-        #                                              gt_semantic_seg,
-        #                                              self.train_cfg)
         loss_decode = self.decode_head.forward_train(x, t, img_metas,
                                                      gt_semantic_seg,
-                                                     self.train_cfg, preds_down)
+                                                     self.train_cfg)
 
         losses.update(add_prefix(loss_decode, 'decode'))
         return losses
@@ -333,34 +288,3 @@ class DDP(EncoderDecoder):
             mask_logit = torch.cat(outs, dim=0)
         logit = mask_logit.mean(dim=0, keepdim=True)
         return logit
-
-    # modifying for semgmentation correction
-    @torch.no_grad()
-    def mod_alpha_deblend_sample(self, x, img_metas):
-        b, c, h, w, device = *x.shape, x.device
-        ## model_prediction calling 
-        map_preds = get_model_pred(img_metas, device)
-        map_preds_down = resize(map_preds.float(), size=(h, w), mode="nearest")
-        map_preds_down = map_preds_down.to(map_preds_down.long())
-        map_preds_down[map_preds_down == 255] = self.num_classes
-        map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
-        map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        map_preds_down_norm = F.one_hot(map_preds_down, num_classes=19).transpose(1, 4).squeeze(-1) ## ideally this should be replaced the model logits...
-        T = 10 # a hyper parameter 
-        for t in range(T):
-            alpha_t = torch.ones((b,), device=device).float() * (t/T)
-            alpha_t_plus_one = torch.ones((b,), device=device).float() * ((t+1)/T)
-            alpha_t_broadcast = self.right_pad_dims_to(map_preds_down, alpha_t)
-            alpha_t_plus_one_broadcast = self.right_pad_dims_to(map_preds_down, alpha_t)
-            
-            feat = torch.cat([x, map_preds_down_enc], dim=1)
-            feat = self.transform(feat)
-            input_times = self.time_mlp(alpha_t)
-            map_pred_logits = map_preds_down_norm + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
-            map_preds_down_norm = F.softmax(map_pred_logits, dim=1) 
-            map_preds_down = torch.argmax(map_preds_down_norm, dim = 1)
-            map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
-            map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        return map_pred_logits
-            
-            

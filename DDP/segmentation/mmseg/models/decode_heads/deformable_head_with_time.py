@@ -5,6 +5,7 @@ import warnings
 from mmseg.models.builder import HEADS
 from mmseg.models.decode_heads.decode_head import BaseDecodeHead
 from mmseg.ops import resize
+import torch.nn.functional as F
 
 try:
     from mmcv.ops.multi_scale_deform_attn import MultiScaleDeformableAttention
@@ -131,7 +132,7 @@ class DeformableHeadWithTime(BaseDecodeHead):
         out = self.conv_seg(memory)
         return out
     
-    def forward_train(self, inputs, times, img_metas, gt_semantic_seg, train_cfg):
+    def forward_train(self, inputs, times, img_metas, gt_semantic_seg, train_cfg, preds_down):
         """Forward function for training.
         Args:
             inputs (list[Tensor]): List of multi-level img features.
@@ -148,7 +149,9 @@ class DeformableHeadWithTime(BaseDecodeHead):
             dict[str, Tensor]: a dictionary of loss components
         """
         seg_logits = self(inputs, times)
-        losses = self.losses(seg_logits, gt_semantic_seg)
+        seg_logits_with_pred = F.softmax(seg_logits, dim = 1) + F.one_hot(preds_down, num_classes=19).transpose(1, 4).squeeze(-1).detach()  ## as per our modified training routine, ## ideally one hot should be replaced the model logits...
+        ## changes for model prediction correction 
+        losses = self.losses(seg_logits_with_pred, gt_semantic_seg)
         return losses
     
     def forward_train_return_logits(self, inputs, times, img_metas, gt_semantic_seg, train_cfg):
