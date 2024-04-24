@@ -149,7 +149,7 @@ class DeformableHeadWithTime(BaseDecodeHead):
             dict[str, Tensor]: a dictionary of loss components
         """
         seg_logits = self(inputs, times)
-        seg_logits_with_pred = F.softmax(seg_logits, dim = 1) + preds_logits.detach()  ## as per our modified training routine, ## ideally one hot should be replaced the model logits...
+        seg_logits_with_pred = F.softmax(seg_logits, dim = 1) + F.softmax(preds_logits, dim =1).detach()  ## as per our modified training routine
         ## changes for model prediction correction 
         losses = self.losses(seg_logits_with_pred, gt_semantic_seg)
         return losses

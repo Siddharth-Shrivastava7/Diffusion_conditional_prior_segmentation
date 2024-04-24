@@ -88,7 +88,7 @@ def get_model_pred_val(img_metas, device):
             pred_imgs_ls.append(pred)         
             pred_logits_ls.append(pred_logits)
         preds = torch.cat(pred_imgs_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
-        preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 128, 256)
+        preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 256, 512)
     else: 
         raise Exception("Only cityscapes predictions are supported, for now!")
     return preds, preds_logits
@@ -375,6 +375,7 @@ class DDP(EncoderDecoder):
         map_preds_down[map_preds_down == 255] = self.num_classes
         map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
         map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
+        map_preds_logits_norm = F.softmax(map_preds_logits, dim =1)
         T = 10 # a hyper parameter 
         for t in range(T):
             alpha_t = torch.ones((b,), device=device).float() * (t/T)
@@ -385,11 +386,11 @@ class DDP(EncoderDecoder):
             feat = torch.cat([x, map_preds_down_enc], dim=1)
             feat = self.transform(feat)
             input_times = self.time_mlp(alpha_t)
-            map_pred_logits = map_preds_logits + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
-            map_pred_logits = F.softmax(map_pred_logits, dim=1) 
-            map_preds_down = torch.argmax(map_pred_logits, dim = 1)
+            map_preds_logits = map_preds_logits_norm + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
+            map_preds_logits_norm = F.softmax(map_preds_logits, dim=1) 
+            map_preds_down = torch.argmax(map_preds_logits_norm, dim = 1)
             map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
             map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        return map_pred_logits
+        return map_preds_logits
             
             
