@@ -56,9 +56,9 @@ def get_model_pred_train(img_metas, device):
         pred_logits_ls = []
         for ind in range(len(img_metas)):
             img_name = img_metas[ind]['filename'].split('/')[-1] 
-            img_name = img_name.split('.')[0] + '_color.png'
+            img_name_rgb = img_name.split('.')[0] + '_color.png'
             logits_name = img_name.split('.')[0] + '_logits.pt'
-            pred_path = pred_folder_name + 'rgb/' + img_name
+            pred_path = pred_folder_name + 'rgb/' + img_name_rgb
             pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
@@ -78,9 +78,9 @@ def get_model_pred_val(img_metas, device):
         pred_logits_ls = []
         for ind in range(len(img_metas)):
             img_name = img_metas[ind]['filename'].split('/')[-1] 
-            img_name = img_name.split('.')[0] + '_color.png'
+            img_name_rgb = img_name.split('.')[0] + '_color.png'
             logits_name = img_name.split('.')[0] + '_logits.pt'
-            pred_path = pred_folder_name + 'rgb/' + img_name
+            pred_path = pred_folder_name + 'rgb/' + img_name_rgb
             pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
