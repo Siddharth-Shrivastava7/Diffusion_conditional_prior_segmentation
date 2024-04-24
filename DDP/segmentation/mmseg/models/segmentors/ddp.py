@@ -375,7 +375,6 @@ class DDP(EncoderDecoder):
         map_preds_down[map_preds_down == 255] = self.num_classes
         map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
         map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        map_preds_logits_norm = F.softmax(map_preds_logits, dim =1)
         T = 10 # a hyper parameter 
         for t in range(T):
             alpha_t = torch.ones((b,), device=device).float() * (t/T)
@@ -386,9 +385,8 @@ class DDP(EncoderDecoder):
             feat = torch.cat([x, map_preds_down_enc], dim=1)
             feat = self.transform(feat)
             input_times = self.time_mlp(alpha_t)
-            map_preds_logits = map_preds_logits_norm + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
-            map_preds_logits_norm = F.softmax(map_preds_logits, dim=1) 
-            map_preds_down = torch.argmax(map_preds_logits_norm, dim = 1)
+            map_preds_logits = F.softmax(map_preds_logits, dim =1) + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
+            map_preds_down = torch.argmax(map_preds_logits, dim = 1)
             map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
             map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
         return map_preds_logits
