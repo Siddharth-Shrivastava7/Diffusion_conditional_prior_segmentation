@@ -49,21 +49,49 @@ class LearnedSinusoidalPosEmb(nn.Module):
         return fouriered
 
 ## adding file for model prediction 
-def get_model_pred(img_metas, device):
+def get_model_pred_train(img_metas, device):
     if img_metas[0]['filename'].find('cityscapes')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/cityscapes_train/saved_models/train/rgb/'
-        pred_ls = []
+        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/cityscapes_train_logits/saved_models/train/'
+        pred_imgs_ls = []
+        pred_logits_ls = []
         for ind in range(len(img_metas)):
             img_name = img_metas[ind]['filename'].split('/')[-1] 
             img_name = img_name.split('.')[0] + '_color.png'
-            pred_path = pred_folder_name + img_name
+            logits_name = img_name.split('.')[0] + '_logits.pt'
+            pred_path = pred_folder_name + 'rgb/' + img_name
+            pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
-            pred_ls.append(pred)         
-        preds = torch.cat(pred_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
+            pred_logits = torch.load(pred_logits_path).to(device) 
+            pred_imgs_ls.append(pred)         
+            pred_logits_ls.append(pred_logits)
+        preds = torch.cat(pred_imgs_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
+        preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 128, 256)
     else: 
         raise Exception("Only cityscapes predictions are supported, for now!")
-    return preds
+    return preds, preds_logits
+
+def get_model_pred_val(img_metas, device):
+    if img_metas[0]['filename'].find('cityscapes')!=-1:
+        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/cityscapes_val_logits/saved_models/val/'
+        pred_imgs_ls = []
+        pred_logits_ls = []
+        for ind in range(len(img_metas)):
+            img_name = img_metas[ind]['filename'].split('/')[-1] 
+            img_name = img_name.split('.')[0] + '_color.png'
+            logits_name = img_name.split('.')[0] + '_logits.pt'
+            pred_path = pred_folder_name + 'rgb/' + img_name
+            pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
+            pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
+            pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
+            pred_logits = torch.load(pred_logits_path).to(device) 
+            pred_imgs_ls.append(pred)         
+            pred_logits_ls.append(pred_logits)
+        preds = torch.cat(pred_imgs_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
+        preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 128, 256)
+    else: 
+        raise Exception("Only cityscapes predictions are supported, for now!")
+    return preds, preds_logits
 
 
 @SEGMENTORS.register_module()
@@ -133,7 +161,9 @@ class DDP(EncoderDecoder):
 
     def encode_decode(self, img, img_metas):
         """Encode images with backbone and decode into a semantic segmentation
-        map of the same size as input."""
+        map of the same size as input.
+        DISCLAIMER:: chaning this original DDP validation to my mod validation procedure
+        """
         x = self.extract_feat(img)[0]
         if self.diffusion == "ddim":
             # out = self.ddim_sample(x, img_metas)
@@ -171,7 +201,7 @@ class DDP(EncoderDecoder):
         x = self.extract_feat(img)[0]  # bs, 256, h/4, w/4
         batch, c, h, w, device, = *x.shape, x.device
         ## model_prediction calling 
-        preds = get_model_pred(img_metas, device)
+        preds, preds_logits = get_model_pred_train(img_metas, device)
         
         gt_down = resize(gt_semantic_seg.float(), size=(h, w), mode="nearest")
         gt_down = gt_down.to(gt_semantic_seg.dtype)
@@ -212,7 +242,7 @@ class DDP(EncoderDecoder):
         losses = dict()
         # input_times = self.time_mlp(noise_level)
         input_times = self.time_mlp(alpha)
-        loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg, preds_down)
+        loss_decode = self._decode_head_forward_train([feat], input_times, img_metas, gt_semantic_seg, preds_logits)
         losses.update(loss_decode)
         # if self.with_auxiliary_head:
         #     loss_aux = self._auxiliary_head_forward_train(
@@ -220,7 +250,7 @@ class DDP(EncoderDecoder):
         #     losses.update(loss_aux)
         return losses
 
-    def _decode_head_forward_train(self, x, t, img_metas, gt_semantic_seg, preds_down): ## changed from original 
+    def _decode_head_forward_train(self, x, t, img_metas, gt_semantic_seg, preds_logits): ## changed from original 
         """Run forward function and calculate loss for decode head in
         training."""
         losses = dict()
@@ -229,7 +259,7 @@ class DDP(EncoderDecoder):
         #                                              self.train_cfg)
         loss_decode = self.decode_head.forward_train(x, t, img_metas,
                                                      gt_semantic_seg,
-                                                     self.train_cfg, preds_down)
+                                                     self.train_cfg, preds_logits)
 
         losses.update(add_prefix(loss_decode, 'decode'))
         return losses
@@ -339,26 +369,25 @@ class DDP(EncoderDecoder):
     def mod_alpha_deblend_sample(self, x, img_metas):
         b, c, h, w, device = *x.shape, x.device
         ## model_prediction calling 
-        map_preds = get_model_pred(img_metas, device)
+        map_preds, map_preds_logits = get_model_pred_val(img_metas, device)
         map_preds_down = resize(map_preds.float(), size=(h, w), mode="nearest")
         map_preds_down = map_preds_down.to(map_preds_down.long())
         map_preds_down[map_preds_down == 255] = self.num_classes
         map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
         map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        map_preds_down_norm = F.one_hot(map_preds_down, num_classes=19).transpose(1, 4).squeeze(-1) ## ideally this should be replaced the model logits...
         T = 10 # a hyper parameter 
         for t in range(T):
             alpha_t = torch.ones((b,), device=device).float() * (t/T)
             alpha_t_plus_one = torch.ones((b,), device=device).float() * ((t+1)/T)
             alpha_t_broadcast = self.right_pad_dims_to(map_preds_down, alpha_t)
-            alpha_t_plus_one_broadcast = self.right_pad_dims_to(map_preds_down, alpha_t)
+            alpha_t_plus_one_broadcast = self.right_pad_dims_to(map_preds_down, alpha_t_plus_one)
             
             feat = torch.cat([x, map_preds_down_enc], dim=1)
             feat = self.transform(feat)
             input_times = self.time_mlp(alpha_t)
-            map_pred_logits = map_preds_down_norm + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
-            map_preds_down_norm = F.softmax(map_pred_logits, dim=1) 
-            map_preds_down = torch.argmax(map_preds_down_norm, dim = 1)
+            map_pred_logits = map_preds_logits + (alpha_t_plus_one_broadcast -  alpha_t_broadcast) * F.softmax(self._decode_head_forward_test([feat], input_times, img_metas=img_metas), dim = 1)
+            map_pred_logits = F.softmax(map_pred_logits, dim=1) 
+            map_preds_down = torch.argmax(map_pred_logits, dim = 1)
             map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
             map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
         return map_pred_logits
