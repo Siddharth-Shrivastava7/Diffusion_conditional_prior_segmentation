@@ -97,7 +97,7 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
 data = dict(
-    samples_per_gpu=2,
+    samples_per_gpu=4,
     workers_per_gpu=4,
 )
 optimizer = dict(
@@ -122,4 +122,4 @@ lr_config = dict(
     min_lr=0.0,
     by_epoch=False)
 find_unused_parameters = True
-evaluation = dict(interval=16000, metric='mIoU', save_best='mIoU')
+evaluation = dict(interval=4000, metric='mIoU', save_best='mIoU')
