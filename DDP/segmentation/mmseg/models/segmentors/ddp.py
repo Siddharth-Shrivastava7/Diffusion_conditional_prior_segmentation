@@ -51,7 +51,7 @@ class LearnedSinusoidalPosEmb(nn.Module):
 ## adding file for model prediction 
 def get_model_pred_train(img_metas, device):
     if img_metas[0]['filename'].find('cityscapes')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/cityscapes_train_logits/saved_models/train/'
+        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/city_robust_cityscapes_train_logits/saved_models/train/' # now training with respect to robustnet(cityscapes) cityscapes predictions
         pred_imgs_ls = []
         pred_logits_ls = []
         for ind in range(len(img_metas)):
@@ -74,7 +74,7 @@ def get_model_pred_train(img_metas, device):
 def get_model_pred_val(img_metas, device):
     # /raid/ai24resch01002/datasets/darkzurich/rgb_anon/val/night/GOPR0356/GOPR0356_frame_000324_rgb_anon.png
     if img_metas[0]['filename'].find('cityscapes')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/cityscapes_val_logits/saved_models/val/'
+        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/city_robust_cityscapes_val_logits/saved_models/val/' # now infereing with respect to robustnet(cityscapes) cityscapes predictions 
         pred_imgs_ls = []
         pred_logits_ls = []
         for ind in range(len(img_metas)):
