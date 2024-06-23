@@ -1,7 +1,7 @@
-2024-06-23 17:25:42,167 - mmseg - INFO - Multi-processing start method is `None`
-2024-06-23 17:25:42,167 - mmseg - INFO - OpenCV num_threads is `96
-2024-06-23 17:25:42,168 - mmseg - INFO - OMP num threads is 1
-2024-06-23 17:25:42,198 - mmseg - INFO - Environment info:
+2024-06-23 18:23:08,816 - mmseg - INFO - Multi-processing start method is `None`
+2024-06-23 18:23:08,817 - mmseg - INFO - OpenCV num_threads is `96
+2024-06-23 18:23:08,817 - mmseg - INFO - OMP num threads is 1
+2024-06-23 18:23:08,872 - mmseg - INFO - Environment info:
 ------------------------------------------------------------
 sys.platform: linux
 Python: 3.9.12 (main, Jun  1 2022, 11:38:51) [GCC 7.5.0]
@@ -31,11 +31,11 @@ OpenCV: 4.9.0
 MMCV: 1.6.2
 MMCV Compiler: GCC 9.3
 MMCV CUDA Compiler: 11.6
-MMSegmentation: 0.29.0+8cc282b
+MMSegmentation: 0.29.0+73c5bcb
 ------------------------------------------------------------
 
-2024-06-23 17:25:42,198 - mmseg - INFO - Distributed training: True
-2024-06-23 17:25:43,235 - mmseg - INFO - Config:
+2024-06-23 18:23:08,872 - mmseg - INFO - Distributed training: True
+2024-06-23 18:23:09,899 - mmseg - INFO - Config:
 dataset_type = 'CityscapesDataset'
 data_root = '/raid/ai24resch01002/datasets/cityscapes'
 img_norm_cfg = dict(
@@ -269,11 +269,11 @@ work_dir = './work_dirs/ddp_convnext_t_4x4_512x1024_160k_cityscapes'
 gpu_ids = range(0, 4)
 auto_resume = False
 
-2024-06-23 17:25:45,530 - mmseg - INFO - Set random seed to 1107872854, deterministic: True
-2024-06-23 17:25:45,921 - mmseg - INFO - initialize ConvNeXt with init_cfg {'type': 'Pretrained', 'checkpoint': 'https://download.openmmlab.com/mmclassification/v0/convnext/downstream/convnext-tiny_3rdparty_32xb128-noema_in1k_20220301-795e9634.pth', 'prefix': 'backbone.'}
-2024-06-23 17:25:46,043 - mmseg - INFO - initialize FPN with init_cfg {'type': 'Xavier', 'layer': 'Conv2d', 'distribution': 'uniform'}
-2024-06-23 17:25:46,061 - mmseg - INFO - initialize MultiStageMerging with init_cfg {'type': 'Xavier', 'layer': 'Conv2d', 'distribution': 'uniform'}
-2024-06-23 17:25:46,118 - mmseg - INFO - initialize FCNHead with init_cfg {'type': 'Normal', 'std': 0.01, 'override': {'name': 'conv_seg'}}
+2024-06-23 18:23:12,194 - mmseg - INFO - Set random seed to 1166563662, deterministic: True
+2024-06-23 18:23:12,588 - mmseg - INFO - initialize ConvNeXt with init_cfg {'type': 'Pretrained', 'checkpoint': 'https://download.openmmlab.com/mmclassification/v0/convnext/downstream/convnext-tiny_3rdparty_32xb128-noema_in1k_20220301-795e9634.pth', 'prefix': 'backbone.'}
+2024-06-23 18:23:12,708 - mmseg - INFO - initialize FPN with init_cfg {'type': 'Xavier', 'layer': 'Conv2d', 'distribution': 'uniform'}
+2024-06-23 18:23:12,726 - mmseg - INFO - initialize MultiStageMerging with init_cfg {'type': 'Xavier', 'layer': 'Conv2d', 'distribution': 'uniform'}
+2024-06-23 18:23:12,782 - mmseg - INFO - initialize FCNHead with init_cfg {'type': 'Normal', 'std': 0.01, 'override': {'name': 'conv_seg'}}
 Name of parameter - Initialization information
 
 backbone.downsample_layers.0.0.weight - torch.Size([96, 3, 4, 4]): 
@@ -1283,7 +1283,7 @@ The value is the same before and after calling `init_weights` of DDP
 
 time_mlp.3.bias - torch.Size([1024]): 
 The value is the same before and after calling `init_weights` of DDP  
-2024-06-23 17:25:46,122 - mmseg - INFO - DDP(
+2024-06-23 18:23:12,786 - mmseg - INFO - DDP(
   (backbone): ConvNeXt(
     (downsample_layers): ModuleList(
       (0): Sequential(
@@ -1751,11 +1751,11 @@ The value is the same before and after calling `init_weights` of DDP
     (3): Linear(in_features=1024, out_features=1024, bias=True)
   )
 )
-2024-06-23 17:25:46,126 - mmseg - INFO - Model size:136.06
-2024-06-23 17:25:46,160 - mmseg - INFO - Loaded 2975 images
-2024-06-23 17:25:47,465 - mmseg - INFO - Loaded 500 images
-2024-06-23 17:25:47,466 - mmseg - INFO - Start running, host: ai24resch01002@ai-dgx201, work_dir: /raid/ai24resch01002/Diffusion_conditional_prior_segmentation/DDP/segmentation/work_dirs/ddp_convnext_t_4x4_512x1024_160k_cityscapes
-2024-06-23 17:25:47,466 - mmseg - INFO - Hooks will be executed in the following order:
+2024-06-23 18:23:12,790 - mmseg - INFO - Model size:136.06
+2024-06-23 18:23:12,824 - mmseg - INFO - Loaded 2975 images
+2024-06-23 18:23:14,145 - mmseg - INFO - Loaded 500 images
+2024-06-23 18:23:14,146 - mmseg - INFO - Start running, host: ai24resch01002@ai-dgx201, work_dir: /raid/ai24resch01002/Diffusion_conditional_prior_segmentation/DDP/segmentation/work_dirs/ddp_convnext_t_4x4_512x1024_160k_cityscapes
+2024-06-23 18:23:14,146 - mmseg - INFO - Hooks will be executed in the following order:
 before_run:
 (VERY_HIGH   ) PolyLrUpdaterHook                  
 (NORMAL      ) CheckpointHook                     
@@ -1801,5 +1801,7 @@ after_val_epoch:
 after_run:
 (VERY_LOW    ) TextLoggerHook                     
  -------------------- 
-2024-06-23 17:25:47,466 - mmseg - INFO - workflow: [('train', 1)], max: 160000 iters
-2024-06-23 17:25:47,466 - mmseg - INFO - Checkpoints will be saved to /raid/ai24resch01002/Diffusion_conditional_prior_segmentation/DDP/segmentation/work_dirs/ddp_convnext_t_4x4_512x1024_160k_cityscapes by HardDiskBackend.
+2024-06-23 18:23:14,146 - mmseg - INFO - workflow: [('train', 1)], max: 160000 iters
+2024-06-23 18:23:14,146 - mmseg - INFO - Checkpoints will be saved to /raid/ai24resch01002/Diffusion_conditional_prior_segmentation/DDP/segmentation/work_dirs/ddp_convnext_t_4x4_512x1024_160k_cityscapes by HardDiskBackend.
+2024-06-23 18:24:05,150 - mmseg - INFO - Iter [50/160000]	lr: 1.959e-06, eta: 1 day, 13:22:30, time: 0.841, data_time: 0.017, memory: 21517, decode.loss_ce: 2.4298, decode.acc_seg: 44.4792, loss: 2.4298
+2024-06-23 18:24:42,767 - mmseg - INFO - Iter [100/160000]	lr: 3.958e-06, eta: 1 day, 11:23:22, time: 0.752, data_time: 0.008, memory: 21517, decode.loss_ce: 2.2372, decode.acc_seg: 45.6661, loss: 2.2372
