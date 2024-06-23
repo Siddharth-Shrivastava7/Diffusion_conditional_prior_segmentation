@@ -48,18 +48,42 @@ class LearnedSinusoidalPosEmb(nn.Module):
         fouriered = torch.cat((x, fouriered), dim=-1)
         return fouriered
 
-## adding file for model prediction 
+## adding file for model prediction ## For RobutsNet predictions
+# def get_model_pred_train(img_metas, device):
+#     if img_metas[0]['filename'].find('cityscapes')!=-1:
+#         pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/city_robust_cityscapes_train_logits/saved_models/train/' # now training with respect to robustnet(cityscapes) cityscapes predictions
+#         pred_imgs_ls = []
+#         pred_logits_ls = []
+#         for ind in range(len(img_metas)):
+#             img_name = img_metas[ind]['filename'].split('/')[-1] 
+#             img_name_rgb = img_name.split('.')[0] + '_color.png'
+#             logits_name = img_name.split('.')[0] + '_logits.pt'
+#             pred_path = pred_folder_name + 'rgb/' + img_name_rgb
+#             pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
+#             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
+#             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
+#             pred_logits = torch.load(pred_logits_path).to(device) 
+#             pred_imgs_ls.append(pred)         
+#             pred_logits_ls.append(pred_logits)
+#         preds = torch.cat(pred_imgs_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
+#         preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 128, 256)
+#     else: 
+#         raise Exception("Only cityscapes predictions are supported, for now!")
+#     return preds, preds_logits
+
+
+## adding file for model prediction  ## for mmseg models
 def get_model_pred_train(img_metas, device):
     if img_metas[0]['filename'].find('cityscapes')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/city_robust_cityscapes_train_logits/saved_models/train/' # now training with respect to robustnet(cityscapes) cityscapes predictions
+        pred_folder_name = '/raid/ai24resch01002/predictions/deeplabv3/cityscapes_train/' # now training with respect to Deeplabv3(cityscapes) cityscapes predictions
         pred_imgs_ls = []
         pred_logits_ls = []
         for ind in range(len(img_metas)):
             img_name = img_metas[ind]['filename'].split('/')[-1] 
-            img_name_rgb = img_name.split('.')[0] + '_color.png'
-            logits_name = img_name.split('.')[0] + '_logits.pt'
-            pred_path = pred_folder_name + 'rgb/' + img_name_rgb
-            pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
+            img_name_rgb = img_name.split('.')[0] + '.png'
+            logits_name = img_name.split('.')[0] + '.pt'
+            pred_path = pred_folder_name + img_name_rgb
+            pred_logits_path = pred_folder_name + 'train_logits/' + logits_name
             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
             pred_logits = torch.load(pred_logits_path).to(device) 
@@ -71,18 +95,58 @@ def get_model_pred_train(img_metas, device):
         raise Exception("Only cityscapes predictions are supported, for now!")
     return preds, preds_logits
 
-def get_model_pred_val(img_metas, device):
-    # /raid/ai24resch01002/datasets/darkzurich/rgb_anon/val/night/GOPR0356/GOPR0356_frame_000324_rgb_anon.png
+# def get_model_pred_val(img_metas, device):  # ## For RobutsNet predictions
+#     # /raid/ai24resch01002/datasets/darkzurich/rgb_anon/val/night/GOPR0356/GOPR0356_frame_000324_rgb_anon.png
+#     if img_metas[0]['filename'].find('cityscapes')!=-1:
+#         pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/city_robust_cityscapes_val_logits/saved_models/val/' # now infereing with respect to robustnet(cityscapes) cityscapes predictions 
+#         pred_imgs_ls = []
+#         pred_logits_ls = []
+#         for ind in range(len(img_metas)):
+#             img_name = img_metas[ind]['filename'].split('/')[-1] 
+#             img_name_rgb = img_name.split('.')[0] + '_color.png'
+#             logits_name = img_name.split('.')[0] + '_logits.pt'
+#             pred_path = pred_folder_name + 'rgb/' + img_name_rgb
+#             pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
+#             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
+#             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
+#             pred_logits = torch.load(pred_logits_path).to(device) 
+#             pred_imgs_ls.append(pred)         
+#             pred_logits_ls.append(pred_logits)
+#         preds = torch.cat(pred_imgs_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
+#         preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 256, 512)
+#     elif img_metas[0]['filename'].find('darkzurich')!=-1:
+#         pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_val_logits/darkzurich/val/' ## from gta source trained robustnet 
+#         # pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_from_city/darkzurich/val/' ## from city source trained robustnet
+#         pred_imgs_ls = []
+#         pred_logits_ls = []
+#         for ind in range(len(img_metas)):
+#             img_name = img_metas[ind]['filename'].split('/')[-1] 
+#             img_name_rgb = img_name.split('.')[0] + '_color.png'
+#             logits_name = img_name.split('.')[0] + '_logits.pt'
+#             pred_path = pred_folder_name + 'rgb/' + img_name_rgb
+#             pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
+#             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
+#             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
+#             pred_logits = torch.load(pred_logits_path).to(device) 
+#             pred_imgs_ls.append(pred)         
+#             pred_logits_ls.append(pred_logits)
+#         preds = torch.cat(pred_imgs_ls, dim = 0) 
+#         preds_logits = torch.cat(pred_logits_ls, dim=0) 
+#     else: 
+#         raise Exception("Only cityscapes, darkzurich predictions are supported, for now!")
+#     return preds, preds_logits
+
+def get_model_pred_val(img_metas, device):  ## for mmseg models
     if img_metas[0]['filename'].find('cityscapes')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/city_robust_cityscapes_val_logits/saved_models/val/' # now infereing with respect to robustnet(cityscapes) cityscapes predictions 
+        pred_folder_name = '/raid/ai24resch01002/predictions/deeplabv3/cityscapes_val/' # now infereing with respect to robustnet(cityscapes) cityscapes predictions 
         pred_imgs_ls = []
         pred_logits_ls = []
         for ind in range(len(img_metas)):
             img_name = img_metas[ind]['filename'].split('/')[-1] 
-            img_name_rgb = img_name.split('.')[0] + '_color.png'
-            logits_name = img_name.split('.')[0] + '_logits.pt'
-            pred_path = pred_folder_name + 'rgb/' + img_name_rgb
-            pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
+            img_name_rgb = img_name.split('.')[0] + '.png'
+            logits_name = img_name.split('.')[0] + '.pt'
+            pred_path = pred_folder_name  + img_name_rgb
+            pred_logits_path = pred_folder_name + 'val_logits/' + logits_name
             pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
             pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
             pred_logits = torch.load(pred_logits_path).to(device) 
@@ -90,26 +154,8 @@ def get_model_pred_val(img_metas, device):
             pred_logits_ls.append(pred_logits)
         preds = torch.cat(pred_imgs_ls, dim = 0) ## (batch_size, 1, 1024, 2048)
         preds_logits = torch.cat(pred_logits_ls, dim=0) ## (batch_size, 19, 256, 512)
-    elif img_metas[0]['filename'].find('darkzurich')!=-1:
-        pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_val_logits/darkzurich/val/' ## from gta source trained robustnet 
-        # pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_from_city/darkzurich/val/' ## from city source trained robustnet
-        pred_imgs_ls = []
-        pred_logits_ls = []
-        for ind in range(len(img_metas)):
-            img_name = img_metas[ind]['filename'].split('/')[-1] 
-            img_name_rgb = img_name.split('.')[0] + '_color.png'
-            logits_name = img_name.split('.')[0] + '_logits.pt'
-            pred_path = pred_folder_name + 'rgb/' + img_name_rgb
-            pred_logits_path = pred_folder_name + 'logits_path/' + logits_name
-            pred = torch.tensor(np.array(Image.open(pred_path))).to(device) 
-            pred = pred.view(1,1, pred.shape[0], pred.shape[1]) 
-            pred_logits = torch.load(pred_logits_path).to(device) 
-            pred_imgs_ls.append(pred)         
-            pred_logits_ls.append(pred_logits)
-        preds = torch.cat(pred_imgs_ls, dim = 0) 
-        preds_logits = torch.cat(pred_logits_ls, dim=0) 
     else: 
-        raise Exception("Only cityscapes, darkzurich predictions are supported, for now!")
+        raise Exception("Only cityscapes predictions are supported, for now!")
     return preds, preds_logits
 
 

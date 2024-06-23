@@ -122,4 +122,4 @@ lr_config = dict(
     min_lr=0.0,
     by_epoch=False)
 find_unused_parameters = True
-evaluation = dict(interval=4000, metric='mIoU', save_best='mIoU')
+evaluation = dict(interval=2000, metric='mIoU', save_best='mIoU')
