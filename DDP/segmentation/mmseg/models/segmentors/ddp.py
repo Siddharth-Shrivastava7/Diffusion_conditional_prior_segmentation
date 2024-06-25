@@ -9,7 +9,7 @@ import math
 from PIL import Image 
 import numpy as np
 import torch.nn.functional as F
-## add it
+
 from ..builder import SEGMENTORS
 from .encoder_decoder import EncoderDecoder
 
@@ -440,7 +440,7 @@ class DDP(EncoderDecoder):
         map_preds_down[map_preds_down == 255] = self.num_classes
         map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
         map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        T = 3 # a hyper parameter  ## For DeepLabv3 now (Cause there are not many changes between DeepLabv3 pred and GT, and also its same the one used for the original DDP)
+        T = 2 # a hyper parameter  ## For DeepLabv3 now (Cause there are not many changes between DeepLabv3 pred and GT, and also its same the one used for the original DDP)
         for t in range(T):
             alpha_t = torch.ones((b,), device=device).float() * (t/T)
             alpha_t_plus_one = torch.ones((b,), device=device).float() * ((t+1)/T)
