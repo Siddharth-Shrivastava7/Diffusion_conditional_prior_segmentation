@@ -1,13 +1,8 @@
-dataset_type = 'CityscapesDataset'
-data_root = '/raid/ai24resch01002/datasets/cityscapes'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-crop_size = (512, 1024)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations'),
-    dict(type='Resize', img_scale=(2048, 1024), ratio_range=(0.5, 2.0)),
-    dict(type='RandomCrop', crop_size=(512, 1024), cat_max_ratio=0.75),
     dict(type='RandomFlip', prob=0.5),
     dict(type='PhotoMetricDistortion'),
     dict(
@@ -23,7 +18,7 @@ test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(2048, 1024),
+        img_scale=(1920, 1080),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
@@ -41,16 +36,13 @@ data = dict(
     samples_per_gpu=4,
     workers_per_gpu=4,
     train=dict(
-        type='CityscapesDataset',
-        data_root='/raid/ai24resch01002/datasets/cityscapes',
-        img_dir='leftImg8bit/train',
-        ann_dir='gtFine/train',
+        type='DGInstyleDataset',
+        data_root='/raid/ai24resch01002/datasets/DGinstyle_night_gta',
+        img_dir='images',
+        ann_dir='labels',
         pipeline=[
             dict(type='LoadImageFromFile'),
             dict(type='LoadAnnotations'),
-            dict(
-                type='Resize', img_scale=(2048, 1024), ratio_range=(0.5, 2.0)),
-            dict(type='RandomCrop', crop_size=(512, 1024), cat_max_ratio=0.75),
             dict(type='RandomFlip', prob=0.5),
             dict(type='PhotoMetricDistortion'),
             dict(
@@ -63,15 +55,15 @@ data = dict(
             dict(type='Collect', keys=['img', 'gt_semantic_seg'])
         ]),
     val=dict(
-        type='CityscapesDataset',
-        data_root='/raid/ai24resch01002/datasets/cityscapes',
-        img_dir='leftImg8bit/val',
-        ann_dir='gtFine/val',
+        type='DarkZurichDataset',
+        data_root='/raid/ai24resch01002/datasets/darkzurich',
+        img_dir='rgb_anon/val/night/GOPR0356',
+        ann_dir='gt/val/night/GOPR0356',
         pipeline=[
             dict(type='LoadImageFromFile'),
             dict(
                 type='MultiScaleFlipAug',
-                img_scale=(2048, 1024),
+                img_scale=(1920, 1080),
                 flip=False,
                 transforms=[
                     dict(type='Resize', keep_ratio=True),
@@ -86,15 +78,15 @@ data = dict(
                 ])
         ]),
     test=dict(
-        type='CityscapesDataset',
-        data_root='/raid/ai24resch01002/datasets/cityscapes',
-        img_dir='leftImg8bit/val',
-        ann_dir='gtFine/val',
+        type='DarkZurichDataset',
+        data_root='/raid/ai24resch01002/datasets/darkzurich',
+        img_dir='rgb_anon/val/night/GOPR0356',
+        ann_dir='gt/val/night/GOPR0356',
         pipeline=[
             dict(type='LoadImageFromFile'),
             dict(
                 type='MultiScaleFlipAug',
-                img_scale=(2048, 1024),
+                img_scale=(1920, 1080),
                 flip=False,
                 transforms=[
                     dict(type='Resize', keep_ratio=True),
@@ -138,7 +130,7 @@ lr_config = dict(
 runner = dict(type='IterBasedRunner', max_iters=160000)
 checkpoint_config = dict(by_epoch=False, interval=16000)
 evaluation = dict(
-    interval=2000, metric='mIoU', pre_eval=True, save_best='mIoU')
+    interval=4000, metric='mIoU', pre_eval=True, save_best='mIoU')
 custom_imports = dict(imports='mmcls.models', allow_failed_imports=False)
 checkpoint_file = 'https://download.openmmlab.com/mmclassification/v0/convnext/downstream/convnext-tiny_3rdparty_32xb128-noema_in1k_20220301-795e9634.pth'
 norm_cfg = dict(type='SyncBN', requires_grad=True)
@@ -227,6 +219,6 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
 find_unused_parameters = True
-work_dir = './work_dirs/ddp_convnext_t_4x4_512x1024_160k_cityscapes'
+work_dir = './work_dirs/DGInstyle_with_DZ'
 gpu_ids = range(0, 4)
 auto_resume = False
