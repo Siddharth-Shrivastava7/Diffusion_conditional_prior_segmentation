@@ -98,7 +98,7 @@ def get_model_pred_train(img_metas, device):
 def get_model_pred_val(img_metas, device):  ## For RobustNet predictions
     if img_metas[0]['filename'].find('darkzurich')!=-1:
         pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_gtatrained/darkzurich/val/' ## from gta source trained robustnet 
-        # pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_from_city/darkzurich/val/' ## from city source trained robustnet
+        # pred_folder_name = '/raid/ai24resch01002/predictions/robustnet/darkzurich_citytrained/darkzurich/val/' ## from city source trained robustnet
         pred_imgs_ls = []
         pred_logits_ls = []
         for ind in range(len(img_metas)):
@@ -400,7 +400,7 @@ class DDP(EncoderDecoder):
         map_preds_down[map_preds_down == 255] = self.num_classes
         map_preds_down_enc = self.embedding_table(map_preds_down).squeeze(1).permute(0, 3, 1, 2)
         map_preds_down_enc = (torch.sigmoid(map_preds_down_enc) * 2 - 1) * self.bit_scale
-        T = 3 # a hyper parameter  ## For DeepLabv3 now (Cause there are not many changes between DeepLabv3 pred and GT, and also its same the one used for the original DDP)
+        T = 5 # a hyper parameter  ## For DeepLabv3 now (Cause there are not many changes between DeepLabv3 pred and GT, and also its same the one used for the original DDP)
         for t in range(T):
             alpha_t = torch.ones((b,), device=device).float() * (t/T)
             alpha_t_plus_one = torch.ones((b,), device=device).float() * ((t+1)/T)

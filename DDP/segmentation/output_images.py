@@ -17,7 +17,7 @@ def main():
     parser.add_argument('--folder', default='/raid/ai24resch01002/datasets/darkzurich/rgb_anon/val/night/GOPR0356', help='Image file')
     parser.add_argument('--config', default='/raid/ai24resch01002/Diffusion_conditional_prior_segmentation/DDP/segmentation/configs/ours_dginstyle_dark/dark_zurich_val_and_dginstyle_train.py', help='Config file')
     parser.add_argument('--checkpoint', default='/raid/ai24resch01002/saved_models/ind_dsp/DGInstyle_with_DZ/best_mIoU_iter_6500.pth', help='Checkpoint file')
-    parser.add_argument('--outfolder', default='/raid/ai24resch01002/predictions/ind_dsp', help='Path to output file')
+    parser.add_argument('--outfolder', default='/raid/ai24resch01002/predictions/ind_dsp_with_gt', help='Path to output file')
     parser.add_argument(
         '--device', default='cuda:0', help='Device used for inference')
     parser.add_argument(
