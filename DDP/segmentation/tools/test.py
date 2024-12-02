@@ -302,7 +302,7 @@ def main():
             pre_eval=args.eval is not None and not eval_on_format_results,
             format_only=args.format_only or eval_on_format_results,
             format_args=eval_kwargs)
-
+    
     rank, _ = get_dist_info()
     if rank == 0:
         if args.out:

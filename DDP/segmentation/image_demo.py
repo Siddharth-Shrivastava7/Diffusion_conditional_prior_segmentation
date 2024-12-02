@@ -20,7 +20,7 @@ def main():
     parser.add_argument(
         '--opacity',
         type=float,
-        default=0.5,
+        default=1,
         help='Opacity of painted segmentation map. In (0, 1] range.')
     args = parser.parse_args()
 
