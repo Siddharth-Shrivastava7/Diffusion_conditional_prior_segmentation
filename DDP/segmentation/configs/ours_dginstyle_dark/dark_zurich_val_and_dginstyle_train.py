@@ -80,10 +80,10 @@ lr_config = dict(
     power=1.0,
     min_lr=0.0,
     by_epoch=False)
-runner = dict(type='IterBasedRunner', max_iters=160000)
-checkpoint_config = dict(by_epoch=False, interval=16000)
+runner = dict(type='IterBasedRunner', max_iters=16000)
+checkpoint_config = dict(by_epoch=False, interval=8000)
 evaluation = dict(
-    interval=4000, metric='mIoU', pre_eval=True, save_best='mIoU')
+    interval=500, metric='mIoU', pre_eval=True, save_best='mIoU')
 custom_imports = dict(imports='mmcls.models', allow_failed_imports=False)
 checkpoint_file = 'https://download.openmmlab.com/mmclassification/v0/convnext/downstream/convnext-tiny_3rdparty_32xb128-noema_in1k_20220301-795e9634.pth'
 norm_cfg = dict(type='SyncBN', requires_grad=True)
