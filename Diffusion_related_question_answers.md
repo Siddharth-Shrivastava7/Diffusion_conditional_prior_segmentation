@@ -1,4 +1,5 @@
 Question 1: why constant noise schedule is a flaw in diffusion, please explain more elaborately? 
+
 Answer 1: 
 A constant noise schedule in a diffusion model can be considered a flaw because it limits the model's ability to accurately capture complex data distributions and can hinder its performance in various tasks. Here's a more detailed explanation of why a constant noise schedule is problematic:
 1. Limited Expressiveness: A constant noise schedule applies the same level of noise throughout the entire diffusion process. This means that the model's capacity to represent and transform data distributions is limited. Complex data distributions often require varying levels of noise to be properly captured. A fixed noise level may not be able to model the intricate details and dependencies in the data.
@@ -14,8 +15,8 @@ A constant noise schedule in a diffusion model can be considered a flaw because 
 In summary, a constant noise schedule in diffusion models is a flaw because it restricts the model's ability to adapt to the complexity of data distributions, hinders learning, and may lead to suboptimal results in various applications. Dynamic noise schedules, which change over the course of the diffusion process, are preferred because they allow the model to better capture the intricate structures and dependencies present in real-world data.
 
 Q2. is noise schedule constant in diffusion? 
-A2: 
-In the context of diffusion models in deep learning, such as the Variational Autoencoder (VAE) and the Normalizing Flow models, the noise schedule is not necessarily constant. The noise schedule is a crucial component of these models, and it typically evolves or changes over the course of the data generation or inference process.
+
+Answer2: In the context of diffusion models in deep learning, such as the Variational Autoencoder (VAE) and the Normalizing Flow models, the noise schedule is not necessarily constant. The noise schedule is a crucial component of these models, and it typically evolves or changes over the course of the data generation or inference process.
 
 The diffusion process is used to model the gradual transformation of a data distribution from a simple distribution (e.g., Gaussian) to a complex one (e.g., the true data distribution). This transformation is achieved by applying a series of noise levels or scales to the data iteratively. The noise schedule determines how these noise levels change during this process.
 
